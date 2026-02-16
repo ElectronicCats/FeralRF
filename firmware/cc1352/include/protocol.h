@@ -8,23 +8,23 @@
 #ifndef PROTOCOL_H
 #define PROTOCOL_H
 
-#include <stdint.h>
 #include <stddef.h>
+#include <stdint.h>
 
 /* Maximum payload size */
-#define PROTOCOL_MAX_PAYLOAD    255
+#define PROTOCOL_MAX_PAYLOAD 255
 
 /* Frame overhead: CMD(1) + SEQ(1) + LEN(2) + CRC(2) = 6 bytes */
-#define PROTOCOL_OVERHEAD       6
+#define PROTOCOL_OVERHEAD 6
 
 /* Maximum frame size (pre-COBS) */
-#define PROTOCOL_MAX_FRAME      (PROTOCOL_MAX_PAYLOAD + PROTOCOL_OVERHEAD)
+#define PROTOCOL_MAX_FRAME (PROTOCOL_MAX_PAYLOAD + PROTOCOL_OVERHEAD)
 
 /* COBS overhead: worst case is (N/254 + 1) extra bytes */
-#define COBS_MAX_OVERHEAD       ((PROTOCOL_MAX_FRAME / 254) + 1)
+#define COBS_MAX_OVERHEAD ((PROTOCOL_MAX_FRAME / 254) + 1)
 
 /* Maximum COBS-encoded frame size */
-#define COBS_MAX_ENCODED        (PROTOCOL_MAX_FRAME + COBS_MAX_OVERHEAD + 1)
+#define COBS_MAX_ENCODED (PROTOCOL_MAX_FRAME + COBS_MAX_OVERHEAD + 1)
 
 /**
  * Calculate CRC-16-CCITT
@@ -66,8 +66,7 @@ size_t cobs_decode(const uint8_t *input, size_t input_len, uint8_t *output);
  * @param output    Output buffer for complete frame
  * @return          Length of frame
  */
-size_t protocol_build_frame(uint8_t cmd_id, uint8_t seq,
-                            const uint8_t *payload, size_t payload_len,
+size_t protocol_build_frame(uint8_t cmd_id, uint8_t seq, const uint8_t *payload, size_t payload_len,
                             uint8_t *output);
 
 /**
@@ -80,8 +79,7 @@ size_t protocol_build_frame(uint8_t cmd_id, uint8_t seq,
  * @param payload   Output: payload buffer
  * @return          Payload length, or 0 on error
  */
-size_t protocol_parse_frame(const uint8_t *frame, size_t frame_len,
-                           uint8_t *cmd_id, uint8_t *seq,
-                           uint8_t *payload);
+size_t protocol_parse_frame(const uint8_t *frame, size_t frame_len, uint8_t *cmd_id, uint8_t *seq,
+                            uint8_t *payload);
 
 #endif /* PROTOCOL_H */

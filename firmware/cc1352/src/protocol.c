@@ -9,8 +9,7 @@
  * Polynomial: 0x1021 (x^16 + x^12 + x^5 + 1)
  * Initial value: 0xFFFF
  */
-uint16_t crc16_ccitt(const uint8_t *data, size_t len)
-{
+uint16_t crc16_ccitt(const uint8_t *data, size_t len) {
     uint16_t crc = 0xFFFF;
 
     for (size_t i = 0; i < len; i++) {
@@ -36,8 +35,7 @@ uint16_t crc16_ccitt(const uint8_t *data, size_t len)
  *
  * Reference: https://en.wikipedia.org/wiki/Consistent_Overhead_Byte_Stuffing
  */
-size_t cobs_encode(const uint8_t *input, size_t input_len, uint8_t *output)
-{
+size_t cobs_encode(const uint8_t *input, size_t input_len, uint8_t *output) {
     if (input_len == 0) {
         return 0;
     }
@@ -79,8 +77,7 @@ size_t cobs_encode(const uint8_t *input, size_t input_len, uint8_t *output)
  * Decodes COBS-encoded data back to original form.
  * Returns 0 on error (invalid encoding).
  */
-size_t cobs_decode(const uint8_t *input, size_t input_len, uint8_t *output)
-{
+size_t cobs_decode(const uint8_t *input, size_t input_len, uint8_t *output) {
     if (input_len == 0) {
         return 0;
     }
@@ -120,10 +117,8 @@ size_t cobs_decode(const uint8_t *input, size_t input_len, uint8_t *output)
  *
  * Frame format: [CMD_ID:1][SEQ:1][LEN:2][PAYLOAD:N][CRC16:2]
  */
-size_t protocol_build_frame(uint8_t cmd_id, uint8_t seq,
-                            const uint8_t *payload, size_t payload_len,
-                            uint8_t *output)
-{
+size_t protocol_build_frame(uint8_t cmd_id, uint8_t seq, const uint8_t *payload, size_t payload_len,
+                            uint8_t *output) {
     size_t idx = 0;
 
     /* Header */
@@ -152,10 +147,8 @@ size_t protocol_build_frame(uint8_t cmd_id, uint8_t seq,
  *
  * Returns payload length on success, 0 on error.
  */
-size_t protocol_parse_frame(const uint8_t *frame, size_t frame_len,
-                           uint8_t *cmd_id, uint8_t *seq,
-                           uint8_t *payload)
-{
+size_t protocol_parse_frame(const uint8_t *frame, size_t frame_len, uint8_t *cmd_id, uint8_t *seq,
+                            uint8_t *payload) {
     /* Minimum frame: CMD(1) + SEQ(1) + LEN(2) + CRC(2) = 6 bytes */
     if (frame_len < PROTOCOL_OVERHEAD) {
         return 0;

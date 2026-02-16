@@ -1,2 +1,65 @@
-
+# Hardware
 hardware/CatSniffer-backups/
+
+# Build directories
+build/
+cmake-build-*/
+out/
+*.egg-info/
+dist/
+*.pyc
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Firmware build artifacts
+*.elf
+*.hex
+*.bin
+*.map
+*.o
+*.a
+*.lib
+*.d
+
+# IDE and editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# TI SDK (download separately)
+firmware/sdk/simplelink_cc13xx_cc26xx_sdk_*/
+
+# Pico SDK (downloaded by CI)
+firmware/sdk/pico-sdk/
+
+# Python virtual environments
+venv/
+.venv/
+env/
+.env/
+
+# Local configuration
+.env.local
+*.local
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+
+# Hardware specific
+*.jlink
+
+# Secrets
+secrets/
+*.pem
+*.key

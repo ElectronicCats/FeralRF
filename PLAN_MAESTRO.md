@@ -244,13 +244,13 @@ feralrf/
 
 ## 5. Fases de Desarrollo
 
-### FASE 0: Setup (Semana 1)
-- [ ] Repo con estructura completa
-- [ ] Dockerfile con TI SDK + ARM GCC
-- [ ] CMake compilando blinky en CC1352
-- [ ] CMake compilando USB echo en RP2040
-- [ ] GitHub Actions operativo
-- [ ] Python package skeleton
+### FASE 0: Setup (Semana 1) ✅
+- [x] Repo con estructura completa
+- [x] Dockerfile con TI SDK + ARM GCC
+- [x] CMake compilando blinky en CC1352
+- [x] CMake compilando USB echo en RP2040
+- [x] GitHub Actions operativo
+- [x] Python package skeleton
 
 ### FASE 1: MVP BLE Sniffer (Semanas 2-3)
 - [ ] COBS implementation (C + Python)

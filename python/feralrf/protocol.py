@@ -5,68 +5,26 @@ FeralRF - Protocol implementation (COBS + CRC16)
 import struct
 from typing import Tuple
 
+from cobs import cobs as _cobs
+
 
 def cobs_encode(data: bytes) -> bytes:
-    """
-    Encode data using COBS (Consistent Overhead Byte Stuffing)
-    """
+    """Encode data using COBS with trailing 0x00 delimiter"""
     if not data:
-        return b'\x01\x00'
-
-    result = bytearray()
-    search_start = 0
-    zero_idx = 0
-
-    while search_start < len(data):
-        # Find next zero byte
-        try:
-            zero_idx = data.index(0, search_start)
-            block_len = zero_idx - search_start
-        except ValueError:
-            # No more zeros
-            block_len = len(data) - search_start
-            zero_idx = len(data)
-
-        # Check for blocks > 254 bytes
-        while block_len > 254:
-            result.append(0xFF)
-            result.extend(data[search_start:search_start + 254])
-            search_start += 254
-            block_len -= 254
-
-        result.append(block_len + 1)
-        result.extend(data[search_start:zero_idx])
-        search_start = zero_idx + 1
-
-    result.append(0x00)  # Frame delimiter
-    return bytes(result)
+        return b'\x00'
+    return _cobs.encode(data) + b'\x00'
 
 
 def cobs_decode(data: bytes) -> bytes:
-    """
-    Decode COBS-encoded data
-    """
+    """Decode COBS-encoded data (with trailing 0x00 delimiter)"""
     if not data:
         return b''
-
-    result = bytearray()
-    idx = 0
-
-    while idx < len(data):
-        block_len = data[idx]
-        if block_len == 0:
-            break  # End of frame
-
-        idx += 1
-        block_len -= 1
-        result.extend(data[idx:idx + block_len])
-
-        if block_len < 254 and idx + block_len < len(data):
-            result.append(0)  # Add the implicit zero
-
-        idx += block_len
-
-    return bytes(result)
+    # Remove trailing delimiter if present
+    if data[-1:] == b'\x00':
+        data = data[:-1]
+    if not data:
+        return b''
+    return _cobs.decode(data)
 
 
 def crc16_ccitt(data: bytes, initial: int = 0xFFFF) -> int:

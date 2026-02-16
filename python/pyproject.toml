@@ -28,6 +28,7 @@ classifiers = [
 dependencies = [
     "pyserial>=3.5",
     "pyserial-asyncio>=0.6",
+    "cobs>=1.2",
 ]
 
 [project.optional-dependencies]

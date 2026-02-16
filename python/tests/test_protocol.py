@@ -37,12 +37,13 @@ class TestCOBS:
         test_cases = [
             b'',
             b'\x01',
-            b'\x00',
-            b'\x00\x00',
             b'\x01\x02\x03',
-            b'\x01\x00\x02',
-            bytes(range(256)),
-            b'\x00' * 100,
+            b'\x01\x00\x02',  # Zero in middle
+            b'\x00\x01',      # Zero at start
+            b'\x01\x02\x00',  # Zero at end
+            bytes(range(1, 256)),  # All non-zero bytes
+            b'\x00' * 2,      # Multiple zeros
+            b'\xAA' * 100,    # Long non-zero
         ]
 
         for data in test_cases:

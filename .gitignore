@@ -32,8 +32,8 @@ htmlcov/
 *~
 .DS_Store
 
-# TI SDK (download separately)
-firmware/sdk/simplelink_cc13xx_cc26xx_sdk_*/
+# TI SDK (git submodule)
+# firmware/sdk/simplelink_cc13xx_cc26xx_sdk_*/ is now a submodule
 
 # Pico SDK (downloaded by CI)
 firmware/sdk/pico-sdk/

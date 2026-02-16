@@ -1,0 +1,67 @@
+Este es el Plan Maestro de Ejecución diseñado para ser importado o seguido como una hoja de ruta técnica completa. Está estructurado para resolver los problemas de versiones de TI, maximizar la velocidad de la radio y permitir ataques avanzados.
+🚀 Proyecto: CatSniffer Pro-Firmware (Cortex-M4 + RP2040)
+Fase 1: Entorno de Desarrollo "Inmortal" (Tooling)
+El objetivo es que el proyecto compile igual hoy que en 5 años, sin depender de instalaciones locales de CCS.
+ * Contenedor de Compilación: Crear un Dockerfile con Ubuntu 22.04 que incluya:
+   * TI Arm Clang (TICLANG) v3.x.
+   * SimpleLink CC13x2 SDK v7.x.
+   * CMake v3.20+ y Ninja Build.
+   * GCC Arm Embedded (para el RP2040).
+ * Sistema de Build: CMakeLists.txt con soporte para Out-of-source builds.
+ * CI/CD: Configurar GitHub Actions para que:
+   * Lanze el contenedor Docker.
+   * Compile ambos firmwares (CC1352 y RP2040).
+   * Realice pruebas unitarias del parser de protocolos.
+   * Genere artefactos .hex y .bin automáticamente en cada push.
+Fase 2: El Protocolo de Comunicación (COBS + Binary)
+Sustituimos la pesadez de Protobuf por la eficiencia cruda de COBS para hacking en tiempo real.
+ * Capa de Framing: Implementar COBS (Consistent Overhead Byte Stuffing).
+   * Delimitador: 0x00.
+ * Estructura de la Trama (Pre-COBS):
+   | Byte | Campo | Descripción |
+   | :--- | :--- | :--- |
+   | 0 | CMD_ID | Identificador de acción (TX, RX, CFG, JAM, RSSI). |
+   | 1 | SEQ | Número de secuencia para detectar paquetes perdidos. |
+   | 2-3 | LEN | Longitud del Payload (Little Endian). |
+   | 4..N | DATA | Argumentos del comando o datos de radio crudos. |
+   | N+1..2| CRC16 | CRC16-CCITT para validar integridad física del UART. |
+ * Velocidad: UART a 3,000,000 bps con Hardware Flow Control (RTS/CTS).
+Fase 3: Firmware CC1352 (The Radio Engine)
+Uso de TI-RTOS7 para gestionar la complejidad de la radio sin bloqueos.
+ * Radio Manager Task:
+   * Abstracción de la RF Driver API.
+   * Uso de RF_cmdPropRadioDivSetup para configurar modulaciones personalizadas.
+   * Cola de comandos para permitir "Chaining" (ej: RX -> TX automático en < 500µs).
+ * Memory Management:
+   * Asignación estática de buffers (no malloc).
+   * Buffer circular de 16KB para Sniffing de alta velocidad.
+ * Modos Iniciales (MVP):
+   * MODE_GFSK_1MBPS: BLE y teclados inalámbricos.
+   * MODE_GFSK_2MBPS: Protocolos propietarios rápidos (Logitech).
+   * MODE_SNIFF_PROMISCUOUS: Captura de todo lo que supere el umbral de RSSI.
+Fase 4: Firmware RP2040 (The Smart Bridge)
+El RP2040 deja de ser un cable y pasa a ser un co-procesador.
+ * USB Dual Interface:
+   * CDC (Serial): Para el flujo de comandos COBS.
+   * WebUSB/Vendor: (Opcional) para actualizaciones de firmware directas.
+ * Timestamping: El RP2040 inyecta un sello de tiempo de microsegundos en cada paquete recibido del CC1352 para análisis de protocolos de precisión en Python.
+ * Error Handling: Monitoreo del pin de reset del CC1352 para recuperarlo si el Radio Core entra en un estado de error tras un ataque de jamming.
+Fase 5: Python API (The Offensive Library)
+Una librería asíncrona para orquestar ataques.
+ * Core: pyserial + threading para lectura constante.
+ * Funcionalidades Clave:
+   * .set_radio_params(freq, deviation, symbol_rate)
+   * .sniff(callback=func)
+   * .inject(payload, timestamp_trigger=None)
+ * Módulos de Ataque MVP:
+   * MouseJack Replay: Script para clonar paquetes de ratones no cifrados.
+   * BLE Advertisement Spoofer: Generación masiva de paquetes de publicidad.
+Fase 6: Pruebas y Validación (QA)
+ * Unit Tests (C): Pruebas del parser COBS en el CI usando Unity.
+ * Mocking: Simular el UART para validar que el Command Dispatcher llama a la función de radio correcta.
+ * Hardware Test: Script de Python que mide la latencia "Round-trip" (PC -> RP2040 -> CC1352 -> RP2040 -> PC).
+Resumen de Decisiones Técnicas
+ * Build System: CMake + Docker (Portabilidad total).
+ * Protocolo: COBS + Binary (Máxima velocidad, mínimo overhead).
+ * OS: TI-RTOS7 (Estabilidad de drivers).
+ * Memoria: Estática (Confiabilidad).

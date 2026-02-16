@@ -1,0 +1,101 @@
+# FeralRF Pre-commit Hooks
+# Install: pip install pre-commit && pre-commit install
+# Run manually: pre-commit run --all-files
+
+repos:
+  # ============= General Checks =============
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: ^firmware/sdk/
+      - id: end-of-file-fixer
+        exclude: ^firmware/sdk/
+      - id: check-yaml
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: ['--maxkb=500']
+      - id: detect-private-key
+      - id: check-case-conflict
+
+  # ============= C Code (Firmware) =============
+  - repo: https://github.com/pre-commit/mirrors-clang-format
+    rev: v17.0.6
+    hooks:
+      - id: clang-format
+        files: ^firmware/(cc1352|rp2040)/.*\.(c|h)$
+        exclude: ^firmware/sdk/
+
+  - repo: local
+    hooks:
+      - id: cppcheck
+        name: cppcheck (C static analysis)
+        entry: cppcheck
+        language: system
+        files: ^firmware/(cc1352|rp2040)/.*\.c$
+        exclude: ^firmware/sdk/
+        args:
+          - '--enable=warning,performance,portability'
+          - '--suppress=missingIncludeSystem'
+          - '--inline-suppr'
+          - '--error-exitcode=1'
+          - '-I'
+          - 'firmware/cc1352/include'
+          - '-I'
+          - 'firmware/rp2040/include'
+
+  # ============= Python =============
+  - repo: https://github.com/psf/black
+    rev: 24.1.1
+    hooks:
+      - id: black
+        files: ^python/
+
+  - repo: https://github.com/pycqa/isort
+    rev: 5.13.2
+    hooks:
+      - id: isort
+        files: ^python/
+        args: ['--settings-path=python/pyproject.toml']
+
+  - repo: https://github.com/pycqa/flake8
+    rev: 7.0.0
+    hooks:
+      - id: flake8
+        files: ^python/
+        args: ['--config=.flake8']
+
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.8.0
+    hooks:
+      - id: mypy
+        files: ^python/
+        additional_dependencies:
+          - types-pyserial
+        args: ['--ignore-missing-imports']
+
+  # ============= Local: Build Checks =============
+  - repo: local
+    hooks:
+      - id: cmake-check-cc1352
+        name: CMake CC1352 Build Check
+        entry: bash -c 'cd firmware/cc1352/build && cmake .. && make -j$(nproc)'
+        language: system
+        files: ^firmware/cc1352/.*\.(c|h|S|ld)$
+        pass_filenames: false
+
+      - id: pytest-check
+        name: Python Tests
+        entry: bash -c 'cd python && source .venv/bin/activate 2>/dev/null || true && pytest -x -q'
+        language: system
+        files: ^python/.*\.py$
+        pass_filenames: false
+        stages: [pre-push]  # Only run on push, not every commit
+
+# CI configuration
+ci:
+  autofix_prs: false
+  skip:
+    - cmake-check-cc1352
+    - pytest-check

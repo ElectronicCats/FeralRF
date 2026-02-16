@@ -5,21 +5,25 @@ FeralRF - Exceptions
 
 class FeralRFError(Exception):
     """Base exception for FeralRF"""
+
     pass
 
 
 class ConnectionError(FeralRFError):
     """Connection error (serial port, etc.)"""
+
     pass
 
 
 class ProtocolError(FeralRFError):
     """Protocol error (invalid frame, CRC, etc.)"""
+
     pass
 
 
 class CommandError(FeralRFError):
     """Command execution error"""
+
     def __init__(self, message: str, error_code: int = 0):
         super().__init__(message)
         self.error_code = error_code
@@ -27,4 +31,5 @@ class CommandError(FeralRFError):
 
 class TimeoutError(FeralRFError):
     """Operation timeout"""
+
     pass

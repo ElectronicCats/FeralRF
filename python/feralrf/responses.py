@@ -4,12 +4,12 @@ FeralRF - Response parsers
 
 import struct
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass
 class RxPacketResponse:
     """RX packet response payload"""
+
     timestamp_us: int
     channel: int
     rssi_dbm: int
@@ -18,17 +18,17 @@ class RxPacketResponse:
     data: bytes
 
     @classmethod
-    def parse(cls, payload: bytes) -> 'RxPacketResponse':
+    def parse(cls, payload: bytes) -> "RxPacketResponse":
         if len(payload) < 13:
             raise ValueError("Payload too short for RX packet")
 
-        timestamp = struct.unpack('<Q', payload[0:8])[0]
+        timestamp = struct.unpack("<Q", payload[0:8])[0]
         channel = payload[8]
-        rssi = struct.unpack('<b', bytes([payload[9]]))[0]
+        rssi = struct.unpack("<b", bytes([payload[9]]))[0]
         lqi = payload[10]
         crc_ok = payload[11] == 1
         pkt_len = payload[12]
-        data = payload[13:13 + pkt_len]
+        data = payload[13 : 13 + pkt_len]
 
         return cls(
             timestamp_us=timestamp,
@@ -43,17 +43,18 @@ class RxPacketResponse:
 @dataclass
 class SpectrumDataResponse:
     """Spectrum data response payload"""
+
     frequency_hz: int
     rssi_dbm: int
     samples: list
 
     @classmethod
-    def parse(cls, payload: bytes) -> 'SpectrumDataResponse':
+    def parse(cls, payload: bytes) -> "SpectrumDataResponse":
         if len(payload) < 5:
             raise ValueError("Payload too short for spectrum data")
 
-        freq = struct.unpack('<I', payload[0:4])[0]
-        rssi = struct.unpack('<b', bytes([payload[4]]))[0]
+        freq = struct.unpack("<I", payload[0:4])[0]
+        rssi = struct.unpack("<b", bytes([payload[4]]))[0]
         samples = list(payload[5:])
 
         return cls(
@@ -66,6 +67,7 @@ class SpectrumDataResponse:
 @dataclass
 class InfoResponse:
     """Device info response payload"""
+
     firmware_major: int
     firmware_minor: int
     firmware_patch: int
@@ -73,7 +75,7 @@ class InfoResponse:
     serial: str
 
     @classmethod
-    def parse(cls, payload: bytes) -> 'InfoResponse':
+    def parse(cls, payload: bytes) -> "InfoResponse":
         if len(payload) < 4:
             raise ValueError("Payload too short for info")
 

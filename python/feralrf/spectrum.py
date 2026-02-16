@@ -9,6 +9,7 @@ from typing import List, Optional
 @dataclass
 class SpectrumPoint:
     """Single spectrum measurement point"""
+
     frequency_hz: int
     rssi_dbm: float
 
@@ -36,10 +37,10 @@ class SpectrumScan:
         rssis = [p.rssi_dbm for p in self.points]
 
         plt.figure(figsize=(10, 6))
-        plt.plot(freqs_mhz, rssis, 'b-')
-        plt.xlabel('Frequency (MHz)')
-        plt.ylabel('RSSI (dBm)')
-        plt.title('Spectrum Scan')
+        plt.plot(freqs_mhz, rssis, "b-")
+        plt.xlabel("Frequency (MHz)")
+        plt.ylabel("RSSI (dBm)")
+        plt.title("Spectrum Scan")
         plt.grid(True)
 
         if filename:

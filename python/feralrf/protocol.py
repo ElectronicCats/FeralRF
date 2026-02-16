@@ -11,19 +11,19 @@ from cobs import cobs as _cobs
 def cobs_encode(data: bytes) -> bytes:
     """Encode data using COBS with trailing 0x00 delimiter"""
     if not data:
-        return b'\x00'
-    return _cobs.encode(data) + b'\x00'
+        return b"\x00"
+    return _cobs.encode(data) + b"\x00"
 
 
 def cobs_decode(data: bytes) -> bytes:
     """Decode COBS-encoded data (with trailing 0x00 delimiter)"""
     if not data:
-        return b''
+        return b""
     # Remove trailing delimiter if present
-    if data[-1:] == b'\x00':
+    if data[-1:] == b"\x00":
         data = data[:-1]
     if not data:
-        return b''
+        return b""
     return _cobs.decode(data)
 
 
@@ -43,7 +43,7 @@ def crc16_ccitt(data: bytes, initial: int = 0xFFFF) -> int:
     return crc
 
 
-def build_frame(cmd_id: int, seq: int, payload: bytes = b'') -> bytes:
+def build_frame(cmd_id: int, seq: int, payload: bytes = b"") -> bytes:
     """
     Build a complete COBS-encoded frame
 
@@ -52,12 +52,12 @@ def build_frame(cmd_id: int, seq: int, payload: bytes = b'') -> bytes:
     """
     # Build frame without COBS encoding
     length = len(payload)
-    frame = struct.pack('<BBH', cmd_id, seq, length)
+    frame = struct.pack("<BBH", cmd_id, seq, length)
     frame += payload
 
     # Calculate CRC
     crc = crc16_ccitt(frame)
-    frame += struct.pack('<H', crc)
+    frame += struct.pack("<H", crc)
 
     # COBS encode
     return cobs_encode(frame)
@@ -74,13 +74,13 @@ def parse_frame(data: bytes) -> Tuple[int, int, bytes]:
         raise ValueError("Frame too short")
 
     # Verify CRC
-    frame_crc = struct.unpack('<H', data[-2:])[0]
+    frame_crc = struct.unpack("<H", data[-2:])[0]
     calc_crc = crc16_ccitt(data[:-2])
     if frame_crc != calc_crc:
         raise ValueError(f"CRC mismatch: expected {frame_crc:04x}, got {calc_crc:04x}")
 
     # Parse header
-    cmd_id, seq, length = struct.unpack('<BBH', data[:4])
+    cmd_id, seq, length = struct.unpack("<BBH", data[:4])
 
     # Extract payload
     payload = data[4:-2]

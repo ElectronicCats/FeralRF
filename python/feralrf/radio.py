@@ -2,24 +2,22 @@
 FeralRF - Radio interface
 """
 
-import asyncio
-from typing import Optional, Callable, Iterator
 from dataclasses import dataclass
+from typing import Iterator, Optional
 
 import serial
 import serial.tools.list_ports
 
-from feralrf.enums import PHY, Command, Response
-from feralrf.protocol import build_frame, parse_frame, cobs_decode
 from feralrf.commands import CommandBuilder
-from feralrf.exceptions import (
-    FeralRFError, ConnectionError, ProtocolError, CommandError, TimeoutError
-)
+from feralrf.enums import PHY, Command, Response
+from feralrf.exceptions import CommandError, ConnectionError, TimeoutError
+from feralrf.protocol import build_frame, cobs_decode, parse_frame
 
 
 @dataclass
 class Packet:
     """Received packet data"""
+
     timestamp_us: int
     channel: int
     rssi_dbm: int
@@ -31,6 +29,7 @@ class Packet:
 @dataclass
 class DeviceInfo:
     """Device information"""
+
     firmware_version: str
     capabilities: int
     serial: str
@@ -57,12 +56,14 @@ class Radio:
         for port in serial.tools.list_ports.comports():
             # CatSniffer typically shows as USB serial
             if port.vid in (0x2E8A, 0x2341, 0x1A86, 0x10C4):
-                devices.append({
-                    'port': port.device,
-                    'vid': port.vid,
-                    'pid': port.pid,
-                    'description': port.description,
-                })
+                devices.append(
+                    {
+                        "port": port.device,
+                        "vid": port.vid,
+                        "pid": port.pid,
+                        "description": port.description,
+                    }
+                )
         return devices
 
     def connect(self) -> None:
@@ -74,7 +75,7 @@ class Radio:
             devices = self.list_devices()
             if not devices:
                 raise ConnectionError("No FeralRF device found")
-            self.port = devices[0]['port']
+            self.port = devices[0]["port"]
 
         try:
             self._serial = serial.Serial(
@@ -98,7 +99,7 @@ class Radio:
         self._seq = (self._seq + 1) & 0xFF
         return seq
 
-    def _send_command(self, cmd: Command, payload: bytes = b'') -> None:
+    def _send_command(self, cmd: Command, payload: bytes = b"") -> None:
         """Send a command to the device"""
         if not self._serial:
             raise ConnectionError("Not connected")
@@ -115,8 +116,6 @@ class Radio:
         self._serial.timeout = timeout
 
         # Read until we get a complete frame (0x00 delimiter)
-        start_time = asyncio.get_event_loop().time() if asyncio.get_event_loop().is_running() else 0
-
         while True:
             byte = self._serial.read(1)
             if not byte:
@@ -124,7 +123,7 @@ class Radio:
 
             self._rx_buffer.extend(byte)
 
-            if byte == b'\x00' and len(self._rx_buffer) > 1:
+            if byte == b"\x00" and len(self._rx_buffer) > 1:
                 # Try to decode frame
                 try:
                     decoded = cobs_decode(bytes(self._rx_buffer))
@@ -212,13 +211,13 @@ class Radio:
                 if cmd_id == Response.RX_PACKET:
                     # Parse packet
                     if len(payload) >= 14:
-                        timestamp = int.from_bytes(payload[0:8], 'little')
+                        timestamp = int.from_bytes(payload[0:8], "little")
                         channel = payload[8]
                         rssi = payload[9] - 256 if payload[9] > 127 else payload[9]
                         lqi = payload[10]
                         crc_ok = payload[11] == 1
                         pkt_len = payload[12]
-                        data = payload[13:13 + pkt_len]
+                        data = payload[13 : 13 + pkt_len]
 
                         yield Packet(
                             timestamp_us=timestamp,

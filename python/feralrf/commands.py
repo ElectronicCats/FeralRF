@@ -3,7 +3,7 @@ FeralRF - Command builders
 """
 
 import struct
-from typing import Optional
+
 from feralrf.enums import Command
 
 
@@ -28,7 +28,7 @@ class CommandBuilder:
     @staticmethod
     def set_phy(phy: int, channel: int = 0, frequency_hz: int = 0) -> bytes:
         """Set PHY type and channel"""
-        return struct.pack('<BBHI', Command.SET_PHY, phy, channel, frequency_hz)
+        return struct.pack("<BBHI", Command.SET_PHY, phy, channel, frequency_hz)
 
     @staticmethod
     def get_info() -> bytes:
@@ -67,17 +67,23 @@ class CommandBuilder:
         return bytes([Command.JAM_STOP])
 
     @staticmethod
-    def spectrum_scan(start_freq_hz: int, end_freq_hz: int,
-                      step_khz: int = 1000, samples: int = 10,
-                      dwell_ms: int = 10) -> bytes:
+    def spectrum_scan(
+        start_freq_hz: int,
+        end_freq_hz: int,
+        step_khz: int = 1000,
+        samples: int = 10,
+        dwell_ms: int = 10,
+    ) -> bytes:
         """Start spectrum scan"""
-        return struct.pack('<BIIHBB',
-                          Command.SPECTRUM_SCAN,
-                          start_freq_hz,
-                          end_freq_hz,
-                          step_khz,
-                          samples,
-                          dwell_ms)
+        return struct.pack(
+            "<BIIHBB",
+            Command.SPECTRUM_SCAN,
+            start_freq_hz,
+            end_freq_hz,
+            step_khz,
+            samples,
+            dwell_ms,
+        )
 
     @staticmethod
     def spectrum_stop() -> bytes:

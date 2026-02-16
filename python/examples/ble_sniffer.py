@@ -9,17 +9,18 @@ Usage:
 """
 
 import argparse
-from feralrf import Radio, PHY
+
+from feralrf import PHY, Radio
 
 
 def main():
-    parser = argparse.ArgumentParser(description='FeralRF BLE Sniffer')
-    parser.add_argument('--port', '-p', help='Serial port', default=None)
-    parser.add_argument('--channel', '-c', help='BLE channel (37, 38, 39)', type=int, default=37)
+    parser = argparse.ArgumentParser(description="FeralRF BLE Sniffer")
+    parser.add_argument("--port", "-p", help="Serial port", default=None)
+    parser.add_argument("--channel", "-c", help="BLE channel (37, 38, 39)", type=int, default=37)
     args = parser.parse_args()
 
-    print(f"FeralRF BLE Sniffer")
-    print(f"===================")
+    print("FeralRF BLE Sniffer")
+    print("===================")
     print()
 
     try:
@@ -27,7 +28,7 @@ def main():
         radio = Radio(port=args.port)
 
         # Connect and initialize
-        print(f"Connecting to device...")
+        print("Connecting to device...")
         info = radio.init()
         print(f"Firmware: {info.firmware_version}")
         print(f"Serial: {info.serial}")
@@ -49,11 +50,13 @@ def main():
         try:
             for packet in radio.read_packets(timeout=None):
                 packet_count += 1
-                print(f"[{packet_count:5d}] "
-                      f"RSSI: {packet.rssi_dbm:3d} dBm | "
-                      f"CH: {packet.channel:2d} | "
-                      f"CRC: {'OK' if packet.crc_ok else 'FAIL'} | "
-                      f"Data: {packet.data.hex()}")
+                print(
+                    f"[{packet_count:5d}] "
+                    f"RSSI: {packet.rssi_dbm:3d} dBm | "
+                    f"CH: {packet.channel:2d} | "
+                    f"CRC: {'OK' if packet.crc_ok else 'FAIL'} | "
+                    f"Data: {packet.data.hex()}"
+                )
 
         except KeyboardInterrupt:
             print(f"\n\nReceived {packet_count} packets")
@@ -70,5 +73,5 @@ def main():
     return 0
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     exit(main())

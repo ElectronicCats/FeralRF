@@ -7,6 +7,7 @@ from enum import IntEnum
 
 class PHY(IntEnum):
     """Supported PHY types"""
+
     BLE_1M = 0
     BLE_2M = 1
     BLE_CODED_S8 = 2
@@ -19,6 +20,7 @@ class PHY(IntEnum):
 
 class Command(IntEnum):
     """Command IDs"""
+
     # Configuration
     RADIO_INIT = 0x01
     SET_CHANNEL = 0x02
@@ -60,6 +62,7 @@ class Command(IntEnum):
 
 class Response(IntEnum):
     """Response IDs"""
+
     ACK = 0x80
     ERROR = 0x81
     RX_PACKET = 0x90

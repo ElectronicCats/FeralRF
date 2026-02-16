@@ -8,11 +8,13 @@ repos:
     rev: v4.5.0
     hooks:
       - id: trailing-whitespace
-        exclude: ^firmware/sdk/
+        exclude: ^(firmware/sdk/|hardware/|plan_.*\.md|.*_con_.*\.md)
       - id: end-of-file-fixer
-        exclude: ^firmware/sdk/
+        exclude: ^(firmware/sdk/|hardware/|plan_.*\.md|.*_con_.*\.md)
       - id: check-yaml
+        exclude: ^hardware/
       - id: check-json
+        exclude: ^hardware/
       - id: check-merge-conflict
       - id: check-added-large-files
         args: ['--maxkb=500']

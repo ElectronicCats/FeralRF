@@ -74,14 +74,21 @@ pytest --cov=feralrf
 pytest -m hardware
 ```
 
-## Current Status (FASE 0)
+## Current Status
 
-| Component | Status |
-|-----------|--------|
-| RP2040 firmware | ✅ Compiles (feralrf_rp2040.uf2) |
-| CC1352 firmware | ⏳ In progress |
-| Python package | ✅ Tests passing (13/13) |
-| GitHub Actions | ✅ Configured |
+**FASE 0: Completada ✅**
+
+| Component | Status | Output |
+|-----------|--------|--------|
+| RP2040 firmware | ✅ | feralrf_rp2040.uf2 (46KB) |
+| CC1352 firmware | ✅ | feralrf_cc1352.elf (392B code) |
+| Python package | ✅ | 13/13 tests passing |
+| GitHub Actions | ✅ | build.yml, release.yml |
+| SDKs | ✅ | TI SDK 7.10.01.24, Pico SDK 2.0.0 |
+
+**Próximo: FASE 1 - BLE Sniffer MVP**
+
+Ver `SESSION_STATE.md` para contexto completo de la sesión anterior.
 
 ## Protocol
 

@@ -3,15 +3,14 @@
  * Phase 0: USB echo test
  */
 
-#include <stdio.h>
-#include "pico/stdlib.h"
+#include "config.h"
 #include "hardware/gpio.h"
 #include "hardware/uart.h"
-#include "config.h"
+#include "pico/stdlib.h"
+#include <stdio.h>
 
 /* Initialize LEDs */
-static void leds_init(void)
-{
+static void leds_init(void) {
     gpio_init(LED1_PIN);
     gpio_init(LED2_PIN);
     gpio_init(LED3_PIN);
@@ -25,16 +24,14 @@ static void leds_init(void)
 }
 
 /* Initialize CC1352 reset control */
-static void reset_init(void)
-{
+static void reset_init(void) {
     gpio_init(RESET_CC_PIN);
     gpio_set_dir(RESET_CC_PIN, GPIO_OUT);
-    gpio_put(RESET_CC_PIN, 1);  /* Release reset */
+    gpio_put(RESET_CC_PIN, 1); /* Release reset */
 }
 
 /* Initialize UART to CC1352 */
-static void uart_cc1352_init(void)
-{
+static void uart_cc1352_init(void) {
     uart_init(UART_ID, UART_BAUD_RATE);
 
     gpio_set_function(UART_TX_PIN, GPIO_FUNC_UART);
@@ -49,8 +46,7 @@ static void uart_cc1352_init(void)
     uart_set_fifo_enabled(UART_ID, true);
 }
 
-int main(void)
-{
+int main(void) {
     stdio_init_all();
 
     leds_init();

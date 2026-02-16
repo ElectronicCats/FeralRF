@@ -8,9 +8,9 @@ repos:
     rev: v4.5.0
     hooks:
       - id: trailing-whitespace
-        exclude: ^(firmware/sdk/|hardware/|plan_.*\.md|.*_con_.*\.md)
+        exclude: ^(firmware/sdk/|hardware/|examples-catsniffer/|plan_.*\.md|.*_con_.*\.md)
       - id: end-of-file-fixer
-        exclude: ^(firmware/sdk/|hardware/|plan_.*\.md|.*_con_.*\.md)
+        exclude: ^(firmware/sdk/|hardware/|examples-catsniffer/|plan_.*\.md|.*_con_.*\.md)
       - id: check-yaml
         exclude: ^hardware/
       - id: check-json

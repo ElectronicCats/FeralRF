@@ -1,6 +1,9 @@
 # Hardware
 hardware/CatSniffer-backups/
 
+# Reference examples (temporary)
+examples-catsniffer/
+
 # Build directories
 build/
 cmake-build-*/

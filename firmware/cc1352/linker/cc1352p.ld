@@ -13,20 +13,41 @@ SECTIONS
 {
     .text :
     {
-        *(.vectors)
+        KEEP(*(.vectors))
         *(.text*)
         *(.rodata*)
+        *(.glue_7)
+        *(.glue_7t)
+        KEEP(*(.init))
+        KEEP(*(.fini))
         . = ALIGN(4);
     } > FLASH
 
-    .data :
+    .ARM.extab :
+    {
+        *(.ARM.extab* .gnu.linkonce.armextab.*)
+        . = ALIGN(4);
+    } > FLASH
+
+    .ARM.exidx :
+    {
+        __exidx_start = .;
+        *(.ARM.exidx* .gnu.linkonce.armexidx.*)
+        __exidx_end = .;
+        . = ALIGN(4);
+    } > FLASH
+
+    _etext = .;
+
+    .data : AT(_etext)
     {
         . = ALIGN(4);
         _data = .;
         *(.data*)
+        *(.ramfunc*)
         . = ALIGN(4);
         _edata = .;
-    } > SRAM AT > FLASH
+    } > SRAM
 
     _ldata = LOADADDR(.data);
 
@@ -49,4 +70,11 @@ SECTIONS
     } > SRAM
 
     _end = .;
+
+    /DISCARD/ :
+    {
+        *(.ARM.attributes*)
+        *(.comment*)
+        *(.note*)
+    }
 }

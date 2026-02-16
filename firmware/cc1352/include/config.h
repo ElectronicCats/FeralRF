@@ -13,7 +13,7 @@
 #define UART_BAUD_RATE      3000000 /* 3Mbps */
 
 /* LED Configuration (for debugging) */
-#define LED_PIN             6       /* DIO6 - typically LED on LaunchPad */
+#define LED_PIN             24      /* DIO24 - LED on CatSniffer */
 
 /* Radio Configuration */
 #define TX_POWER_DBM        0       /* Default TX power */

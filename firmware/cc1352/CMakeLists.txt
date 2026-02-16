@@ -41,6 +41,7 @@ set(SDK_INCLUDE_DIRS
 # Source files
 set(SOURCES
     src/main.c
+    src/protocol.c
     src/startup_cc13x2_cc26x2_gcc.c
 )
 

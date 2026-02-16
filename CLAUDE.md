@@ -49,13 +49,13 @@ See `hardware/PINOUT.md` for full details.
 # Build Docker container
 docker build -t feralrf-build -f docker/Dockerfile .
 
-# Build CC1352 firmware
-cd firmware/cc1352 && mkdir build && cd build
+# Build CC1352 firmware (requires TI SDK in firmware/sdk/)
+cd firmware/cc1352 && mkdir -p build && cd build
 cmake .. && make -j$(nproc)
 
-# Build RP2040 firmware
-cd firmware/rp2040 && mkdir build && cd build
-cmake .. && make -j$(nproc)
+# Build RP2040 firmware (Pico SDK auto-downloaded)
+cd firmware/rp2040 && mkdir -p build && cd build
+cmake .. -DPICO_SDK_PATH=../../sdk/pico-sdk && make -j$(nproc)
 
 # Build Python package
 cd python && pip install -e ".[dev]"
@@ -65,23 +65,37 @@ cd python && pip install -e ".[dev]"
 
 ```bash
 # Python unit tests
-cd python && pytest
+cd python && source .venv/bin/activate && pytest
 
 # Python tests with coverage
 pytest --cov=feralrf
 
-# C unit tests (CC1352)
-cd firmware/build && ctest
-
 # Hardware integration tests
 pytest -m hardware
 ```
+
+## Current Status (FASE 0)
+
+| Component | Status |
+|-----------|--------|
+| RP2040 firmware | ✅ Compiles (feralrf_rp2040.uf2) |
+| CC1352 firmware | ⏳ In progress |
+| Python package | ✅ Tests passing (13/13) |
+| GitHub Actions | ✅ Configured |
 
 ## Protocol
 
 COBS-framed binary protocol with CRC16-CCITT. See `PLAN_MAESTRO.md` section 3 for full command IDs and frame format.
 
 Key response codes: `RSP_ACK (0x80)`, `RSP_ERROR (0x81)`, `RSP_RX_PACKET (0x90)`
+
+## Python Dependencies
+
+| Package | Purpose |
+|---------|---------|
+| pyserial | Serial communication |
+| pyserial-asyncio | Async serial support |
+| cobs | COBS encoding/decoding |
 
 ## Development Phases
 

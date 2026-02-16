@@ -84,7 +84,7 @@ Firmware universal para CatSniffer (CC1352P + RP2040) con capacidades de sniffin
 |------------|------------|
 | Core | Python 3.9+ |
 | Serial | pyserial-asyncio |
-| Protocol | COBS + struct |
+| Protocol | COBS (cobs library) + struct |
 | Testing | pytest, pytest-asyncio |
 
 ### Build & CI/CD

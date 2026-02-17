@@ -9,8 +9,46 @@ Usage:
 """
 
 import argparse
+from typing import Optional
 
 from feralrf import PHY, Radio
+
+
+def ll_kind_label(kind: Optional[int]) -> str:
+    if kind == 1:
+        return "ADV"
+    if kind == 2:
+        return "SCAN"
+    if kind == 3:
+        return "CONNECT"
+    if kind == 4:
+        return "DATA"
+    return "N/A"
+
+
+def ll_subtype_label(kind: Optional[int], pdu_type: Optional[int], flags: Optional[int]) -> str:
+    if kind is None or pdu_type is None:
+        return "-"
+    if flags is not None and (flags & 0x08):
+        return "RESERVED"
+    if kind == 1:
+        mapping = {
+            0x00: "ADV_IND",
+            0x01: "ADV_DIRECT_IND",
+            0x02: "ADV_NONCONN_IND",
+            0x06: "ADV_SCAN_IND",
+            0x07: "ADV_EXT_IND",
+        }
+        return mapping.get(pdu_type, f"ADV_0x{pdu_type:02X}")
+    if kind == 2:
+        mapping = {0x03: "SCAN_REQ", 0x04: "SCAN_RSP"}
+        return mapping.get(pdu_type, f"SCAN_0x{pdu_type:02X}")
+    if kind == 3:
+        return "CONNECT_IND"
+    if kind == 4:
+        mapping = {0x01: "DATA_CONT", 0x02: "DATA_START", 0x03: "CTRL"}
+        return mapping.get(pdu_type, f"DATA_0x{pdu_type:02X}")
+    return f"0x{pdu_type:02X}"
 
 
 def main():
@@ -55,6 +93,8 @@ def main():
                     f"RSSI: {packet.rssi_dbm:3d} dBm | "
                     f"CH: {packet.channel:2d} | "
                     f"CRC: {'OK' if packet.crc_ok else 'FAIL'} | "
+                    f"LL: {ll_kind_label(packet.ll_pdu_kind)}"
+                    f"/{ll_subtype_label(packet.ll_pdu_kind, packet.ll_pdu_type, packet.ll_pdu_flags)} | "
                     f"Data: {packet.data.hex()}"
                 )
 

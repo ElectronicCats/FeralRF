@@ -41,6 +41,15 @@ def get_stats_with_retry(radio: Radio, retries: int, timeout: float):
     raise TimeoutError("Response timeout")
 
 
+def format_ll_stats(stats) -> str:
+    if stats.ll_kind_adv is None:
+        return ""
+    return (
+        f" ll(unk={stats.ll_kind_unknown},adv={stats.ll_kind_adv},"
+        f"scan={stats.ll_kind_scan},conn={stats.ll_kind_connect},data={stats.ll_kind_data})"
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="FeralRF BLE soak test")
     parser.add_argument("--port", "-p", help="Serial port (auto-detect if omitted)", default=None)
@@ -102,7 +111,8 @@ def main() -> int:
         ok(
             "RX started "
             f"(baseline ok={baseline.rx_ok} crc_err={baseline.rx_crc_err} "
-            f"drop={baseline.rx_drop} ovf={baseline.rx_overflow})"
+            f"drop={baseline.rx_drop} ovf={baseline.rx_overflow}"
+            f"{format_ll_stats(baseline)})"
         )
         print()
 
@@ -149,6 +159,7 @@ def main() -> int:
                     f"pkts_window={len(pkts):4d} "
                     f"delta(ok={delta_ok},crc_err={delta_crc_err},drop={delta_drop},ovf={delta_ovf}) "
                     f"cum(ok={cum_ok},crc_err={cum_crc_err},drop={cum_drop},ovf={cum_ovf})"
+                    f"{format_ll_stats(curr)}"
                 )
                 prev = curr
             else:
@@ -176,6 +187,7 @@ def main() -> int:
                 f"crc_err={final_stats.rx_crc_err - baseline.rx_crc_err} "
                 f"drop={final_stats.rx_drop - baseline.rx_drop} "
                 f"ovf={final_stats.rx_overflow - baseline.rx_overflow}"
+                f"{format_ll_stats(final_stats)}"
             )
         except TimeoutError:
             if stopped_cleanly:

@@ -16,7 +16,11 @@
 #define FW_VERSION_MAJOR 0x01u
 #define FW_VERSION_MINOR 0x00u
 #define FW_VERSION_PATCH 0x00u
-#define FW_CAPABILITIES 0x01u
+#define FW_CAPABILITY_RX_STATS 0x01u
+#define FW_CAPABILITY_LL_PDU_META 0x02u
+#define FW_CAPABILITY_LL_STATS_EXT 0x04u
+#define FW_CAPABILITIES \
+    (FW_CAPABILITY_RX_STATS | FW_CAPABILITY_LL_PDU_META | FW_CAPABILITY_LL_STATS_EXT)
 
 static uint8_t s_selected_phy = 0;
 static uint16_t s_channel = 0;
@@ -41,6 +45,7 @@ void ControlTask_init(void) {
 void ControlTask_onRadioInit(void) {
     s_rx_enabled = false;
     RadioIF_resetMetrics();
+    LLManager_resetStats();
 }
 
 bool ControlTask_onSetPhy(uint8_t phy, uint16_t channel, uint32_t frequency_hz) {

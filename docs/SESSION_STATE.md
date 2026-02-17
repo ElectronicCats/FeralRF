@@ -15,6 +15,10 @@
    4. `rx_overflow`
 6. Soak BLE de 30 minutos validado en hardware (`OK`).
 7. Base de Fase 5 integrada en firmware (`phy_manager` tabular + `LL_DEFAULT/LL_BLE` pluggable).
+8. `LL_BLE` ya aplica validacion minima de PDU (header+length), con recorte o descarte de paquetes inconsistentes.
+9. `RSP_RX_PACKET` ya incluye metadata LL opcional (`ll_pdu_kind`, `ll_pdu_type`) con capability flag en `GET_INFO`.
+10. `GET_STATS` extendido (compat): incluye contadores LL por tipo (`unknown/adv/scan/connect/data`) cuando capability lo anuncia.
+11. Parser `LL_BLE` ampliado: subtipos advertising (`ADV_IND`, `ADV_SCAN_IND`, `ADV_EXT_IND`, etc.) y bandera de casos reservados.
 
 ## Estado por fase
 
@@ -35,6 +39,12 @@
    2. `packets: 2`
    3. `stats_after: ok=2 crc_err=0 drop=0 ovf=0`
 4. Soak BLE 30 minutos: `OK` (sin caida de sesion).
+5. Soak BLE 60s con stats LL live: `OK`:
+   1. `capabilities=0x07`
+   2. `packets_total=9476`
+   3. `stats_total ok=9669 crc_err=1291 drop=64 ovf=0`
+   4. `ll_total unk=0 adv=7601 scan=2068 conn=0 data=0`
+6. Validacion de parser LL ampliado: `OK` (captura real muestra subtipos `ADV_IND`, `ADV_NONCONN_IND`, `ADV_EXT_IND`, `SCAN_REQ`, `SCAN_RSP` en canales 37/38/39).
 
 ## Riesgo abierto actual
 
@@ -73,5 +83,6 @@
 
 ## Siguiente paso inmediato recomendado
 
-1. Consolidar Fase 5 (`phy_manager` tabular + `LL_DEFAULT/LL_BLE` pluggable).
-2. Continuar Fase 7 con automatizacion de regresion (soak canario + validacion de `RX_STOP/GET_STATS` final).
+1. Cerrar Fase 5 (parser LL BLE mas completo `OK` + primer backend RF real no-BLE pendiente).
+2. Cerrar Fase 7 (regresion automatizada con criterios de aceptacion).
+3. Publicar `docs/protocol.md` con contrato vigente y capacidades.

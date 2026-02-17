@@ -4,6 +4,7 @@ FeralRF - Response parsers
 
 import struct
 from dataclasses import dataclass
+from typing import Optional
 
 
 @dataclass
@@ -16,6 +17,9 @@ class RxPacketResponse:
     lqi: int
     crc_ok: bool
     data: bytes
+    ll_pdu_kind: Optional[int] = None
+    ll_pdu_type: Optional[int] = None
+    ll_pdu_flags: Optional[int] = None
 
     @classmethod
     def parse(cls, payload: bytes) -> "RxPacketResponse":
@@ -29,6 +33,16 @@ class RxPacketResponse:
         crc_ok = payload[11] == 1
         pkt_len = payload[12]
         data = payload[13 : 13 + pkt_len]
+        ll_pdu_kind = None
+        ll_pdu_type = None
+        ll_pdu_flags = None
+        ll_meta_offset = 13 + pkt_len
+
+        if len(payload) >= ll_meta_offset + 2:
+            ll_pdu_kind = payload[ll_meta_offset]
+            ll_pdu_type = payload[ll_meta_offset + 1]
+            if len(payload) >= ll_meta_offset + 3:
+                ll_pdu_flags = payload[ll_meta_offset + 2]
 
         return cls(
             timestamp_us=timestamp,
@@ -37,6 +51,9 @@ class RxPacketResponse:
             lqi=lqi,
             crc_ok=crc_ok,
             data=data,
+            ll_pdu_kind=ll_pdu_kind,
+            ll_pdu_type=ll_pdu_type,
+            ll_pdu_flags=ll_pdu_flags,
         )
 
 

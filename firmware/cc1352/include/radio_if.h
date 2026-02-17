@@ -11,7 +11,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-/* Keep response payload <= PROTOCOL_MAX_PAYLOAD (255): metadata 13 + data <= 242 */
+/* Data task clamps emitted data length to keep RX payload <= 255 with LL metadata. */
 #define RADIO_IF_MAX_PACKET_DATA 242u
 
 typedef struct {
@@ -20,6 +20,9 @@ typedef struct {
     int8_t rssi_dbm;
     uint8_t lqi;
     bool crc_ok;
+    uint8_t ll_pdu_kind;
+    uint8_t ll_pdu_type;
+    uint8_t ll_pdu_flags;
     uint8_t data_len;
     uint8_t data[RADIO_IF_MAX_PACKET_DATA];
 } RadioIF_RxPacket;

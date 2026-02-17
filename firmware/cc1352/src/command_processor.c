@@ -9,6 +9,7 @@
 #include <stdint.h>
 
 #include "control_task.h"
+#include "ll_manager.h"
 #include "output_if.h"
 #include "protocol.h"
 #include "radio_if.h"
@@ -73,14 +74,21 @@ static void send_info(uint8_t seq) {
 }
 
 static void send_stats(uint8_t seq) {
-    uint8_t payload[16];
+    uint8_t payload[36];
     RadioIF_Metrics metrics;
+    LLManager_Stats ll_stats;
 
     RadioIF_getMetrics(&metrics);
+    LLManager_getStats(&ll_stats);
     write_u32_le(&payload[0], metrics.rx_ok);
     write_u32_le(&payload[4], metrics.rx_crc_err);
     write_u32_le(&payload[8], metrics.rx_drop);
     write_u32_le(&payload[12], metrics.rx_overflow);
+    write_u32_le(&payload[16], ll_stats.kind_unknown);
+    write_u32_le(&payload[20], ll_stats.kind_adv);
+    write_u32_le(&payload[24], ll_stats.kind_scan);
+    write_u32_le(&payload[28], ll_stats.kind_connect);
+    write_u32_le(&payload[32], ll_stats.kind_data);
     send_response(RSP_STATS, seq, payload, sizeof(payload));
 }
 

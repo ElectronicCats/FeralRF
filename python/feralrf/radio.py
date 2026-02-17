@@ -25,6 +25,9 @@ class Packet:
     lqi: int
     crc_ok: bool
     data: bytes
+    ll_pdu_kind: Optional[int] = None
+    ll_pdu_type: Optional[int] = None
+    ll_pdu_flags: Optional[int] = None
 
 
 @dataclass
@@ -44,12 +47,21 @@ class DeviceStats:
     rx_crc_err: int
     rx_drop: int
     rx_overflow: int
+    ll_kind_unknown: Optional[int] = None
+    ll_kind_adv: Optional[int] = None
+    ll_kind_scan: Optional[int] = None
+    ll_kind_connect: Optional[int] = None
+    ll_kind_data: Optional[int] = None
 
 
 class Radio:
     """
     Synchronous Radio interface for FeralRF
     """
+
+    CAPABILITY_RX_STATS = 0x01
+    CAPABILITY_LL_PDU_META = 0x02
+    CAPABILITY_LL_STATS_EXT = 0x04
 
     def __init__(self, port: Optional[str] = None, baudrate: int = 921600):
         self.port = port
@@ -58,6 +70,7 @@ class Radio:
         self._seq = 0
         self._phy: Optional[PHY] = None
         self._channel: int = 0
+        self._capabilities: int = 0
         self._rx_buffer = bytearray()
 
     @staticmethod
@@ -222,11 +235,13 @@ class Radio:
         if len(payload) < 12:
             raise ProtocolError(f"INFO payload too short: {len(payload)}")
 
-        return DeviceInfo(
+        info = DeviceInfo(
             firmware_version=f"{payload[0]}.{payload[1]}.{payload[2]}",
             capabilities=payload[3],
             serial=payload[4:12].hex(),
         )
+        self._capabilities = info.capabilities
+        return info
 
     def set_phy(self, phy: PHY, channel: int = 0) -> None:
         """Set PHY type and channel"""
@@ -282,6 +297,31 @@ class Radio:
             rx_crc_err=int.from_bytes(payload[4:8], "little"),
             rx_drop=int.from_bytes(payload[8:12], "little"),
             rx_overflow=int.from_bytes(payload[12:16], "little"),
+            ll_kind_unknown=(
+                int.from_bytes(payload[16:20], "little")
+                if len(payload) >= 36 and (self._capabilities & self.CAPABILITY_LL_STATS_EXT)
+                else None
+            ),
+            ll_kind_adv=(
+                int.from_bytes(payload[20:24], "little")
+                if len(payload) >= 36 and (self._capabilities & self.CAPABILITY_LL_STATS_EXT)
+                else None
+            ),
+            ll_kind_scan=(
+                int.from_bytes(payload[24:28], "little")
+                if len(payload) >= 36 and (self._capabilities & self.CAPABILITY_LL_STATS_EXT)
+                else None
+            ),
+            ll_kind_connect=(
+                int.from_bytes(payload[28:32], "little")
+                if len(payload) >= 36 and (self._capabilities & self.CAPABILITY_LL_STATS_EXT)
+                else None
+            ),
+            ll_kind_data=(
+                int.from_bytes(payload[32:36], "little")
+                if len(payload) >= 36 and (self._capabilities & self.CAPABILITY_LL_STATS_EXT)
+                else None
+            ),
         )
 
     def start_rx(self) -> None:
@@ -352,6 +392,19 @@ class Radio:
                         crc_ok = payload[11] == 1
                         pkt_len = payload[12]
                         data = payload[13 : 13 + pkt_len]
+                        ll_pdu_kind = None
+                        ll_pdu_type = None
+                        ll_pdu_flags = None
+                        ll_meta_offset = 13 + pkt_len
+
+                        if (
+                            self._capabilities & self.CAPABILITY_LL_PDU_META
+                            and len(payload) >= ll_meta_offset + 2
+                        ):
+                            ll_pdu_kind = payload[ll_meta_offset]
+                            ll_pdu_type = payload[ll_meta_offset + 1]
+                            if len(payload) >= ll_meta_offset + 3:
+                                ll_pdu_flags = payload[ll_meta_offset + 2]
 
                         yield Packet(
                             timestamp_us=timestamp,
@@ -360,6 +413,9 @@ class Radio:
                             lqi=lqi,
                             crc_ok=crc_ok,
                             data=data,
+                            ll_pdu_kind=ll_pdu_kind,
+                            ll_pdu_type=ll_pdu_type,
+                            ll_pdu_flags=ll_pdu_flags,
                         )
             except TimeoutError:
                 break

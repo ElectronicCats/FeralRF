@@ -10,6 +10,7 @@
 
 #include "ll_manager.h"
 #include "output_if.h"
+#include "protocol.h"
 #include "radio_if.h"
 #include "task_event.h"
 
@@ -17,10 +18,21 @@ static bool s_rx_active = false;
 static uint8_t s_rx_rsp_seq = 0;
 
 #define RSP_RX_PACKET 0x90u
+#define RX_PACKET_BASE_META_LEN 13u
+#define RX_PACKET_LL_META_LEN 3u
+#define RX_PACKET_MAX_EMIT_DATA_LEN \
+    (PROTOCOL_MAX_PAYLOAD - RX_PACKET_BASE_META_LEN - RX_PACKET_LL_META_LEN)
 
 static void DataTask_emitRxPacket(const RadioIF_RxPacket *pkt) {
-    uint8_t payload[13u + RADIO_IF_MAX_PACKET_DATA];
-    uint16_t payload_len = 13u + pkt->data_len;
+    uint8_t payload[RX_PACKET_BASE_META_LEN + RADIO_IF_MAX_PACKET_DATA + RX_PACKET_LL_META_LEN];
+    uint8_t emit_data_len = pkt->data_len;
+    uint16_t payload_len = 0u;
+
+    if (emit_data_len > RX_PACKET_MAX_EMIT_DATA_LEN) {
+        emit_data_len = (uint8_t)RX_PACKET_MAX_EMIT_DATA_LEN;
+    }
+
+    payload_len = RX_PACKET_BASE_META_LEN + emit_data_len + RX_PACKET_LL_META_LEN;
 
     payload[0] = (uint8_t)(pkt->timestamp_us & 0xFFu);
     payload[1] = (uint8_t)((pkt->timestamp_us >> 8) & 0xFFu);
@@ -34,10 +46,13 @@ static void DataTask_emitRxPacket(const RadioIF_RxPacket *pkt) {
     payload[9] = (uint8_t)pkt->rssi_dbm;
     payload[10] = pkt->lqi;
     payload[11] = pkt->crc_ok ? 1u : 0u;
-    payload[12] = pkt->data_len;
-    for (uint16_t i = 0; i < pkt->data_len; i++) {
+    payload[12] = emit_data_len;
+    for (uint16_t i = 0; i < emit_data_len; i++) {
         payload[13u + i] = pkt->data[i];
     }
+    payload[13u + emit_data_len] = pkt->ll_pdu_kind;
+    payload[13u + emit_data_len + 1u] = pkt->ll_pdu_type;
+    payload[13u + emit_data_len + 2u] = pkt->ll_pdu_flags;
 
     OutputIF_sendResponse(RSP_RX_PACKET, s_rx_rsp_seq++, payload, payload_len);
 }
@@ -69,8 +84,9 @@ void DataTask_poll(void) {
     if (s_rx_active) {
         RadioIF_RxPacket pkt;
         while (RadioIF_popRxPacket(&pkt)) {
-            LLManager_processRxPacket(&pkt);
-            DataTask_emitRxPacket(&pkt);
+            if (LLManager_processRxPacket(&pkt)) {
+                DataTask_emitRxPacket(&pkt);
+            }
         }
     }
 }

@@ -10,6 +10,9 @@ Firmware universal para CatSniffer (CC1352P + RP2040) con capacidades de sniffin
 - BLE adv hopping basico activo en firmware (`37/38/39`, dwell configurable).
 - Metricas RX base expuestas al host (`rx_ok`, `rx_crc_err`, `rx_drop`, `rx_overflow`).
 - Base de Fase 5 integrada: `phy_manager` tabular + seleccion `LL_DEFAULT/LL_BLE` en pipeline.
+- Metadata LL en `RSP_RX_PACKET` (capability-gated): clasificacion `ADV/SCAN/CONNECT/DATA` + tipo PDU.
+- `GET_STATS` extendido (compat) con contadores LL por tipo para regresion automatizada.
+- Parser LL BLE ampliado para subtipos advertising/extended y deteccion de tipos reservados.
 - Estabilidad validada: soak BLE de 30 minutos completado en hardware.
 - Pendiente principal: automatizar regresion sobre metricas y cierre de sesion (`RX_STOP/GET_STATS`) como prueba canaria.
 
@@ -387,14 +390,16 @@ def test_ble_sniffer_receive():
 
 ## 9. Próximos Pasos
 
-1. Consolidar FASE 5:
-   1. formalizar `phy_manager` tabular.
-   2. integrar `LL_DEFAULT` y `LL_BLE` como interfaz pluggable clara.
-2. Iniciar FASE 7:
-   1. agregar metricas de firmware (`rx_ok`, `rx_crc_err`, `rx_drop`, `rx_overflow`).
-   2. exponer metricas al host para pruebas de regresion.
-3. Completar ejemplo de usuario:
-   1. publicar `python/examples/ble_sniffer.py` como flujo recomendado.
-4. Automatizar estabilidad:
-   1. dejar `python/examples/soak_ble_30min.py` como canario de regresion.
-   2. validar cierre limpio con `RX_STOP ACK` y `GET_STATS` final en cada corrida.
+1. Cerrar FASE 5 (LL BLE):
+   1. ampliar clasificacion LL para subtipos advertising/extended.
+   2. sostener compatibilidad backward del payload RX.
+2. Cerrar FASE 5 (multi-PHY real):
+   1. primer backend RF no-BLE: `IEEE_802_15_4` RX real.
+   2. fallback sintetico solo en PHY aun no implementados.
+3. Ejecutar FASE 7 (regresion):
+   1. automatizar smoke + soak corto + validacion de stats LL.
+   2. fijar umbrales de aceptacion y salida no-cero en regresion.
+4. Documentacion de protocolo:
+   1. publicar `docs/protocol.md` con contrato actualizado (`RSP_RX_PACKET`, `RSP_STATS`, capabilities).
+5. Gate de release BLE:
+   1. checklist HW: smoke, soak 30 min, clasificacion LL y cierre limpio de sesion.

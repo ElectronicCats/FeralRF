@@ -203,6 +203,7 @@ Dejar base lista para Zigbee/Sub-1GHz, jamming y spectrum.
    2. `OK`: gate operativo formalizado en comando unico (`python/examples/release_gate_ble.py`).
    3. `OK`: corridas 1/2 y 2/2 consecutivas del gate BLE en verde (`BLE RELEASE GATE PASS`).
    4. `OK`: baseline BLE congelado.
-   5. pendiente: abrir Zigbee/Sub-1GHz/TX/jamming manteniendo gate BLE como no-regresion.
+   5. `OK`: gate conectado a flujo manual/CI (`.github/workflows/ble_release_gate_hw.yml` + validacion en `build.yml`).
+   6. pendiente: abrir Zigbee/Sub-1GHz/TX/jamming manteniendo gate BLE como no-regresion.
 
 Este orden prioriza cerrar MVP BLE estable antes de abrir Zigbee/Sub-1GHz.

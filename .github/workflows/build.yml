@@ -111,3 +111,11 @@ jobs:
         working-directory: python
         run: |
           flake8 feralrf tests examples --max-line-length=100 --ignore=E501,W503
+
+      - name: Validate BLE release gate scripts
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ./python
+          PYTHONPATH=python python3 python/examples/smoke_phase2.py --help
+          PYTHONPATH=python python3 python/examples/canary_regression.py --help
+          PYTHONPATH=python python3 python/examples/release_gate_ble.py --help

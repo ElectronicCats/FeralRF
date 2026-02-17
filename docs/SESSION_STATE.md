@@ -67,6 +67,9 @@
    3. gate operativo formalizado en comando unico (`python/examples/release_gate_ble.py`).
    4. `OK`: corridas 1/2 y 2/2 consecutivas del gate BLE en verde.
    5. `OK`: baseline BLE congelado para evitar regresiones antes de abrir nuevos verticales.
+   6. `OK`: gate conectado a flujo manual/CI:
+      1. workflow manual HW `ble_release_gate_hw.yml`.
+      2. validacion CI de scripts gate en `build.yml`.
 
 ## Scripts y comandos vigentes
 
@@ -102,5 +105,6 @@
 ## Siguiente paso inmediato recomendado
 
 1. Generar/capturar trafico real Zigbee/Thread para cerrar evidencia de paquetes reales en `SET_PHY(4)`.
-2. Conectar el gate BLE a flujo CI/manual de release interna.
+2. Ejecutar el workflow manual HW (`ble_release_gate_hw.yml`) al menos una vez en GitHub Actions para validar runner/artefactos.
 3. Afinar perfil objetivo (`lab` vs `ci_manual`) para cada tipo de validacion de release.
+4. Configurar en GitHub branch/tag protection los checks del gate como obligatorios segun politica del equipo.

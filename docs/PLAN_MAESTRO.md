@@ -402,6 +402,9 @@ def test_ble_sniffer_receive():
    3. `OK` gate operativo de release formalizado (`python/examples/release_gate_ble.py`).
    4. `OK` corridas 1/2 y 2/2 consecutivas validadas en hardware (`BLE RELEASE GATE PASS`).
    5. `OK` baseline BLE congelado para evitar regresiones.
+   6. `OK` integrado a flujo manual/CI:
+      1. workflow HW manual `ble_release_gate_hw.yml` (runner `self-hosted, feralrf-hw`).
+      2. validacion CI de scripts gate (`--help`) en `build.yml`.
 3. Baseline BLE:
    1. `OK` baseline BLE estable congelado.
    2. siguiente: abrir verticales nuevos bajo gate BLE obligatorio.

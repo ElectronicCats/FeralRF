@@ -47,6 +47,8 @@ set(DRIVERLIB_LIB
 # Source files
 set(SOURCES
     ccfg.c
+    src/command_processor.c
+    src/host_if.c
     src/main.c
     src/protocol.c
     src/startup_cc13x2_cc26x2_gcc.c

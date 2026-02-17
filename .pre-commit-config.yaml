@@ -3,6 +3,8 @@
 # Run manually: pre-commit run --all-files
 
 repos:
+  exclude: ^(docs/|firmware/rp2040/)
+
   # ============= General Checks =============
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.5.0

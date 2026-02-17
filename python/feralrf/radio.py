@@ -159,6 +159,9 @@ class Radio:
 
             byte = self._serial.read(1)
             if not byte:
+                if deadline is not None and time.monotonic() < deadline:
+                    # Keep waiting until global deadline expires.
+                    continue
                 details = []
                 if ignored_command_frames:
                     details.append(f"ignored {ignored_command_frames} command-frame echoes")
@@ -192,8 +195,9 @@ class Radio:
                         continue
 
                     return cmd_id, seq, payload
-                except ValueError:
-                    # Invalid frame, continue reading
+                except Exception:
+                    # Invalid/partial frame, continue reading next delimited frame.
+                    self._rx_buffer.clear()
                     continue
 
     def init(self) -> DeviceInfo:
@@ -259,10 +263,12 @@ class Radio:
         if cmd_id != Response.ACK:
             raise ProtocolError(f"Unexpected response to SET_POWER: 0x{cmd_id:02X}")
 
-    def get_stats(self) -> DeviceStats:
+    def get_stats(self, timeout: float = 2.0) -> DeviceStats:
         """Get device RX metrics"""
         self._send_command(Command.GET_STATS)
-        cmd_id, seq, payload = self._read_response(expected={Response.STATS, Response.ERROR})
+        cmd_id, seq, payload = self._read_response(
+            timeout=timeout, expected={Response.STATS, Response.ERROR}
+        )
 
         if cmd_id == Response.ERROR:
             raise CommandError("Get stats failed", payload[0] if payload else 0)
@@ -288,15 +294,32 @@ class Radio:
         if cmd_id != Response.ACK:
             raise ProtocolError(f"Unexpected response to RX_START: 0x{cmd_id:02X}")
 
-    def stop_rx(self) -> None:
+    def stop_rx(self, retries: int = 3, timeout: float = 1.0) -> None:
         """Stop receiving"""
-        self._send_command(Command.RX_STOP)
-        cmd_id, seq, payload = self._read_response(expected={Response.ACK, Response.ERROR})
+        last_timeout: Optional[TimeoutError] = None
 
-        if cmd_id == Response.ERROR:
-            raise CommandError("Stop RX failed", payload[0] if payload else 0)
-        if cmd_id != Response.ACK:
-            raise ProtocolError(f"Unexpected response to RX_STOP: 0x{cmd_id:02X}")
+        if retries <= 0:
+            retries = 1
+
+        for _ in range(retries):
+            self._send_command(Command.RX_STOP)
+            try:
+                cmd_id, seq, payload = self._read_response(
+                    timeout=timeout, expected={Response.ACK, Response.ERROR}
+                )
+            except TimeoutError as exc:
+                last_timeout = exc
+                continue
+
+            if cmd_id == Response.ERROR:
+                raise CommandError("Stop RX failed", payload[0] if payload else 0)
+            if cmd_id != Response.ACK:
+                raise ProtocolError(f"Unexpected response to RX_STOP: 0x{cmd_id:02X}")
+            return
+
+        if last_timeout is not None:
+            raise last_timeout
+        raise TimeoutError("Response timeout")
 
     def read_packets(self, timeout: Optional[float] = 1.0) -> Iterator[Packet]:
         """

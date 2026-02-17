@@ -19,6 +19,8 @@
 9. `RSP_RX_PACKET` ya incluye metadata LL opcional (`ll_pdu_kind`, `ll_pdu_type`) con capability flag en `GET_INFO`.
 10. `GET_STATS` extendido (compat): incluye contadores LL por tipo (`unknown/adv/scan/connect/data`) cuando capability lo anuncia.
 11. Parser `LL_BLE` ampliado: subtipos advertising (`ADV_IND`, `ADV_SCAN_IND`, `ADV_EXT_IND`, etc.) y bandera de casos reservados.
+12. Backend RF real `IEEE_802_15_4` (RX) integrado en `radio_if` con settings SmartRF dedicados y fallback sintetico para PHY no soportados.
+13. Validacion HW PHY 4: `OK` en CH 11/15/20/25 para flujo de control/estabilidad (`SET_PHY`, `RX_START`, `RX_STOP`) sin timeouts.
 
 ## Estado por fase
 
@@ -45,6 +47,7 @@
    3. `stats_total ok=9669 crc_err=1291 drop=64 ovf=0`
    4. `ll_total unk=0 adv=7601 scan=2068 conn=0 data=0`
 6. Validacion de parser LL ampliado: `OK` (captura real muestra subtipos `ADV_IND`, `ADV_NONCONN_IND`, `ADV_EXT_IND`, `SCAN_REQ`, `SCAN_RSP` en canales 37/38/39).
+7. Barrido PHY 4 IEEE 802.15.4 (CH 11/15/20/25, 15s c/u): `OK` sin cuelgues ni timeouts; `packets=0` en ambiente actual (sin trafico 802.15.4 observable).
 
 ## Riesgo abierto actual
 
@@ -83,6 +86,6 @@
 
 ## Siguiente paso inmediato recomendado
 
-1. Cerrar Fase 5 (parser LL BLE mas completo `OK` + primer backend RF real no-BLE pendiente).
+1. Generar/capturar trafico real Zigbee/Thread para cerrar evidencia de paquetes reales en `SET_PHY(4)`.
 2. Cerrar Fase 7 (regresion automatizada con criterios de aceptacion).
 3. Publicar `docs/protocol.md` con contrato vigente y capacidades.

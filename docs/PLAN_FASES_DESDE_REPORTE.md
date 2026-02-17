@@ -14,7 +14,7 @@
 2. Fase 2: `COMPLETA` (UART 921600 + comandos base + smoke test en verde).
 3. Fase 3: `COMPLETA (alcance MVP)` (pipeline `control_task + data_task + host_if_task` activo).
 4. Fase 4: `COMPLETA (alcance MVP)` (RF BLE real, data queue, manejo de overflow, restart RX).
-5. Fase 5: `PARCIAL` (base tabular `phy_manager` + `LL_DEFAULT/LL_BLE` integrada, parser LL BLE ampliado con subtipos advertising/extended y casos reservados, metricas LL por tipo en `GET_STATS`; falta soporte multi-PHY real).
+5. Fase 5: `PARCIAL` (base tabular `phy_manager` + `LL_DEFAULT/LL_BLE` integrada, parser LL BLE ampliado con subtipos advertising/extended y casos reservados, metricas LL por tipo en `GET_STATS`; backend RF real `IEEE_802_15_4` RX validado en HW a nivel control/estabilidad `SET_PHY/RX_START/RX_STOP` en CH 11/15/20/25, pendiente captura real de trafico 802.15.4).
 6. Fase 6: `COMPLETA (MVP BLE)` (sniffing BLE funcional validado con captura continua de 30 min en hardware).
 7. Fase 7: `EN PROGRESO` (metricas base `rx_ok/rx_crc_err/rx_drop/rx_overflow` expuestas por comando host).
 
@@ -187,9 +187,9 @@ Dejar base lista para Zigbee/Sub-1GHz, jamming y spectrum.
    2. mantener compatibilidad backward en `RSP_RX_PACKET`.
    3. criterio de done: clasificacion consistente en captura real multi-canal.
 2. Tarea 2 (cierre tecnico Fase 5 - multi-PHY real):
-   1. habilitar backend RF real para `IEEE_802_15_4` (primero RX).
-   2. mantener fallback sintetico solo para PHY no soportados aun.
-   3. criterio de done: `SET_PHY(802.15.4)` + `RX_START` entrega paquetes reales.
+   1. `OK`: validar en hardware el backend RF real para `IEEE_802_15_4` (RX) ya integrado (sin timeouts de cierre).
+   2. pendiente: ejecutar captura con emisor Zigbee/Thread activo para confirmar paquetes reales (no solo control path).
+   3. criterio de done: `SET_PHY(802.15.4)` + `RX_START` entrega paquetes reales de forma estable.
 3. Tarea 3 (avance Fase 7 - regresion automatizada):
    1. agregar script canario que ejecute smoke + soak corto + validacion de stats LL.
    2. fijar umbrales de aceptacion (sin timeout, `RX_STOP ACK`, contadores monotonos).

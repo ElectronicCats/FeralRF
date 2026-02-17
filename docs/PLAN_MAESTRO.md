@@ -13,6 +13,7 @@ Firmware universal para CatSniffer (CC1352P + RP2040) con capacidades de sniffin
 - Metadata LL en `RSP_RX_PACKET` (capability-gated): clasificacion `ADV/SCAN/CONNECT/DATA` + tipo PDU.
 - `GET_STATS` extendido (compat) con contadores LL por tipo para regresion automatizada.
 - Parser LL BLE ampliado para subtipos advertising/extended y deteccion de tipos reservados.
+- Backend RF real `IEEE_802_15_4` (RX) integrado y validado en hardware a nivel control path (`SET_PHY/RX_START/RX_STOP`) en CH 11/15/20/25.
 - Estabilidad validada: soak BLE de 30 minutos completado en hardware.
 - Pendiente principal: automatizar regresion sobre metricas y cierre de sesion (`RX_STOP/GET_STATS`) como prueba canaria.
 
@@ -288,7 +289,7 @@ feralrf/
 - [ ] Python visualization (matplotlib)
 
 ### FASE 4: Zigbee + Multi-PHY (Semanas 7-8)
-- [ ] IEEE 802.15.4 RX/TX
+- [~] IEEE 802.15.4 RX/TX (RX integrado y estable en control path, falta evidencia de captura real + TX)
 - [ ] PHY switching dinámico
 - [ ] Channel translation
 
@@ -394,8 +395,9 @@ def test_ble_sniffer_receive():
    1. ampliar clasificacion LL para subtipos advertising/extended.
    2. sostener compatibilidad backward del payload RX.
 2. Cerrar FASE 5 (multi-PHY real):
-   1. primer backend RF no-BLE: `IEEE_802_15_4` RX real.
-   2. fallback sintetico solo en PHY aun no implementados.
+   1. `OK` validar estabilidad HW del backend `IEEE_802_15_4` RX ya integrado.
+   2. pendiente: validar captura real con trafico Zigbee/Thread cercano.
+   3. fallback sintetico solo en PHY aun no implementados.
 3. Ejecutar FASE 7 (regresion):
    1. automatizar smoke + soak corto + validacion de stats LL.
    2. fijar umbrales de aceptacion y salida no-cero en regresion.

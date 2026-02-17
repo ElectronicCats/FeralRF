@@ -9,6 +9,7 @@ Firmware universal para CatSniffer (CC1352P + RP2040) con capacidades de sniffin
 - RX BLE real operativo en hardware (ya no sintetico), con parser robusto y filtro CRC.
 - BLE adv hopping basico activo en firmware (`37/38/39`, dwell configurable).
 - Metricas RX base expuestas al host (`rx_ok`, `rx_crc_err`, `rx_drop`, `rx_overflow`).
+- Riesgo abierto: timeout intermitente en `RX_STOP/GET_STATS` durante RX continuo (en endurecimiento).
 - Pendiente de cierre: estabilidad 30 min + automatizacion de regresion sobre esas metricas.
 
 ---
@@ -386,8 +387,9 @@ def test_ble_sniffer_receive():
 ## 9. Próximos Pasos
 
 1. Cerrar FASE 6 (MVP BLE):
-   1. correr captura continua de 30 min.
-   2. confirmar estabilidad (sin cuelgues/reinicios) y metadata coherente.
+   1. endurecer `RX_STOP` y `GET_STATS` bajo carga RX continua.
+   2. correr captura continua de 30 min.
+   3. confirmar estabilidad (sin cuelgues/reinicios) y metadata coherente.
 2. Consolidar FASE 5:
    1. formalizar `phy_manager` tabular.
    2. integrar `LL_DEFAULT` y `LL_BLE` como interfaz pluggable clara.

@@ -15,7 +15,7 @@
 3. Fase 3: `COMPLETA (alcance MVP)` (pipeline `control_task + data_task + host_if_task` activo).
 4. Fase 4: `COMPLETA (alcance MVP)` (RF BLE real, data queue, manejo de overflow, restart RX).
 5. Fase 5: `PARCIAL` (hay seleccion BLE funcional, falta manager tabular formal y LL pluggable completo).
-6. Fase 6: `PARCIAL` (sniffing BLE end-to-end funcional, pendiente cierre de estabilidad de 30 min).
+6. Fase 6: `PARCIAL` (sniffing BLE funcional, pendiente cierre de estabilidad y endurecer `RX_STOP/GET_STATS` bajo carga).
 7. Fase 7: `EN PROGRESO` (metricas base `rx_ok/rx_crc_err/rx_drop/rx_overflow` expuestas por comando host).
 
 ---
@@ -180,8 +180,9 @@ Dejar base lista para Zigbee/Sub-1GHz, jamming y spectrum.
 ## Orden recomendado de ejecucion inmediata (actualizado)
 
 1. Cierre Fase 6:
-   1. test de captura continua por 30 minutos (BLE adv hopping 37/38/39).
-   2. validacion de metadata por paquete (timestamp, canal, RSSI, CRC).
+   1. estabilizar cierre de sesion RX (`RX_STOP`) y lectura de stats bajo RX continuo.
+   2. test de captura continua por 30 minutos (BLE adv hopping 37/38/39).
+   3. validacion de metadata por paquete (timestamp, canal, RSSI, CRC).
 2. Avance Fase 5:
    1. consolidar `phy_manager` tabular (BLE primero).
    2. integrar `LL_DEFAULT` y `LL_BLE` con interfaz limpia.

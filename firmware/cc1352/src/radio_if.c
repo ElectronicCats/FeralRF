@@ -1,7 +1,7 @@
 /*
  * FeralRF CC1352 - Radio Interface (hybrid backend)
  *
- * Primary backend: RF Core BLE5 RX (based on sniffer_fw_cc1252P_7).
+ * Real RF backends: BLE5 RX and IEEE 802.15.4 RX (based on sniffer_fw_cc1252P_7 semantics).
  * Fallback backend: synthetic stream (keeps host pipeline alive if RF init fails).
  */
 
@@ -10,6 +10,7 @@
 #include "config.h"
 #include "phy_manager.h"
 #include "smartrf_ble5_0.h"
+#include "smartrf_ieee_15_4_0.h"
 
 #include <stddef.h>
 #include <string.h>
@@ -44,11 +45,30 @@
     (BLE_APPENDED_CRC_LEN + BLE_APPENDED_RSSI_LEN + BLE_APPENDED_STATUS_LEN + \
      BLE_APPENDED_TIMESTAMP_LEN)
 #define BLE_STATUS0_CHANNEL_MASK 0x3Fu
+#define IEEE_15_4_CHANNEL_MIN 11u
+#define IEEE_15_4_CHANNEL_MAX 26u
+#define IEEE_15_4_DEFAULT_CHANNEL IEEE_15_4_CHANNEL_MIN
+#define IEEE_15_4_RFCORE_CHAN_OFFSET IEEE_15_4_CHANNEL_MIN
+#define IEEE_15_4_FS_BASE_FREQUENCY_MHZ 2405u
+#define IEEE_15_4_FS_STEP_MHZ 5u
+#define IEEE_15_4_APPENDED_RSSI_LEN 1u
+#define IEEE_15_4_APPENDED_CORRCRC_LEN 1u
+#define IEEE_15_4_APPENDED_TIMESTAMP_LEN 4u
+#define IEEE_15_4_APPENDED_TOTAL_LEN                                \
+    (IEEE_15_4_APPENDED_RSSI_LEN + IEEE_15_4_APPENDED_CORRCRC_LEN + \
+     IEEE_15_4_APPENDED_TIMESTAMP_LEN)
+#define IEEE_15_4_CORRCRC_CRC_ERR_BIT 0x80u
 
 typedef enum {
     RADIO_IF_BACKEND_SYNTH = 0,
     RADIO_IF_BACKEND_RF = 1,
 } RadioIF_Backend;
+
+typedef enum {
+    RADIO_IF_RF_MODE_NONE = 0,
+    RADIO_IF_RF_MODE_BLE = 1,
+    RADIO_IF_RF_MODE_IEEE_15_4 = 2,
+} RadioIF_RfMode;
 
 static bool s_rx_running = false;
 static uint64_t s_timestamp_us = 0;
@@ -69,6 +89,7 @@ static uint32_t s_systick_cycles_per_packet = 0;
 static RadioIF_Metrics s_metrics = {0u, 0u, 0u, 0u};
 
 static RadioIF_Backend s_backend = RADIO_IF_BACKEND_SYNTH;
+static RadioIF_RfMode s_rf_mode = RADIO_IF_RF_MODE_NONE;
 
 /* RF backend state */
 static RF_Object s_rf_object;
@@ -140,6 +161,24 @@ static uint16_t RadioIF_bleChannelToFrequency(uint8_t channel) {
     return (uint16_t)(2300u + channel);
 }
 
+static uint8_t RadioIF_convertToIeee154Channel(uint16_t channel) {
+    if (channel >= IEEE_15_4_CHANNEL_MIN && channel <= IEEE_15_4_CHANNEL_MAX) {
+        return (uint8_t)channel;
+    }
+
+    /* Allow raw RF core channel index (0..15) for compatibility with some tools. */
+    if (channel <= (IEEE_15_4_CHANNEL_MAX - IEEE_15_4_CHANNEL_MIN)) {
+        return (uint8_t)(channel + IEEE_15_4_CHANNEL_MIN);
+    }
+
+    return IEEE_15_4_DEFAULT_CHANNEL;
+}
+
+static uint16_t RadioIF_ieee154ChannelToFrequency(uint8_t channel) {
+    return (uint16_t)(IEEE_15_4_FS_BASE_FREQUENCY_MHZ +
+                      ((uint16_t)(channel - IEEE_15_4_CHANNEL_MIN) * IEEE_15_4_FS_STEP_MHZ));
+}
+
 static void RadioIF_applyBleChannelConfig(uint8_t channel) {
     uint8_t ble_channel = RadioIF_convertToBleChannel(channel);
 
@@ -151,8 +190,20 @@ static void RadioIF_applyBleChannelConfig(uint8_t channel) {
     Ble5_0_cmdFs.fractFreq = 0u;
 }
 
+static void RadioIF_applyIeee154ChannelConfig(uint16_t channel) {
+    uint8_t ieee_channel = RadioIF_convertToIeee154Channel(channel);
+
+    Ieee154_0_cmdIeeeRx.channel = (uint8_t)(ieee_channel - IEEE_15_4_RFCORE_CHAN_OFFSET);
+    Ieee154_0_cmdFs.frequency = RadioIF_ieee154ChannelToFrequency(ieee_channel);
+    Ieee154_0_cmdFs.fractFreq = 0u;
+}
+
 static bool RadioIF_isBleAdvChannel(uint16_t channel) {
     return (channel >= 37u) && (channel <= 39u);
+}
+
+static bool RadioIF_isIeee154PhySelected(void) {
+    return s_selected_phy == PHY_MANAGER_PHY_IEEE_802_15_4;
 }
 
 static void RadioIF_updateBleHopMode(void) {
@@ -287,7 +338,7 @@ static void RadioIF_updateSyntheticCadence(uint32_t elapsed_cycles) {
     s_systick_cycles_accum += elapsed_cycles;
 
     while (s_systick_cycles_accum >= s_systick_cycles_per_packet) {
-        RadioIF_RxPacket pkt;
+        RadioIF_RxPacket pkt = {0};
 
         s_systick_cycles_accum -= s_systick_cycles_per_packet;
         s_timestamp_us += ((uint64_t)RADIO_IF_SYNTH_PACKET_INTERVAL_MS * 1000u);
@@ -384,18 +435,41 @@ static void RadioIF_rfCallback(RF_Handle h, RF_CmdHandle ch, RF_EventMask e) {
     }
 
     if ((e & RF_EventRxBufFull) != 0u) {
+        if ((s_rf_mode == RADIO_IF_RF_MODE_IEEE_15_4) && (s_rf_handle != NULL)) {
+            /* IEEE 802.15.4 RX does not always self-terminate on buffer full. */
+            RF_cancelCmd(s_rf_handle, s_rf_rx_cmd, 0);
+        }
         s_rf_event_flags |= RADIO_IF_RF_EVENT_RX_BUF_FULL;
     }
 }
 
 static bool RadioIF_runFsAndPostRx(void) {
+    RF_EventMask event_mask = RF_EventRxEntryDone | RF_EventRxBufFull;
+    RF_Op *fs_cmd = NULL;
+    RF_Op *rx_cmd = NULL;
+
     if (s_rf_handle == NULL) {
         return false;
     }
 
-    (void)RF_runCmd(s_rf_handle, (RF_Op *)&Ble5_0_cmdFs, RF_PriorityNormal, NULL, 0);
-    s_rf_rx_cmd = RF_postCmd(s_rf_handle, (RF_Op *)&Ble5_0_cmdBle5GenericRx, RF_PriorityNormal,
-                             &RadioIF_rfCallback, RF_EventRxEntryDone | RF_EventRxBufFull);
+    switch (s_rf_mode) {
+    case RADIO_IF_RF_MODE_BLE:
+        fs_cmd = (RF_Op *)&Ble5_0_cmdFs;
+        rx_cmd = (RF_Op *)&Ble5_0_cmdBle5GenericRx;
+        break;
+    case RADIO_IF_RF_MODE_IEEE_15_4:
+        fs_cmd = (RF_Op *)&Ieee154_0_cmdFs;
+        rx_cmd = (RF_Op *)&Ieee154_0_cmdIeeeRx;
+        event_mask |= RF_EventLastFGCmdDone;
+        break;
+    case RADIO_IF_RF_MODE_NONE:
+    default:
+        return false;
+    }
+
+    (void)RF_runCmd(s_rf_handle, fs_cmd, RF_PriorityNormal, NULL, 0);
+    s_rf_rx_cmd =
+        RF_postCmd(s_rf_handle, rx_cmd, RF_PriorityNormal, &RadioIF_rfCallback, event_mask);
     return s_rf_rx_cmd >= 0;
 }
 
@@ -409,6 +483,20 @@ static bool RadioIF_restartRfRx(void) {
     return RadioIF_runFsAndPostRx();
 }
 
+static bool RadioIF_rearmIeee154RxAfterOverflow(void) {
+    if (s_rf_handle == NULL || s_rf_mode != RADIO_IF_RF_MODE_IEEE_15_4) {
+        return false;
+    }
+
+    /* Match base sniffer behavior: after IEEE RX buffer full + cancel, reset queue and re-post RX.
+     */
+    RadioIF_resetRfDataQueue();
+    s_rf_rx_cmd = RF_postCmd(s_rf_handle, (RF_Op *)&Ieee154_0_cmdIeeeRx, RF_PriorityNormal,
+                             &RadioIF_rfCallback,
+                             RF_EventRxEntryDone | RF_EventRxBufFull | RF_EventLastFGCmdDone);
+    return s_rf_rx_cmd >= 0;
+}
+
 static bool RadioIF_advanceBleHopChannel(void) {
     if (!s_ble_adv_hop_enabled) {
         return false;
@@ -420,7 +508,7 @@ static bool RadioIF_advanceBleHopChannel(void) {
     return RadioIF_restartRfRx();
 }
 
-static bool RadioIF_startRfBackend(void) {
+static bool RadioIF_startBleRfBackend(void) {
     RF_Params rf_params;
 
     if (!RadioIF_createRfDataQueue(&s_rf_data_queue, s_rf_rx_data_buffer,
@@ -429,6 +517,7 @@ static bool RadioIF_startRfBackend(void) {
         return false;
     }
 
+    s_rf_mode = RADIO_IF_RF_MODE_BLE;
     RadioIF_applyBleChannelConfig((uint8_t)s_channel);
 
     Ble5_0_cmdBle5GenericRx.pParams->pRxQ = &s_rf_data_queue;
@@ -446,6 +535,7 @@ static bool RadioIF_startRfBackend(void) {
         RF_open(&s_rf_object, &Ble5_0_mode, (RF_RadioSetup *)&Ble5_0_cmdBle5RadioSetup, &rf_params);
 
     if (s_rf_handle == NULL) {
+        s_rf_mode = RADIO_IF_RF_MODE_NONE;
         return false;
     }
 
@@ -453,6 +543,50 @@ static bool RadioIF_startRfBackend(void) {
         RF_close(s_rf_handle);
         s_rf_handle = NULL;
         s_rf_rx_cmd = RF_SCHEDULE_CMD_ERROR;
+        s_rf_mode = RADIO_IF_RF_MODE_NONE;
+        return false;
+    }
+
+    s_rf_event_flags = 0u;
+    return true;
+}
+
+static bool RadioIF_startIeee154RfBackend(void) {
+    RF_Params rf_params;
+
+    if (!RadioIF_createRfDataQueue(&s_rf_data_queue, s_rf_rx_data_buffer,
+                                   (uint16_t)sizeof(s_rf_rx_data_buffer), RF_QUEUE_NUM_DATA_ENTRIES,
+                                   RF_QUEUE_ENTRY_PAYLOAD_LEN)) {
+        return false;
+    }
+
+    s_rf_mode = RADIO_IF_RF_MODE_IEEE_15_4;
+    RadioIF_applyIeee154ChannelConfig(s_channel);
+
+    Ieee154_0_cmdIeeeRx.pRxQ = &s_rf_data_queue;
+    Ieee154_0_cmdIeeeRx.rxConfig.bAutoFlushCrc = 0u;
+    Ieee154_0_cmdIeeeRx.rxConfig.bAutoFlushIgn = 0u;
+    Ieee154_0_cmdIeeeRx.rxConfig.bIncludePhyHdr = 1u;
+    Ieee154_0_cmdIeeeRx.rxConfig.bIncludeCrc = 1u;
+    Ieee154_0_cmdIeeeRx.rxConfig.bAppendRssi = 1u;
+    Ieee154_0_cmdIeeeRx.rxConfig.bAppendCorrCrc = 1u;
+    Ieee154_0_cmdIeeeRx.rxConfig.bAppendSrcInd = 0u;
+    Ieee154_0_cmdIeeeRx.rxConfig.bAppendTimestamp = 1u;
+
+    RF_Params_init(&rf_params);
+    s_rf_handle = RF_open(&s_rf_object, &Ieee154_0_mode, (RF_RadioSetup *)&Ieee154_0_cmdRadioSetup,
+                          &rf_params);
+
+    if (s_rf_handle == NULL) {
+        s_rf_mode = RADIO_IF_RF_MODE_NONE;
+        return false;
+    }
+
+    if (!RadioIF_runFsAndPostRx()) {
+        RF_close(s_rf_handle);
+        s_rf_handle = NULL;
+        s_rf_rx_cmd = RF_SCHEDULE_CMD_ERROR;
+        s_rf_mode = RADIO_IF_RF_MODE_NONE;
         return false;
     }
 
@@ -462,6 +596,9 @@ static bool RadioIF_startRfBackend(void) {
 
 static void RadioIF_stopRfBackend(void) {
     if (s_rf_handle != NULL) {
+        if ((s_rf_mode == RADIO_IF_RF_MODE_IEEE_15_4) && (s_rf_rx_cmd >= 0)) {
+            RF_cancelCmd(s_rf_handle, s_rf_rx_cmd, 0);
+        }
         RF_flushCmd(s_rf_handle, RF_CMDHANDLE_FLUSH_ALL, 0);
         RF_close(s_rf_handle);
         s_rf_handle = NULL;
@@ -469,12 +606,13 @@ static void RadioIF_stopRfBackend(void) {
 
     s_rf_rx_cmd = RF_SCHEDULE_CMD_ERROR;
     s_rf_event_flags = 0u;
+    s_rf_mode = RADIO_IF_RF_MODE_NONE;
     RadioIF_resetRfDataQueue();
 }
 
-static void RadioIF_processRfPackets(void) {
+static void RadioIF_processBlePackets(void) {
     while (RadioIF_rfHasPacket()) {
-        RadioIF_RxPacket pkt;
+        RadioIF_RxPacket pkt = {0};
         uint16_t entry_len = 0;
         uint8_t *entry_data = NULL;
         uint8_t *raw_entry = NULL;
@@ -552,6 +690,94 @@ static void RadioIF_processRfPackets(void) {
     }
 }
 
+static void RadioIF_processIeee154Packets(void) {
+    while (RadioIF_rfHasPacket()) {
+        RadioIF_RxPacket pkt = {0};
+        uint16_t entry_len = 0u;
+        uint8_t *entry_data = NULL;
+        uint8_t *raw_entry = NULL;
+        uint16_t frame_with_hdr_len = 0u;
+        uint16_t expected_with_hdr_len = 0u;
+        uint16_t rssi_idx = 0u;
+        uint16_t corrcrc_idx = 0u;
+        uint16_t timestamp_idx = 0u;
+        uint8_t corrcrc = 0u;
+        uint32_t rat_timestamp = 0u;
+
+        raw_entry = (uint8_t *)&s_rf_read_entry->data;
+        entry_len = (uint16_t)raw_entry[0] | ((uint16_t)raw_entry[1] << 8);
+        entry_data = raw_entry + RF_QUEUE_ENTRY_LEN_FIELD_SIZE;
+
+        if (entry_len <= IEEE_15_4_APPENDED_TOTAL_LEN) {
+            s_metrics.rx_drop++;
+            RadioIF_rfConsumeEntry();
+            continue;
+        }
+
+        frame_with_hdr_len = (uint16_t)(entry_len - IEEE_15_4_APPENDED_TOTAL_LEN);
+        expected_with_hdr_len = (uint16_t)(1u + entry_data[0]);
+
+        if (frame_with_hdr_len < 1u || expected_with_hdr_len > frame_with_hdr_len) {
+            s_metrics.rx_drop++;
+            RadioIF_rfConsumeEntry();
+            continue;
+        }
+
+        if (expected_with_hdr_len < frame_with_hdr_len) {
+            frame_with_hdr_len = expected_with_hdr_len;
+        }
+
+        rssi_idx = frame_with_hdr_len;
+        corrcrc_idx = (uint16_t)(rssi_idx + IEEE_15_4_APPENDED_RSSI_LEN);
+        timestamp_idx = (uint16_t)(corrcrc_idx + IEEE_15_4_APPENDED_CORRCRC_LEN);
+
+        corrcrc = entry_data[corrcrc_idx];
+        rat_timestamp = (uint32_t)entry_data[timestamp_idx] |
+                        ((uint32_t)entry_data[timestamp_idx + 1u] << 8) |
+                        ((uint32_t)entry_data[timestamp_idx + 2u] << 16) |
+                        ((uint32_t)entry_data[timestamp_idx + 3u] << 24);
+
+        pkt.timestamp_us = ((uint64_t)rat_timestamp) / 4u;
+        pkt.channel = (uint8_t)s_channel;
+        pkt.rssi_dbm = (int8_t)entry_data[rssi_idx];
+        pkt.lqi = (uint8_t)(corrcrc & 0x7Fu);
+        pkt.crc_ok = (corrcrc & IEEE_15_4_CORRCRC_CRC_ERR_BIT) == 0u;
+        if (!pkt.crc_ok) {
+            s_metrics.rx_crc_err++;
+            RadioIF_rfConsumeEntry();
+            continue;
+        }
+
+        pkt.data_len = entry_data[0];
+        if (pkt.data_len > RADIO_IF_MAX_PACKET_DATA) {
+            pkt.data_len = RADIO_IF_MAX_PACKET_DATA;
+        }
+        memcpy(pkt.data, &entry_data[1], pkt.data_len);
+
+        if (RadioIF_enqueuePacket(&pkt)) {
+            s_metrics.rx_ok++;
+        } else {
+            s_metrics.rx_drop++;
+        }
+        RadioIF_rfConsumeEntry();
+    }
+}
+
+static void RadioIF_processRfPackets(void) {
+    switch (s_rf_mode) {
+    case RADIO_IF_RF_MODE_BLE:
+        RadioIF_processBlePackets();
+        break;
+    case RADIO_IF_RF_MODE_IEEE_15_4:
+        RadioIF_processIeee154Packets();
+        break;
+    case RADIO_IF_RF_MODE_NONE:
+    default:
+        /* No active RF parser. */
+        break;
+    }
+}
+
 void RadioIF_init(void) {
     s_rx_running = false;
     s_timestamp_us = 0;
@@ -567,6 +793,7 @@ void RadioIF_init(void) {
     s_rf_handle = NULL;
     s_rf_rx_cmd = RF_SCHEDULE_CMD_ERROR;
     s_rf_event_flags = 0u;
+    s_rf_mode = RADIO_IF_RF_MODE_NONE;
     s_rf_read_entry = NULL;
     RadioIF_resetMetrics();
     s_ble_adv_hop_enabled = false;
@@ -578,8 +805,16 @@ void RadioIF_setPhy(uint8_t phy, uint16_t channel, uint32_t frequency_hz) {
     s_selected_phy = phy;
 
     if (channel != 0u) {
-        s_channel =
-            PhyManager_isBlePhy(phy) ? RadioIF_convertToBleChannel((uint8_t)channel) : channel;
+        if (PhyManager_isBlePhy(phy)) {
+            s_channel = RadioIF_convertToBleChannel((uint8_t)channel);
+        } else if (phy == PHY_MANAGER_PHY_IEEE_802_15_4) {
+            s_channel = RadioIF_convertToIeee154Channel(channel);
+        } else {
+            s_channel = channel;
+        }
+    } else if ((phy == PHY_MANAGER_PHY_IEEE_802_15_4) &&
+               (s_channel < IEEE_15_4_CHANNEL_MIN || s_channel > IEEE_15_4_CHANNEL_MAX)) {
+        s_channel = IEEE_15_4_DEFAULT_CHANNEL;
     }
 
     if (frequency_hz != 0u) {
@@ -588,6 +823,8 @@ void RadioIF_setPhy(uint8_t phy, uint16_t channel, uint32_t frequency_hz) {
 
     if (PhyManager_isBlePhy(s_selected_phy)) {
         RadioIF_applyBleChannelConfig((uint8_t)s_channel);
+    } else if (RadioIF_isIeee154PhySelected()) {
+        RadioIF_applyIeee154ChannelConfig(s_channel);
     }
 
     RadioIF_updateBleHopMode();
@@ -596,17 +833,25 @@ void RadioIF_setPhy(uint8_t phy, uint16_t channel, uint32_t frequency_hz) {
     }
 
     if ((s_backend == RADIO_IF_BACKEND_RF) && (s_rf_handle != NULL) &&
-        PhyManager_isBlePhy(s_selected_phy)) {
+        ((PhyManager_isBlePhy(s_selected_phy) && (s_rf_mode == RADIO_IF_RF_MODE_BLE)) ||
+         (RadioIF_isIeee154PhySelected() && (s_rf_mode == RADIO_IF_RF_MODE_IEEE_15_4)))) {
         (void)RadioIF_restartRfRx();
     }
 }
 
 void RadioIF_setChannel(uint8_t channel) {
-    s_channel =
-        PhyManager_isBlePhy(s_selected_phy) ? RadioIF_convertToBleChannel(channel) : channel;
+    if (PhyManager_isBlePhy(s_selected_phy)) {
+        s_channel = RadioIF_convertToBleChannel(channel);
+    } else if (RadioIF_isIeee154PhySelected()) {
+        s_channel = RadioIF_convertToIeee154Channel(channel);
+    } else {
+        s_channel = channel;
+    }
 
     if (PhyManager_isBlePhy(s_selected_phy)) {
         RadioIF_applyBleChannelConfig((uint8_t)s_channel);
+    } else if (RadioIF_isIeee154PhySelected()) {
+        RadioIF_applyIeee154ChannelConfig(s_channel);
     }
 
     RadioIF_updateBleHopMode();
@@ -615,7 +860,8 @@ void RadioIF_setChannel(uint8_t channel) {
     }
 
     if ((s_backend == RADIO_IF_BACKEND_RF) && (s_rf_handle != NULL) &&
-        PhyManager_isBlePhy(s_selected_phy)) {
+        ((PhyManager_isBlePhy(s_selected_phy) && (s_rf_mode == RADIO_IF_RF_MODE_BLE)) ||
+         (RadioIF_isIeee154PhySelected() && (s_rf_mode == RADIO_IF_RF_MODE_IEEE_15_4)))) {
         (void)RadioIF_restartRfRx();
     }
 }
@@ -628,18 +874,28 @@ bool RadioIF_startRx(void) {
     s_rx_running = true;
     RadioIF_resetRxQueue();
 
-    /* Real RF backend currently supports BLE 1M only; others use synthetic fallback. */
-    if (PhyManager_supportsRfBackendRx(s_selected_phy) && RadioIF_startRfBackend()) {
-        s_backend = RADIO_IF_BACKEND_RF;
-        RadioIF_updateBleHopMode();
-        if (s_ble_adv_hop_enabled) {
-            RadioIF_initBleHopCadence();
+    if (PhyManager_supportsRfBackendRx(s_selected_phy)) {
+        bool rf_started = false;
+
+        if (PhyManager_isBlePhy(s_selected_phy)) {
+            rf_started = RadioIF_startBleRfBackend();
+        } else if (RadioIF_isIeee154PhySelected()) {
+            rf_started = RadioIF_startIeee154RfBackend();
         }
-        return true;
+
+        if (rf_started) {
+            s_backend = RADIO_IF_BACKEND_RF;
+            RadioIF_updateBleHopMode();
+            if (s_ble_adv_hop_enabled) {
+                RadioIF_initBleHopCadence();
+            }
+            return true;
+        }
     }
 
     /* Fallback: synthetic stream keeps command path operational. */
     s_backend = RADIO_IF_BACKEND_SYNTH;
+    s_rf_mode = RADIO_IF_RF_MODE_NONE;
     RadioIF_initSyntheticCadence();
     return true;
 }
@@ -653,6 +909,7 @@ void RadioIF_stopRx(void) {
     }
 
     s_backend = RADIO_IF_BACKEND_SYNTH;
+    s_rf_mode = RADIO_IF_RF_MODE_NONE;
     s_ble_adv_hop_enabled = false;
     s_ble_adv_hop_index = 0u;
     RadioIF_initBleHopCadence();
@@ -674,7 +931,11 @@ void RadioIF_poll(void) {
 
         if ((events & RADIO_IF_RF_EVENT_RX_BUF_FULL) != 0u && s_rf_handle != NULL) {
             s_metrics.rx_overflow++;
-            (void)RadioIF_restartRfRx();
+            if (s_rf_mode == RADIO_IF_RF_MODE_IEEE_15_4) {
+                (void)RadioIF_rearmIeee154RxAfterOverflow();
+            } else {
+                (void)RadioIF_restartRfRx();
+            }
         }
 
         if ((events & RADIO_IF_RF_EVENT_RX_ENTRY_DONE) != 0u) {
@@ -686,7 +947,7 @@ void RadioIF_poll(void) {
             RadioIF_processRfPackets();
         }
 
-        if (RadioIF_shouldHopBleChannel()) {
+        if ((s_rf_mode == RADIO_IF_RF_MODE_BLE) && RadioIF_shouldHopBleChannel()) {
             (void)RadioIF_advanceBleHopChannel();
         }
     } else {

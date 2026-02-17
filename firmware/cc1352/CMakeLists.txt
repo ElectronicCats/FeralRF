@@ -67,6 +67,7 @@ set(SOURCES
     src/protocol.c
     src/radio_if.c
     src/smartrf_ble5_0.c
+    src/smartrf_ieee_15_4_0.c
     src/ti_rf_config_min.c
     src/startup_cc13x2_cc26x2_gcc.c
     src/task_event.c

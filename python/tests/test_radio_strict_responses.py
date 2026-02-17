@@ -43,7 +43,9 @@ def test_read_response_ignores_echoed_command_frames():
     radio = Radio(port="dummy")
     radio._serial = FakeSerial(echoed_command + ack_response)
 
-    cmd_id, seq, payload = radio._read_response(timeout=0.1, expected={Response.ACK, Response.ERROR})
+    cmd_id, seq, payload = radio._read_response(
+        timeout=0.1, expected={Response.ACK, Response.ERROR}
+    )
     assert cmd_id == Response.ACK
     assert seq == 0x10
     assert payload == b""

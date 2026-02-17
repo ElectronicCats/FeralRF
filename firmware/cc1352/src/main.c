@@ -34,10 +34,9 @@ static void board_power_init(void) {
 
 static void board_gpio_init(void) {
     IOCPortConfigureSet(LED_PIN, IOC_PORT_GPIO,
-                        IOC_CURRENT_8MA | IOC_STRENGTH_MAX | IOC_NO_IOPULL |
-                            IOC_SLEW_DISABLE | IOC_HYST_DISABLE | IOC_NO_EDGE |
-                            IOC_INT_DISABLE | IOC_IOMODE_NORMAL | IOC_NO_WAKE_UP |
-                            IOC_INPUT_DISABLE);
+                        IOC_CURRENT_8MA | IOC_STRENGTH_MAX | IOC_NO_IOPULL | IOC_SLEW_DISABLE |
+                            IOC_HYST_DISABLE | IOC_NO_EDGE | IOC_INT_DISABLE | IOC_IOMODE_NORMAL |
+                            IOC_NO_WAKE_UP | IOC_INPUT_DISABLE);
     GPIO_setOutputEnableDio(LED_PIN, GPIO_OUTPUT_ENABLE);
 #if LED_ACTIVE_LOW
     GPIO_setDio(LED_PIN);

@@ -21,11 +21,9 @@
 #define SET_CCFG_BL_CONFIG_BL_LEVEL 0x00u
 #define SET_CCFG_BL_CONFIG_BL_PIN_NUMBER 0x0Fu
 #define SET_CCFG_BL_CONFIG_BL_ENABLE 0xC5u
-#define SET_CCFG_BL_CONFIG                                                      \
-    ((SET_CCFG_BL_CONFIG_BOOTLOADER_ENABLE << 24) |                           \
-     (SET_CCFG_BL_CONFIG_RESERVED_23_17 << 17) |                              \
-     (SET_CCFG_BL_CONFIG_BL_LEVEL << 16) |                                    \
-     (SET_CCFG_BL_CONFIG_BL_PIN_NUMBER << 8) |                                \
+#define SET_CCFG_BL_CONFIG                                                                      \
+    ((SET_CCFG_BL_CONFIG_BOOTLOADER_ENABLE << 24) | (SET_CCFG_BL_CONFIG_RESERVED_23_17 << 17) | \
+     (SET_CCFG_BL_CONFIG_BL_LEVEL << 16) | (SET_CCFG_BL_CONFIG_BL_PIN_NUMBER << 8) |            \
      (SET_CCFG_BL_CONFIG_BL_ENABLE))
 
 /* Remaining fields */

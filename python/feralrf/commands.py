@@ -4,6 +4,7 @@ FeralRF - Command builders
 
 import struct
 
+
 class CommandBuilder:
     """Build command payloads"""
 

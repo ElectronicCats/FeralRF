@@ -74,11 +74,14 @@ size_t protocol_build_frame(uint8_t cmd_id, uint8_t seq, const uint8_t *payload,
  * Parse a frame and verify CRC
  *
  * @param frame     Frame data (without COBS encoding)
- * @param frame_len Length of frame
+ * @param
+ * frame_len Length of frame
  * @param cmd_id    Output: command ID
- * @param seq       Output: sequence number
+ * @param seq       Output:
+ * sequence number
  * @param payload   Output: payload buffer
- * @param payload_len Output: payload length
+ * @param payload_len Output: payload
+ * length
  * @return          true on success, false on error
  */
 bool protocol_parse_frame(const uint8_t *frame, size_t frame_len, uint8_t *cmd_id, uint8_t *seq,

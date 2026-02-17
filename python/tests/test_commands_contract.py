@@ -5,7 +5,7 @@ FeralRF - Command payload contract tests
 import struct
 
 from feralrf.commands import CommandBuilder
-from feralrf.enums import Command, PHY
+from feralrf.enums import PHY, Command
 from feralrf.protocol import build_frame, cobs_decode, parse_frame
 from feralrf.radio import Radio
 

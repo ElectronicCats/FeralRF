@@ -36,7 +36,9 @@ def main() -> int:
 
     print("FeralRF Phase 2 Smoke Test")
     print("==========================")
-    print(f"port={args.port or 'auto'} baudrate={args.baudrate} phy={args.phy} channel={args.channel} power={args.power}")
+    print(
+        f"port={args.port or 'auto'} baudrate={args.baudrate} phy={args.phy} channel={args.channel} power={args.power}"
+    )
     print()
 
     radio = Radio(port=args.port, baudrate=args.baudrate)

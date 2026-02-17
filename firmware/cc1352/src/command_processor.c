@@ -53,7 +53,8 @@ static uint32_t read_u32_le(const uint8_t *p) {
     return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
 }
 
-static void send_response(uint8_t rsp_cmd, uint8_t seq, const uint8_t *payload, uint16_t payload_len) {
+static void send_response(uint8_t rsp_cmd, uint8_t seq, const uint8_t *payload,
+                          uint16_t payload_len) {
     uint8_t raw_frame[PROTOCOL_MAX_FRAME];
     uint8_t encoded[COBS_MAX_ENCODED];
 

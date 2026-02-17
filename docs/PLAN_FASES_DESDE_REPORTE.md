@@ -16,7 +16,7 @@
 4. Fase 4: `COMPLETA (alcance MVP)` (RF BLE real, data queue, manejo de overflow, restart RX).
 5. Fase 5: `PARCIAL` (hay seleccion BLE funcional, falta manager tabular formal y LL pluggable completo).
 6. Fase 6: `PARCIAL` (sniffing BLE end-to-end funcional, pendiente cierre de estabilidad de 30 min).
-7. Fase 7: `PENDIENTE`.
+7. Fase 7: `EN PROGRESO` (metricas base `rx_ok/rx_crc_err/rx_drop/rx_overflow` expuestas por comando host).
 
 ---
 

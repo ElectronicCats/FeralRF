@@ -8,7 +8,8 @@ Firmware universal para CatSniffer (CC1352P + RP2040) con capacidades de sniffin
 - Smoke test de fase 2 en verde (`RADIO_INIT`, `GET_INFO`, `SET_PHY`, `SET_CHANNEL`, `SET_POWER`, `RX_START`, `RX_STOP`).
 - RX BLE real operativo en hardware (ya no sintetico), con parser robusto y filtro CRC.
 - BLE adv hopping basico activo en firmware (`37/38/39`, dwell configurable).
-- Pendiente de cierre: estabilidad 30 min + metricas de calidad para regresion.
+- Metricas RX base expuestas al host (`rx_ok`, `rx_crc_err`, `rx_drop`, `rx_overflow`).
+- Pendiente de cierre: estabilidad 30 min + automatizacion de regresion sobre esas metricas.
 
 ---
 

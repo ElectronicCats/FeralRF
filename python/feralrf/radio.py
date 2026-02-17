@@ -3,14 +3,14 @@ FeralRF - Radio interface
 """
 
 from dataclasses import dataclass
-from typing import Iterator, Optional
+from typing import Iterator, Optional, Set
 
 import serial
 import serial.tools.list_ports
 
 from feralrf.commands import CommandBuilder
 from feralrf.enums import PHY, Command, Response
-from feralrf.exceptions import CommandError, ConnectionError, TimeoutError
+from feralrf.exceptions import CommandError, ConnectionError, ProtocolError, TimeoutError
 from feralrf.protocol import build_frame, cobs_decode, parse_frame
 
 
@@ -108,17 +108,35 @@ class Radio:
         self._serial.write(frame)
         self._serial.flush()
 
-    def _read_response(self, timeout: float = 1.0) -> tuple:
+    @staticmethod
+    def _is_response_cmd(cmd_id: int) -> bool:
+        """Responses occupy 0x80-0xFF range; commands are below 0x80."""
+        return cmd_id >= 0x80
+
+    def _read_response(self, timeout: float = 1.0, expected: Optional[Set[int]] = None) -> tuple:
         """Read and parse a response"""
         if not self._serial:
             raise ConnectionError("Not connected")
 
         self._serial.timeout = timeout
+        ignored_command_frames = 0
+        ignored_unexpected_responses = 0
+        last_unexpected_response = None
 
         # Read until we get a complete frame (0x00 delimiter)
         while True:
             byte = self._serial.read(1)
             if not byte:
+                details = []
+                if ignored_command_frames:
+                    details.append(f"ignored {ignored_command_frames} command-frame echoes")
+                if ignored_unexpected_responses and last_unexpected_response is not None:
+                    details.append(
+                        f"ignored {ignored_unexpected_responses} unexpected response(s), "
+                        f"last=0x{last_unexpected_response:02X}"
+                    )
+                if details:
+                    raise TimeoutError(f"Response timeout ({'; '.join(details)})")
                 raise TimeoutError("Response timeout")
 
             self._rx_buffer.extend(byte)
@@ -128,7 +146,20 @@ class Radio:
                 try:
                     decoded = cobs_decode(bytes(self._rx_buffer))
                     self._rx_buffer.clear()
-                    return parse_frame(decoded)
+                    cmd_id, seq, payload = parse_frame(decoded)
+
+                    # Ignore echoed command frames or stray command traffic.
+                    if not self._is_response_cmd(cmd_id):
+                        ignored_command_frames += 1
+                        continue
+
+                    # If caller expects specific response types, keep reading until match.
+                    if expected is not None and cmd_id not in expected:
+                        ignored_unexpected_responses += 1
+                        last_unexpected_response = cmd_id
+                        continue
+
+                    return cmd_id, seq, payload
                 except ValueError:
                     # Invalid frame, continue reading
                     continue
@@ -138,32 +169,38 @@ class Radio:
         self.connect()
         self._send_command(Command.RADIO_INIT)
 
-        # Wait for ACK
-        cmd_id, seq, payload = self._read_response()
+        # Wait for ACK/ERROR
+        cmd_id, seq, payload = self._read_response(expected={Response.ACK, Response.ERROR})
         if cmd_id == Response.ERROR:
             raise CommandError("Radio init failed", payload[0] if payload else 0)
+        if cmd_id != Response.ACK:
+            raise ProtocolError(f"Unexpected response to RADIO_INIT: 0x{cmd_id:02X}")
 
         # Get device info
         self._send_command(Command.GET_INFO)
-        cmd_id, seq, payload = self._read_response()
+        cmd_id, seq, payload = self._read_response(expected={Response.INFO, Response.ERROR})
+        if cmd_id == Response.ERROR:
+            raise CommandError("Get info failed", payload[0] if payload else 0)
+        if cmd_id != Response.INFO:
+            raise ProtocolError(f"Unexpected response to GET_INFO: 0x{cmd_id:02X}")
+        if len(payload) < 12:
+            raise ProtocolError(f"INFO payload too short: {len(payload)}")
 
-        if cmd_id == Response.INFO:
-            # Parse info response
-            return DeviceInfo(
-                firmware_version=f"{payload[0]}.{payload[1]}.{payload[2]}",
-                capabilities=payload[3] if len(payload) > 3 else 0,
-                serial=payload[4:12].hex() if len(payload) > 4 else "",
-            )
-
-        return DeviceInfo(firmware_version="unknown", capabilities=0, serial="")
+        return DeviceInfo(
+            firmware_version=f"{payload[0]}.{payload[1]}.{payload[2]}",
+            capabilities=payload[3],
+            serial=payload[4:12].hex(),
+        )
 
     def set_phy(self, phy: PHY, channel: int = 0) -> None:
         """Set PHY type and channel"""
         self._send_command(Command.SET_PHY, CommandBuilder.set_phy(phy, channel))
-        cmd_id, seq, payload = self._read_response()
+        cmd_id, seq, payload = self._read_response(expected={Response.ACK, Response.ERROR})
 
         if cmd_id == Response.ERROR:
             raise CommandError("Set PHY failed", payload[0] if payload else 0)
+        if cmd_id != Response.ACK:
+            raise ProtocolError(f"Unexpected response to SET_PHY: 0x{cmd_id:02X}")
 
         self._phy = phy
         self._channel = channel
@@ -171,36 +208,44 @@ class Radio:
     def set_channel(self, channel: int) -> None:
         """Set RF channel"""
         self._send_command(Command.SET_CHANNEL, CommandBuilder.set_channel(channel))
-        cmd_id, seq, payload = self._read_response()
+        cmd_id, seq, payload = self._read_response(expected={Response.ACK, Response.ERROR})
 
         if cmd_id == Response.ERROR:
             raise CommandError("Set channel failed", payload[0] if payload else 0)
+        if cmd_id != Response.ACK:
+            raise ProtocolError(f"Unexpected response to SET_CHANNEL: 0x{cmd_id:02X}")
 
         self._channel = channel
 
     def set_power(self, power_dbm: int) -> None:
         """Set TX power in dBm"""
         self._send_command(Command.SET_POWER, CommandBuilder.set_power(power_dbm))
-        cmd_id, seq, payload = self._read_response()
+        cmd_id, seq, payload = self._read_response(expected={Response.ACK, Response.ERROR})
 
         if cmd_id == Response.ERROR:
             raise CommandError("Set power failed", payload[0] if payload else 0)
+        if cmd_id != Response.ACK:
+            raise ProtocolError(f"Unexpected response to SET_POWER: 0x{cmd_id:02X}")
 
     def start_rx(self) -> None:
         """Start receiving"""
         self._send_command(Command.RX_START)
-        cmd_id, seq, payload = self._read_response()
+        cmd_id, seq, payload = self._read_response(expected={Response.ACK, Response.ERROR})
 
         if cmd_id == Response.ERROR:
             raise CommandError("Start RX failed", payload[0] if payload else 0)
+        if cmd_id != Response.ACK:
+            raise ProtocolError(f"Unexpected response to RX_START: 0x{cmd_id:02X}")
 
     def stop_rx(self) -> None:
         """Stop receiving"""
         self._send_command(Command.RX_STOP)
-        cmd_id, seq, payload = self._read_response()
+        cmd_id, seq, payload = self._read_response(expected={Response.ACK, Response.ERROR})
 
         if cmd_id == Response.ERROR:
             raise CommandError("Stop RX failed", payload[0] if payload else 0)
+        if cmd_id != Response.ACK:
+            raise ProtocolError(f"Unexpected response to RX_STOP: 0x{cmd_id:02X}")
 
     def read_packets(self, timeout: float = 1.0) -> Iterator[Packet]:
         """Read received packets"""
@@ -233,10 +278,12 @@ class Radio:
     def transmit(self, packet: bytes, power_dbm: int = -128) -> None:
         """Transmit a packet"""
         self._send_command(Command.TX_RAW, CommandBuilder.tx_raw(packet, power_dbm))
-        cmd_id, seq, payload = self._read_response()
+        cmd_id, seq, payload = self._read_response(expected={Response.ACK, Response.ERROR})
 
         if cmd_id == Response.ERROR:
             raise CommandError("Transmit failed", payload[0] if payload else 0)
+        if cmd_id != Response.ACK:
+            raise ProtocolError(f"Unexpected response to TX_RAW: 0x{cmd_id:02X}")
 
     def __enter__(self):
         self.connect()

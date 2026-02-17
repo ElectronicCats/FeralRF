@@ -8,6 +8,7 @@
 #ifndef PROTOCOL_H
 #define PROTOCOL_H
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -77,9 +78,10 @@ size_t protocol_build_frame(uint8_t cmd_id, uint8_t seq, const uint8_t *payload,
  * @param cmd_id    Output: command ID
  * @param seq       Output: sequence number
  * @param payload   Output: payload buffer
- * @return          Payload length, or 0 on error
+ * @param payload_len Output: payload length
+ * @return          true on success, false on error
  */
-size_t protocol_parse_frame(const uint8_t *frame, size_t frame_len, uint8_t *cmd_id, uint8_t *seq,
-                            uint8_t *payload);
+bool protocol_parse_frame(const uint8_t *frame, size_t frame_len, uint8_t *cmd_id, uint8_t *seq,
+                          uint8_t *payload, uint16_t *payload_len);
 
 #endif /* PROTOCOL_H */

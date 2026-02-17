@@ -144,24 +144,22 @@ size_t protocol_build_frame(uint8_t cmd_id, uint8_t seq, const uint8_t *payload,
 
 /*
  * Parse a frame and verify CRC
- *
- * Returns payload length on success, 0 on error.
  */
-size_t protocol_parse_frame(const uint8_t *frame, size_t frame_len, uint8_t *cmd_id, uint8_t *seq,
-                            uint8_t *payload) {
+bool protocol_parse_frame(const uint8_t *frame, size_t frame_len, uint8_t *cmd_id, uint8_t *seq,
+                          uint8_t *payload, uint16_t *payload_len) {
     /* Minimum frame: CMD(1) + SEQ(1) + LEN(2) + CRC(2) = 6 bytes */
     if (frame_len < PROTOCOL_OVERHEAD) {
-        return 0;
+        return false;
     }
 
     /* Parse header */
     *cmd_id = frame[0];
     *seq = frame[1];
-    uint16_t payload_len = frame[2] | ((uint16_t)frame[3] << 8);
+    *payload_len = frame[2] | ((uint16_t)frame[3] << 8);
 
     /* Verify total length */
-    if (frame_len != (size_t)(PROTOCOL_OVERHEAD + payload_len)) {
-        return 0;
+    if (frame_len != (size_t)(PROTOCOL_OVERHEAD + *payload_len)) {
+        return false;
     }
 
     /* Verify CRC */
@@ -169,15 +167,15 @@ size_t protocol_parse_frame(const uint8_t *frame, size_t frame_len, uint8_t *cmd
     uint16_t calc_crc = crc16_ccitt(frame, frame_len - 2);
 
     if (frame_crc != calc_crc) {
-        return 0;
+        return false;
     }
 
     /* Copy payload */
-    if (payload_len > 0 && payload != NULL) {
-        for (size_t i = 0; i < payload_len; i++) {
+    if (*payload_len > 0 && payload != NULL) {
+        for (size_t i = 0; i < *payload_len; i++) {
             payload[i] = frame[4 + i];
         }
     }
 
-    return payload_len;
+    return true;
 }

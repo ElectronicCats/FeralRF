@@ -1,10 +1,12 @@
-/* CC1352P1F3RGZT Linker Script */
-/* 352KB Flash, 80KB SRAM */
+/* CC1352P7 Linker Script */
+/* 704KB Flash, 144KB SRAM */
 
 MEMORY
 {
-    FLASH (RX)  : ORIGIN = 0x00000000, LENGTH = 0x00058000  /* 352KB */
-    SRAM (RWX)  : ORIGIN = 0x20000000, LENGTH = 0x00014000  /* 80KB */
+    FLASH (RX)  : ORIGIN = 0x00000000, LENGTH = 0x000AFFA8  /* Flash minus CCFG lock page */
+    CCFG  (RX)  : ORIGIN = 0x000AFFA8, LENGTH = 0x00000058  /* CCFG fixed address */
+    SRAM  (RWX) : ORIGIN = 0x20000000, LENGTH = 0x00023000  /* 140KB data/bss */
+    STACK (RWX) : ORIGIN = 0x20023000, LENGTH = 0x00001000  /* 4KB stack */
 }
 
 ENTRY(ResetISR)
@@ -13,6 +15,7 @@ SECTIONS
 {
     .text :
     {
+        KEEP(*(.resetVecs))
         KEEP(*(.vectors))
         *(.text*)
         *(.rodata*)
@@ -63,11 +66,21 @@ SECTIONS
 
     .stack (NOLOAD) :
     {
+        . = ORIGIN(STACK);
         . = ALIGN(8);
         _stack = .;
-        . = . + 0x1000;  /* 4KB stack */
+        . = . + LENGTH(STACK);
         _estack = .;
-    } > SRAM
+    } > STACK
+
+    .ccfg :
+    {
+        . = ALIGN(4);
+        KEEP(*(.ccfg))
+        . = ALIGN(4);
+    } > CCFG
+
+    ASSERT(SIZEOF(.ccfg) == 0x58, "CCFG section must be 0x58 bytes")
 
     _end = .;
 

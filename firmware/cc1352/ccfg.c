@@ -1,0 +1,73 @@
+/*
+ * FeralRF CC1352 CCFG
+ *
+ * Values intentionally matched to the known-working
+ * examples-catsniffer/sniffer_fw_cc1252P_7 image.
+ */
+
+#include <stdint.h>
+
+#include <ti/devices/cc13x2x7_cc26x2x7/inc/hw_ccfg_simple_struct.h>
+
+/* Clock settings */
+#define SET_CCFG_EXT_LF_CLK 0x01800000u
+#define SET_CCFG_MODE_CONF_1 0xFF800010u
+#define SET_CCFG_SIZE_AND_DIS_FLAGS 0x0058FFFDu
+#define SET_CCFG_MODE_CONF 0xF3B9D53Au
+
+/* Bootloader settings (style requested) */
+#define SET_CCFG_BL_CONFIG_BOOTLOADER_ENABLE 0xC5u
+#define SET_CCFG_BL_CONFIG_RESERVED_23_17 0x7Fu
+#define SET_CCFG_BL_CONFIG_BL_LEVEL 0x00u
+#define SET_CCFG_BL_CONFIG_BL_PIN_NUMBER 0x0Fu
+#define SET_CCFG_BL_CONFIG_BL_ENABLE 0xC5u
+#define SET_CCFG_BL_CONFIG                                                      \
+    ((SET_CCFG_BL_CONFIG_BOOTLOADER_ENABLE << 24) |                           \
+     (SET_CCFG_BL_CONFIG_RESERVED_23_17 << 17) |                              \
+     (SET_CCFG_BL_CONFIG_BL_LEVEL << 16) |                                    \
+     (SET_CCFG_BL_CONFIG_BL_PIN_NUMBER << 8) |                                \
+     (SET_CCFG_BL_CONFIG_BL_ENABLE))
+
+/* Remaining fields */
+#define SET_CCFG_VOLT_LOAD_0 0xFFFFFFFFu
+#define SET_CCFG_VOLT_LOAD_1 0xFFFFFFFFu
+#define SET_CCFG_RTC_OFFSET 0xFFFFFFFFu
+#define SET_CCFG_FREQ_OFFSET 0xFFFFFFFFu
+#define SET_CCFG_IEEE_MAC_0 0xFFFFFFFFu
+#define SET_CCFG_IEEE_MAC_1 0xFFFFFFFFu
+#define SET_CCFG_IEEE_BLE_0 0xFFFFFFFFu
+#define SET_CCFG_IEEE_BLE_1 0xFFFFFFFFu
+#define SET_CCFG_ERASE_CONF 0xFFFFFFFFu
+#define SET_CCFG_TI_OPTIONS 0xFFFFFF00u
+#define SET_CCFG_TAP_DAP_0 0xFFC5C500u
+#define SET_CCFG_TAP_DAP_1 0xFF000000u
+#define SET_CCFG_IMAGE_VALID_CONF 0x00000000u
+#define SET_CCFG_PROT_31_0 0xFFFFFFFFu
+#define SET_CCFG_PROT_63_32 0xFFFFFFFFu
+#define SET_CCFG_PROT_95_64 0xFFFFFFFFu
+#define SET_CCFG_PROT_127_96 0xFFFFFFFFu
+
+__attribute__((section(".ccfg"), used)) const ccfg_t __ccfg = {
+    .CCFG_EXT_LF_CLK = SET_CCFG_EXT_LF_CLK,
+    .CCFG_MODE_CONF_1 = SET_CCFG_MODE_CONF_1,
+    .CCFG_SIZE_AND_DIS_FLAGS = SET_CCFG_SIZE_AND_DIS_FLAGS,
+    .CCFG_MODE_CONF = SET_CCFG_MODE_CONF,
+    .CCFG_VOLT_LOAD_0 = SET_CCFG_VOLT_LOAD_0,
+    .CCFG_VOLT_LOAD_1 = SET_CCFG_VOLT_LOAD_1,
+    .CCFG_RTC_OFFSET = SET_CCFG_RTC_OFFSET,
+    .CCFG_FREQ_OFFSET = SET_CCFG_FREQ_OFFSET,
+    .CCFG_IEEE_MAC_0 = SET_CCFG_IEEE_MAC_0,
+    .CCFG_IEEE_MAC_1 = SET_CCFG_IEEE_MAC_1,
+    .CCFG_IEEE_BLE_0 = SET_CCFG_IEEE_BLE_0,
+    .CCFG_IEEE_BLE_1 = SET_CCFG_IEEE_BLE_1,
+    .CCFG_BL_CONFIG = SET_CCFG_BL_CONFIG,
+    .CCFG_ERASE_CONF = SET_CCFG_ERASE_CONF,
+    .CCFG_CCFG_TI_OPTIONS = SET_CCFG_TI_OPTIONS,
+    .CCFG_CCFG_TAP_DAP_0 = SET_CCFG_TAP_DAP_0,
+    .CCFG_CCFG_TAP_DAP_1 = SET_CCFG_TAP_DAP_1,
+    .CCFG_IMAGE_VALID_CONF = SET_CCFG_IMAGE_VALID_CONF,
+    .CCFG_CCFG_PROT_31_0 = SET_CCFG_PROT_31_0,
+    .CCFG_CCFG_PROT_63_32 = SET_CCFG_PROT_63_32,
+    .CCFG_CCFG_PROT_95_64 = SET_CCFG_PROT_95_64,
+    .CCFG_CCFG_PROT_127_96 = SET_CCFG_PROT_127_96,
+};

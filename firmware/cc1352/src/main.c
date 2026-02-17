@@ -1,62 +1,52 @@
 /*
  * FeralRF CC1352 - Main Entry Point
- * Phase 0: Simple blinky to verify build
+ * Phase 0: Simple blinky using DriverLib.
  */
 
-#include "config.h"
 #include <stdint.h>
 
-/* CC1352P GPIO registers */
-#define GPIO_BASE 0x40022000
-#define GPIO_DOE31_0 (*(volatile uint32_t *)(GPIO_BASE + 0x200))
-#define GPIO_DOUT31_0 (*(volatile uint32_t *)(GPIO_BASE + 0x008))
-#define GPIO_DIN31_0 (*(volatile uint32_t *)(GPIO_BASE + 0x010))
+#include <ti/devices/cc13x2x7_cc26x2x7/driverlib/gpio.h>
+#include <ti/devices/cc13x2x7_cc26x2x7/driverlib/ioc.h>
+#include <ti/devices/cc13x2x7_cc26x2x7/driverlib/prcm.h>
 
-/* CC1352P IOC registers */
-#define IOC_BASE 0x40081000
-#define IOC_PORT_CFG(pin) (*(volatile uint32_t *)(IOC_BASE + 0x000 + (pin) * 4))
+#include "config.h"
 
-/* IOC Port Configuration */
-#define IOC_PORT_GPIO 0x00000000
-#define IOC_INPUT_ENABLE (1 << 18)
-#define IOC_OUTPUT_ENABLE (1 << 18) /* Actually bit 18 is input en, 20 is output en */
+#define BLINK_DELAY_CYCLES 12000000u
 
-/* Simple delay */
-static void delay(volatile uint32_t count) {
-    while (count--) {
+static void delay_cycles(volatile uint32_t cycles) {
+    while (cycles--) {
         __asm__ volatile("nop");
     }
 }
 
-/* Configure GPIO pin as output */
-static void gpio_output_init(uint8_t pin) {
-    /* Set IOC to GPIO mode with output enable */
-    IOC_PORT_CFG(pin) = IOC_PORT_GPIO | (1 << 20); /* Output enable */
-
-    /* Enable in GPIO DOE */
-    GPIO_DOE31_0 |= (1 << pin);
-}
-
-/* Set GPIO pin */
-static void gpio_set(uint8_t pin, uint8_t value) {
-    if (value) {
-        GPIO_DOUT31_0 |= (1 << pin);
-    } else {
-        GPIO_DOUT31_0 &= ~(1 << pin);
+static void board_gpio_init(void) {
+    PRCMPowerDomainOn(PRCM_DOMAIN_PERIPH);
+    while (PRCMPowerDomainsAllOn(PRCM_DOMAIN_PERIPH) != PRCM_DOMAIN_POWER_ON) {
+        /* Wait until peripheral domain is powered. */
     }
+
+    PRCMPeripheralRunEnable(PRCM_PERIPH_GPIO);
+    PRCMLoadSet();
+    while (!PRCMLoadGet()) {
+        /* Wait until clock settings are applied. */
+    }
+
+    IOCPortConfigureSet(LED_PIN, IOC_PORT_GPIO,
+                        IOC_CURRENT_8MA | IOC_STRENGTH_MAX | IOC_NO_IOPULL |
+                            IOC_SLEW_DISABLE | IOC_HYST_DISABLE | IOC_NO_EDGE |
+                            IOC_INT_DISABLE | IOC_IOMODE_NORMAL | IOC_NO_WAKE_UP |
+                            IOC_INPUT_DISABLE);
+    GPIO_setOutputEnableDio(LED_PIN, GPIO_OUTPUT_ENABLE);
+    GPIO_clearDio(LED_PIN);
 }
 
 int main(void) {
-    /* Initialize LED pin */
-    gpio_output_init(LED_PIN);
+    board_gpio_init();
 
-    /* Blinky loop */
     while (1) {
-        gpio_set(LED_PIN, 1);
-        delay(500000);
-        gpio_set(LED_PIN, 0);
-        delay(500000);
+        GPIO_setDio(LED_PIN);
+        delay_cycles(BLINK_DELAY_CYCLES);
+        GPIO_clearDio(LED_PIN);
+        delay_cycles(BLINK_DELAY_CYCLES);
     }
-
-    return 0;
 }

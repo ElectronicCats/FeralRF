@@ -36,11 +36,9 @@ static void uart_cc1352_init(void) {
 
     gpio_set_function(UART_TX_PIN, GPIO_FUNC_UART);
     gpio_set_function(UART_RX_PIN, GPIO_FUNC_UART);
-    gpio_set_function(UART_RTS_PIN, GPIO_FUNC_UART);
-    gpio_set_function(UART_CTS_PIN, GPIO_FUNC_UART);
 
-    /* Enable flow control */
-    uart_set_hw_flow(UART_ID, true, true);
+    /* Flow control is disabled on CatSniffer v3 wiring (RTS/CTS not dedicated). */
+    uart_set_hw_flow(UART_ID, false, false);
 
     /* Enable FIFO */
     uart_set_fifo_enabled(UART_ID, true);

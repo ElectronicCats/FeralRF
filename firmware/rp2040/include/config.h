@@ -8,8 +8,9 @@
 /* UART Configuration (to CC1352) */
 #define UART_TX_PIN 0          /* GPIO0 */
 #define UART_RX_PIN 1          /* GPIO1 */
-#define UART_RTS_PIN 2         /* GPIO2 */
-#define UART_CTS_PIN 3         /* GPIO3 */
+/* CatSniffer v3 does not provide dedicated RTS/CTS lines to CC1352 UART. */
+#define UART_RTS_PIN 2         /* GPIO2 (wired to CC1352 DIO15 / BOOT net) */
+#define UART_CTS_PIN 3         /* GPIO3 (shared with RESET_CC net) */
 #define UART_BAUD_RATE 3000000 /* 3Mbps */
 #define UART_ID uart0
 

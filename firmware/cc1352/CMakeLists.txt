@@ -25,21 +25,28 @@ set(CMAKE_OBJCOPY arm-none-eabi-objcopy)
 set(CMAKE_SIZE arm-none-eabi-size)
 
 # Compiler flags
-set(CMAKE_C_FLAGS "-mcpu=cortex-m4 -mthumb -mfloat-abi=soft -Wall -Wextra -std=c11 -ffunction-sections -fdata-sections -g -O0" CACHE INTERNAL "")
-set(CMAKE_ASM_FLAGS "-mcpu=cortex-m4 -mthumb -g -x assembler-with-cpp" CACHE INTERNAL "")
+set(CMAKE_C_FLAGS "-mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16 -Wall -Wextra -std=c11 -ffunction-sections -fdata-sections -g -O0" CACHE INTERNAL "")
+set(CMAKE_ASM_FLAGS "-mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16 -g -x assembler-with-cpp" CACHE INTERNAL "")
 set(CMAKE_EXE_LINKER_FLAGS "-T ${CMAKE_CURRENT_SOURCE_DIR}/linker/cc1352p.ld -nostartfiles -Wl,--gc-sections -Wl,-Map=${CMAKE_PROJECT_NAME}.map" CACHE INTERNAL "")
 
 # Include paths from SDK
 set(SDK_INCLUDE_DIRS
     ${TI_SDK_PATH}/source
-    ${TI_SDK_PATH}/source/ti/devices/cc13x2_cc26x2
-    ${TI_SDK_PATH}/source/ti/devices/cc13x2_cc26x2/inc
+    ${TI_SDK_PATH}/source/ti/devices/cc13x2x7_cc26x2x7
+    ${TI_SDK_PATH}/source/ti/devices/cc13x2x7_cc26x2x7/inc
+    ${TI_SDK_PATH}/source/ti/devices/cc13x2x7_cc26x2x7/driverlib
     ${TI_SDK_PATH}/source/ti/drivers
     ${TI_SDK_PATH}/source/ti/drivers/rf
 )
 
+# DriverLib library (pre-compiled for GCC)
+set(DRIVERLIB_LIB
+    ${TI_SDK_PATH}/source/ti/devices/cc13x2x7_cc26x2x7/driverlib/bin/gcc/driverlib.lib
+)
+
 # Source files
 set(SOURCES
+    ccfg.c
     src/main.c
     src/protocol.c
     src/startup_cc13x2_cc26x2_gcc.c
@@ -53,6 +60,14 @@ include_directories(
 
 # Executable
 add_executable(${CMAKE_PROJECT_NAME}.elf ${SOURCES})
+
+target_compile_definitions(${CMAKE_PROJECT_NAME}.elf PRIVATE
+    DeviceFamily_CC13X2X7
+)
+
+target_link_libraries(${CMAKE_PROJECT_NAME}.elf PRIVATE
+    ${DRIVERLIB_LIB}
+)
 
 # Set output suffix
 set_target_properties(${CMAKE_PROJECT_NAME}.elf PROPERTIES

@@ -8,8 +8,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "host_if.h"
+#include "control_task.h"
+#include "output_if.h"
 #include "protocol.h"
+#include "task_event.h"
 
 /* Commands (match python/feralrf/enums.py) */
 #define CMD_RADIO_INIT 0x01u
@@ -31,20 +33,6 @@
 #define ERR_INVALID_FRAME 0x03u
 #define ERR_FRAME_TOO_LONG 0x04u
 
-/* Firmware info payload */
-#define FW_VERSION_MAJOR 0x01u
-#define FW_VERSION_MINOR 0x00u
-#define FW_VERSION_PATCH 0x00u
-#define FW_CAPABILITIES 0x01u
-
-static uint8_t g_selected_phy = 0;
-static uint16_t g_channel = 0;
-static int8_t g_tx_power_dbm = 0;
-static uint32_t g_frequency_hz = 0;
-static bool g_rx_enabled = false;
-
-static const uint8_t g_serial[8] = {'F', 'E', 'R', 'A', 'L', 'R', 'F', '1'};
-
 static uint16_t read_u16_le(const uint8_t *p) {
     return (uint16_t)p[0] | ((uint16_t)p[1] << 8);
 }
@@ -55,14 +43,7 @@ static uint32_t read_u32_le(const uint8_t *p) {
 
 static void send_response(uint8_t rsp_cmd, uint8_t seq, const uint8_t *payload,
                           uint16_t payload_len) {
-    uint8_t raw_frame[PROTOCOL_MAX_FRAME];
-    uint8_t encoded[COBS_MAX_ENCODED];
-
-    size_t raw_len = protocol_build_frame(rsp_cmd, seq, payload, payload_len, raw_frame);
-    size_t encoded_len = cobs_encode(raw_frame, raw_len, encoded);
-
-    HostIF_writeBuffer(encoded, encoded_len);
-    HostIF_writeByte(0x00u);
+    OutputIF_sendResponse(rsp_cmd, seq, payload, payload_len);
 }
 
 static void send_ack(uint8_t seq) {
@@ -77,14 +58,7 @@ static void send_error(uint8_t seq, uint8_t error_code) {
 static void send_info(uint8_t seq) {
     uint8_t payload[12];
 
-    payload[0] = FW_VERSION_MAJOR;
-    payload[1] = FW_VERSION_MINOR;
-    payload[2] = FW_VERSION_PATCH;
-    payload[3] = FW_CAPABILITIES;
-    for (size_t i = 0; i < sizeof(g_serial); i++) {
-        payload[4 + i] = g_serial[i];
-    }
-
+    ControlTask_getInfoPayload(payload, sizeof(payload));
     send_response(RSP_INFO, seq, payload, sizeof(payload));
 }
 
@@ -95,7 +69,7 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
             send_error(seq, ERR_INVALID_PAYLOAD);
             return;
         }
-        g_rx_enabled = false;
+        ControlTask_onRadioInit();
         send_ack(seq);
         return;
 
@@ -112,13 +86,8 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
             send_error(seq, ERR_INVALID_PAYLOAD);
             return;
         }
-        g_selected_phy = payload[0];
-        if (payload_len >= 3) {
-            g_channel = read_u16_le(&payload[1]);
-        }
-        if (payload_len == 7) {
-            g_frequency_hz = read_u32_le(&payload[3]);
-        }
+        ControlTask_onSetPhy(payload[0], payload_len >= 3 ? read_u16_le(&payload[1]) : 0u,
+                             payload_len == 7 ? read_u32_le(&payload[3]) : 0u);
         send_ack(seq);
         return;
 
@@ -127,7 +96,7 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
             send_error(seq, ERR_INVALID_PAYLOAD);
             return;
         }
-        g_channel = payload[0];
+        ControlTask_onSetChannel(payload[0]);
         send_ack(seq);
         return;
 
@@ -136,7 +105,7 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
             send_error(seq, ERR_INVALID_PAYLOAD);
             return;
         }
-        g_tx_power_dbm = (int8_t)payload[0];
+        ControlTask_onSetPower((int8_t)payload[0]);
         send_ack(seq);
         return;
 
@@ -145,7 +114,7 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
             send_error(seq, ERR_INVALID_PAYLOAD);
             return;
         }
-        g_rx_enabled = true;
+        ControlTask_onRxStart();
         send_ack(seq);
         return;
 
@@ -154,7 +123,7 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
             send_error(seq, ERR_INVALID_PAYLOAD);
             return;
         }
-        g_rx_enabled = false;
+        ControlTask_onRxStop();
         send_ack(seq);
         return;
 
@@ -165,11 +134,7 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
 }
 
 void CommandProcessor_init(void) {
-    g_selected_phy = 0;
-    g_channel = 0;
-    g_tx_power_dbm = 0;
-    g_frequency_hz = 0;
-    g_rx_enabled = false;
+    /* State lives in control_task; keep init for module parity. */
 }
 
 void CommandProcessor_sendFrameTooLongError(void) {
@@ -186,13 +151,16 @@ void CommandProcessor_processEncodedFrame(const uint8_t *encoded_frame, size_t e
     size_t frame_len = cobs_decode(encoded_frame, encoded_len, frame);
     if (frame_len == 0) {
         send_error(0, ERR_INVALID_FRAME);
+        TaskEvent_set(TASK_EVENT_CMD_PROCESSED);
         return;
     }
 
     if (!protocol_parse_frame(frame, frame_len, &cmd, &seq, payload, &payload_len)) {
         send_error(seq, ERR_INVALID_FRAME);
+        TaskEvent_set(TASK_EVENT_CMD_PROCESSED);
         return;
     }
 
     handle_command(cmd, seq, payload, payload_len);
+    TaskEvent_set(TASK_EVENT_CMD_PROCESSED);
 }

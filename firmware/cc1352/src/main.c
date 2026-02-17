@@ -15,8 +15,11 @@
 
 #include "command_processor.h"
 #include "config.h"
+#include "control_task.h"
+#include "data_task.h"
 #include "host_if.h"
 #include "host_if_task.h"
+#include "task_event.h"
 
 static void board_power_init(void) {
     PRCMPowerDomainOn(PRCM_DOMAIN_PERIPH | PRCM_DOMAIN_SERIAL);
@@ -59,7 +62,10 @@ int main(void) {
     board_power_init();
     board_gpio_init();
     HostIF_init();
+    TaskEvent_init();
+    ControlTask_init();
     CommandProcessor_init();
+    DataTask_init();
     HostIFTask_init();
     systick_timebase_init();
     systick_last = SysTickValueGet();
@@ -86,5 +92,6 @@ int main(void) {
         }
 
         HostIFTask_poll();
+        DataTask_poll();
     }
 }

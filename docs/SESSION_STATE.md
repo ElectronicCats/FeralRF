@@ -49,6 +49,8 @@
 6. Validacion de parser LL ampliado: `OK` (captura real muestra subtipos `ADV_IND`, `ADV_NONCONN_IND`, `ADV_EXT_IND`, `SCAN_REQ`, `SCAN_RSP` en canales 37/38/39).
 7. Barrido PHY 4 IEEE 802.15.4 (CH 11/15/20/25, 15s c/u): `OK` sin cuelgues ni timeouts; `packets=0` en ambiente actual (sin trafico 802.15.4 observable).
 8. Canary regresion (BLE, 60s): `OK` en hardware (`CANARY PASS`) con monotonia de stats, `RX_STOP ACK` y `packets_total=8150`.
+9. Gate BLE unificado (`release_gate_ble.py`, 60s, `ci_manual`) corrida 1/2: `OK` (smoke + canary en verde, `packets_total=5304`, `stats_total ok=5390 crc_err=919 drop=37 ovf=0`).
+10. Gate BLE unificado (`release_gate_ble.py`, 60s, `ci_manual`) corrida 2/2: `OK` (smoke + canary en verde, `packets_total=5623`, `stats_total ok=5733 crc_err=778 drop=37 ovf=0`).
 
 ## Riesgo abierto actual
 
@@ -60,7 +62,11 @@
    2. reintentos en `stop_rx()`.
    3. script soak tolerante a timeout puntual de stats.
 4. Pendiente de calidad:
-   1. canario automatizado implementado y validado en corrida base HW; pendiente fijar umbral definitivo por entorno para CI manual.
+   1. canario automatizado implementado y validado en corrida base HW.
+   2. umbral por entorno implementado con perfiles (`lab/ci_manual/quiet`).
+   3. gate operativo formalizado en comando unico (`python/examples/release_gate_ble.py`).
+   4. `OK`: corridas 1/2 y 2/2 consecutivas del gate BLE en verde.
+   5. `OK`: baseline BLE congelado para evitar regresiones antes de abrir nuevos verticales.
 
 ## Scripts y comandos vigentes
 
@@ -69,7 +75,9 @@
 2. Smoke fase 2:
    `python examples/smoke_phase2.py -p /dev/ttyACM0 --baudrate 921600 --phy 0 --channel 37 --power 0`
 3. Canary regresion:
-   `PYTHONPATH=python python3 python/examples/canary_regression.py -p /dev/ttyACM0 --baudrate 921600 --phy 0 --channel 37 --power 0 --soak-duration 60 --report-every 15 --stats-timeout 2 --stats-retries 3 --min-packets 1`
+   `PYTHONPATH=python python3 python/examples/canary_regression.py -p /dev/ttyACM0 --baudrate 921600 --phy 0 --channel 37 --power 0 --soak-duration 60 --report-every 15 --stats-timeout 2 --stats-retries 3 --profile ci_manual`
+4. Gate release BLE (comando unico):
+   `PYTHONPATH=python python3 python/examples/release_gate_ble.py -p /dev/ttyACM0 --baudrate 921600 --phy 0 --channel 37 --power 0 --soak-duration 60 --report-every 15 --stats-timeout 2 --stats-retries 3 --profile ci_manual`
 
 ## Archivos clave tocados en este bloque
 
@@ -94,5 +102,5 @@
 ## Siguiente paso inmediato recomendado
 
 1. Generar/capturar trafico real Zigbee/Thread para cerrar evidencia de paquetes reales en `SET_PHY(4)`.
-2. Definir umbral operativo final de `--min-packets` para regresion canaria segun entorno.
-3. Conectar el canario a flujo CI/manual de release interna.
+2. Conectar el gate BLE a flujo CI/manual de release interna.
+3. Afinar perfil objetivo (`lab` vs `ci_manual`) para cada tipo de validacion de release.

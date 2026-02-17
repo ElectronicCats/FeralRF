@@ -183,24 +183,26 @@ Dejar base lista para Zigbee/Sub-1GHz, jamming y spectrum.
 ## Orden recomendado de ejecucion inmediata (actualizado)
 
 1. Tarea 1 (cierre tecnico Fase 5 - LL BLE):
-   1. enriquecer parser `LL_BLE` (subtipos advertising extendido y casos reservados).
-   2. mantener compatibilidad backward en `RSP_RX_PACKET`.
-   3. criterio de done: clasificacion consistente en captura real multi-canal.
+   1. `OK`: parser `LL_BLE` ampliado (subtipos advertising/extended y casos reservados).
+   2. `OK`: compatibilidad backward mantenida en `RSP_RX_PACKET` (metadata capability-gated).
+   3. `OK`: clasificacion consistente validada en captura real multi-canal.
 2. Tarea 2 (cierre tecnico Fase 5 - multi-PHY real):
    1. `OK`: validar en hardware el backend RF real para `IEEE_802_15_4` (RX) ya integrado (sin timeouts de cierre).
    2. pendiente: ejecutar captura con emisor Zigbee/Thread activo para confirmar paquetes reales (no solo control path).
    3. criterio de done: `SET_PHY(802.15.4)` + `RX_START` entrega paquetes reales de forma estable.
 3. Tarea 3 (avance Fase 7 - regresion automatizada):
    1. `OK`: agregar script canario que ejecute smoke + soak corto + validacion de stats LL (`python/examples/canary_regression.py`).
-   2. `OK`: umbrales de aceptacion implementados (sin timeout, `RX_STOP ACK`, contadores monotonos, `min_packets` configurable).
+   2. `OK`: umbrales de aceptacion implementados (sin timeout, `RX_STOP ACK`, contadores monotonos, `min_packets` configurable + perfiles `lab/ci_manual/quiet`).
    3. `OK`: validacion HW base completada (`CANARY PASS`, 60s, `packets_total=8150`).
 4. Tarea 4 (documentacion de contrato):
    1. `OK`: crear `docs/protocol.md` con formato actualizado de `RSP_RX_PACKET` y `RSP_STATS`.
    2. `OK`: documentar capabilities (`0x01`, `0x02`, `0x04`) y reglas de compatibilidad.
    3. `OK`: host y firmware referencian la misma especificacion.
 5. Tarea 5 (gate de release interna BLE):
-   1. checklist de validacion HW: smoke, soak 30 min, clasificacion LL, cierre limpio.
-   2. congelar baseline para abrir Zigbee/Sub-1GHz/TX/jamming sin regresion BLE.
-   3. criterio de done: checklist en verde dos corridas consecutivas.
+   1. `OK`: checklist de validacion HW ejecutado (smoke, soak, clasificacion LL, cierre limpio).
+   2. `OK`: gate operativo formalizado en comando unico (`python/examples/release_gate_ble.py`).
+   3. `OK`: corridas 1/2 y 2/2 consecutivas del gate BLE en verde (`BLE RELEASE GATE PASS`).
+   4. `OK`: baseline BLE congelado.
+   5. pendiente: abrir Zigbee/Sub-1GHz/TX/jamming manteniendo gate BLE como no-regresion.
 
 Este orden prioriza cerrar MVP BLE estable antes de abrir Zigbee/Sub-1GHz.

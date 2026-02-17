@@ -17,7 +17,7 @@ Firmware universal para CatSniffer (CC1352P + RP2040) con capacidades de sniffin
 - Estabilidad validada: soak BLE de 30 minutos completado en hardware.
 - Canary de regresion validado en hardware (`CANARY PASS`, 60s, monotonia de stats y `RX_STOP ACK`).
 - `docs/protocol.md` publicado con contrato vigente host<->firmware.
-- Pendiente principal: evidencia de captura real 802.15.4 (no solo control path) y fijar umbral canario por entorno.
+- Pendiente principal: evidencia de captura real 802.15.4 (no solo control path) y conexion del canario al gate de release.
 
 ---
 
@@ -277,7 +277,7 @@ feralrf/
 - [x] BLE PHY initialization
 - [x] RX streaming via UART
 - [x] Python API basica (sync)
-- [ ] Ejemplo: `ble_sniffer.py`
+- [x] Ejemplo: `ble_sniffer.py`
 
 ### FASE 2: TX + Jamming Básico (Semanas 4-5)
 - [ ] TX raw packets
@@ -393,17 +393,35 @@ def test_ble_sniffer_receive():
 
 ## 9. Próximos Pasos
 
-1. Cerrar FASE 5 (LL BLE):
-   1. ampliar clasificacion LL para subtipos advertising/extended.
-   2. sostener compatibilidad backward del payload RX.
-2. Cerrar FASE 5 (multi-PHY real):
-   1. `OK` validar estabilidad HW del backend `IEEE_802_15_4` RX ya integrado.
-   2. pendiente: validar captura real con trafico Zigbee/Thread cercano.
-   3. fallback sintetico solo en PHY aun no implementados.
-3. Ejecutar FASE 7 (regresion):
-   1. `OK` automatizar smoke + soak corto + validacion de stats LL (`python/examples/canary_regression.py`).
-   2. `OK` umbrales y salida no-cero implementados (timeout, `RX_STOP ACK`, monotonia, `min_packets`).
-4. Documentacion de protocolo:
-   1. `OK` publicar `docs/protocol.md` con contrato actualizado (`RSP_RX_PACKET`, `RSP_STATS`, capabilities).
-5. Gate de release BLE:
-   1. checklist HW: smoke, soak 30 min, clasificacion LL y cierre limpio de sesion.
+1. Cerrar FASE 5 (multi-PHY real):
+   1. `OK` estabilidad HW del backend `IEEE_802_15_4` RX (control path) en CH 11/15/20/25.
+   2. pendiente: evidencia de captura real 802.15.4 con emisor Zigbee/Thread activo.
+2. Cerrar FASE 7 (regresión/gate):
+   1. `OK` canario smoke+soak+stats LL implementado (`python/examples/canary_regression.py`).
+   2. `OK` perfiles por entorno (`lab/ci_manual/quiet`) y piso dinámico por duración.
+   3. `OK` gate operativo de release formalizado (`python/examples/release_gate_ble.py`).
+   4. `OK` corridas 1/2 y 2/2 consecutivas validadas en hardware (`BLE RELEASE GATE PASS`).
+   5. `OK` baseline BLE congelado para evitar regresiones.
+3. Baseline BLE:
+   1. `OK` baseline BLE estable congelado.
+   2. siguiente: abrir verticales nuevos bajo gate BLE obligatorio.
+
+---
+
+## 10. Brecha vs Planes Originales
+
+1. Ya logrado del plan original:
+   1. MVP BLE sniffing estable end-to-end con UART `921600` y `COBS+CRC16`.
+   2. Pipeline de RX robusto con métricas y parser LL BLE ampliado.
+   3. Soak BLE prolongado y canario de regresión en hardware.
+2. En progreso:
+   1. IEEE 802.15.4 RX real: control path estable, falta evidencia de tráfico real capturado.
+3. No iniciado respecto al plan original amplio:
+   1. TX features (`TX_RAW/TX_BURST/TX_CONTINUOUS`) en firmware.
+   2. Jamming (`CW/reactivo/patrones`) y policy engine autónomo.
+   3. Spectrum analyzer (scan + visualización).
+   4. Sub-1GHz operativo.
+   5. Bootloader custom/OTA y gate de release completo.
+4. Ajuste recomendado de alcance:
+   1. cerrar primero baseline BLE + 802.15.4 RX real.
+   2. luego abrir verticales nuevas una por una (TX -> spectrum -> jamming -> Sub-1GHz).

@@ -4,6 +4,7 @@ FeralRF - Regression Canary (smoke + short soak + stats monotonic checks)
 """
 
 import argparse
+import math
 import sys
 import time
 from typing import Optional
@@ -23,6 +24,13 @@ def ok(msg: str) -> None:
 
 def fail(msg: str) -> None:
     print(f"[FAIL] {msg}")
+
+
+CANARY_PROFILE_MIN_PACKETS_60S = {
+    "lab": 500,
+    "ci_manual": 50,
+    "quiet": 1,
+}
 
 
 def ll_summary(stats: DeviceStats) -> str:
@@ -170,10 +178,16 @@ def main() -> int:
     )
     parser.add_argument("--stats-retries", help="Retries for GET_STATS", type=int, default=3)
     parser.add_argument(
+        "--profile",
+        help="Packet-floor profile when --min-packets is not provided",
+        choices=tuple(CANARY_PROFILE_MIN_PACKETS_60S.keys()),
+        default="ci_manual",
+    )
+    parser.add_argument(
         "--min-packets",
-        help="Minimum packets expected in soak window (fail if below)",
+        help="Minimum packets expected in soak window (override profile-derived floor)",
         type=int,
-        default=1,
+        default=None,
     )
     args = parser.parse_args()
 
@@ -189,17 +203,29 @@ def main() -> int:
     if args.stats_retries <= 0:
         fail("stats-retries must be > 0")
         return 2
-    if args.min_packets < 0:
+    if args.min_packets is not None and args.min_packets < 0:
         fail("min-packets must be >= 0")
         return 2
+
+    profile_floor_60s = CANARY_PROFILE_MIN_PACKETS_60S[args.profile]
+    profile_scaled_floor = int(math.ceil((profile_floor_60s * args.soak_duration) / 60.0))
+    effective_min_packets = (
+        args.min_packets if args.min_packets is not None else profile_scaled_floor
+    )
 
     print("FeralRF Regression Canary")
     print("=========================")
     print(
         f"port={args.port or 'auto'} baudrate={args.baudrate} phy={args.phy} channel={args.channel} "
         f"power={args.power} soak_duration={args.soak_duration}s report_every={args.report_every}s "
-        f"stats_timeout={args.stats_timeout}s stats_retries={args.stats_retries} min_packets={args.min_packets}"
+        f"stats_timeout={args.stats_timeout}s stats_retries={args.stats_retries} "
+        f"profile={args.profile} min_packets={effective_min_packets}"
     )
+    if args.min_packets is None:
+        print(
+            f"profile_floor_60s={profile_floor_60s} -> scaled_floor={profile_scaled_floor} "
+            f"(duration={args.soak_duration}s)"
+        )
     print()
 
     radio = Radio(port=args.port, baudrate=args.baudrate)
@@ -221,7 +247,7 @@ def main() -> int:
             report_every=args.report_every,
             stats_timeout=args.stats_timeout,
             stats_retries=args.stats_retries,
-            min_packets=args.min_packets,
+            min_packets=effective_min_packets,
         )
 
         print()

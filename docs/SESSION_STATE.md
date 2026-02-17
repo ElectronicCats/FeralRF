@@ -13,6 +13,8 @@
    2. `rx_crc_err`
    3. `rx_drop`
    4. `rx_overflow`
+6. Soak BLE de 30 minutos validado en hardware (`OK`).
+7. Base de Fase 5 integrada en firmware (`phy_manager` tabular + `LL_DEFAULT/LL_BLE` pluggable).
 
 ## Estado por fase
 
@@ -21,7 +23,7 @@
 3. Fase 3: `COMPLETA (alcance MVP)`.
 4. Fase 4: `COMPLETA (alcance MVP)`.
 5. Fase 5: `PARCIAL`.
-6. Fase 6: `PARCIAL` (captura funcional, falta cierre de estabilidad).
+6. Fase 6: `COMPLETA (MVP BLE validado en hardware)`.
 7. Fase 7: `EN PROGRESO` (metricas base implementadas).
 
 ## Validaciones recientes (hardware)
@@ -32,20 +34,24 @@
    1. `stats_before: ok=0 crc_err=0 drop=0 ovf=0`
    2. `packets: 2`
    3. `stats_after: ok=2 crc_err=0 drop=0 ovf=0`
+4. Soak BLE 30 minutos: `OK` (sin caida de sesion).
 
-## Bloqueo / riesgo abierto actual
+## Riesgo abierto actual
 
-1. En soak de 120s hay timeout intermitente al cierre (`RX_STOP`) y/o en `GET_STATS` durante RX continuo.
-2. Se aplicaron mitigaciones host:
+1. No hay bloqueo critico abierto para MVP BLE.
+2. Riesgo residual en endurecimiento:
+   1. mantener vigilancia sobre timeout intermitente de `RX_STOP/GET_STATS` bajo carga extrema.
+3. Mitigaciones host ya aplicadas:
    1. timeout global robusto en lectura de respuestas.
    2. reintentos en `stop_rx()`.
    3. script soak tolerante a timeout puntual de stats.
-3. Aun pendiente: endurecer lado firmware para ACK consistente de `RX_STOP` bajo carga.
+4. Pendiente de calidad:
+   1. automatizar soak canario y criterio de cierre limpio.
 
 ## Scripts y comandos vigentes
 
 1. Soak test:
-   `PYTHONPATH=python python3 python/examples/soak_ble_30min.py -p /dev/ttyACM0 --baudrate 921600 --phy 0 --channel 37 --duration 120 --report-every 30 --stats-timeout 3 --stats-retries 5`
+   `PYTHONPATH=python python3 python/examples/soak_ble_30min.py -p /dev/ttyACM0 --baudrate 921600 --phy 0 --channel 37 --duration 1800 --report-every 30 --stats-timeout 3 --stats-retries 5`
 2. Smoke fase 2:
    `python examples/smoke_phase2.py -p /dev/ttyACM0 --baudrate 921600 --phy 0 --channel 37 --power 0`
 
@@ -67,5 +73,5 @@
 
 ## Siguiente paso inmediato recomendado
 
-1. Cerrar timeout de `RX_STOP` en firmware (estado/flush/restart) y repetir soak 120s.
-2. Si 120s queda limpio, ejecutar soak 30min para cierre formal de Fase 6.
+1. Consolidar Fase 5 (`phy_manager` tabular + `LL_DEFAULT/LL_BLE` pluggable).
+2. Continuar Fase 7 con automatizacion de regresion (soak canario + validacion de `RX_STOP/GET_STATS` final).

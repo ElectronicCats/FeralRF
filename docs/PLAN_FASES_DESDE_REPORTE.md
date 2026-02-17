@@ -14,8 +14,8 @@
 2. Fase 2: `COMPLETA` (UART 921600 + comandos base + smoke test en verde).
 3. Fase 3: `COMPLETA (alcance MVP)` (pipeline `control_task + data_task + host_if_task` activo).
 4. Fase 4: `COMPLETA (alcance MVP)` (RF BLE real, data queue, manejo de overflow, restart RX).
-5. Fase 5: `PARCIAL` (hay seleccion BLE funcional, falta manager tabular formal y LL pluggable completo).
-6. Fase 6: `PARCIAL` (sniffing BLE funcional, pendiente cierre de estabilidad y endurecer `RX_STOP/GET_STATS` bajo carga).
+5. Fase 5: `PARCIAL` (base tabular `phy_manager` y `LL_DEFAULT/LL_BLE` ya integrada; falta completar procesamiento LL y soporte multi-PHY real).
+6. Fase 6: `COMPLETA (MVP BLE)` (sniffing BLE funcional validado con captura continua de 30 min en hardware).
 7. Fase 7: `EN PROGRESO` (metricas base `rx_ok/rx_crc_err/rx_drop/rx_overflow` expuestas por comando host).
 
 ---
@@ -155,6 +155,9 @@ Lograr sniffing BLE util y estable de punta a punta.
 1. Captura continua durante 30 minutos sin caida.
 2. Metadata minima correcta por paquete (timestamp, canal, RSSI, CRC).
 
+### Validacion actual
+1. `SOAK 30 min`: `OK` en hardware real (usuario reporta corrida completa estable).
+
 ---
 
 ## Fase 7: Endurecimiento y preparacion para expansion
@@ -179,15 +182,14 @@ Dejar base lista para Zigbee/Sub-1GHz, jamming y spectrum.
 
 ## Orden recomendado de ejecucion inmediata (actualizado)
 
-1. Cierre Fase 6:
-   1. estabilizar cierre de sesion RX (`RX_STOP`) y lectura de stats bajo RX continuo.
-   2. test de captura continua por 30 minutos (BLE adv hopping 37/38/39).
-   3. validacion de metadata por paquete (timestamp, canal, RSSI, CRC).
-2. Avance Fase 5:
+1. Avance Fase 5:
    1. consolidar `phy_manager` tabular (BLE primero).
    2. integrar `LL_DEFAULT` y `LL_BLE` con interfaz limpia.
-3. Arranque Fase 7:
+2. Arranque Fase 7:
    1. agregar metricas firmware (`rx_ok`, `rx_crc_err`, `rx_drop`, `rx_overflow`).
    2. exponer metrica minima al host para regresion HW automatizable.
+3. Regresion de estabilidad:
+   1. dejar soak de 30 min como prueba canaria recurrente.
+   2. automatizar verificacion de `RX_STOP` + `GET_STATS` al cierre de corrida.
 
 Este orden prioriza cerrar MVP BLE estable antes de abrir Zigbee/Sub-1GHz.

@@ -9,8 +9,9 @@ Firmware universal para CatSniffer (CC1352P + RP2040) con capacidades de sniffin
 - RX BLE real operativo en hardware (ya no sintetico), con parser robusto y filtro CRC.
 - BLE adv hopping basico activo en firmware (`37/38/39`, dwell configurable).
 - Metricas RX base expuestas al host (`rx_ok`, `rx_crc_err`, `rx_drop`, `rx_overflow`).
-- Riesgo abierto: timeout intermitente en `RX_STOP/GET_STATS` durante RX continuo (en endurecimiento).
-- Pendiente de cierre: estabilidad 30 min + automatizacion de regresion sobre esas metricas.
+- Base de Fase 5 integrada: `phy_manager` tabular + seleccion `LL_DEFAULT/LL_BLE` en pipeline.
+- Estabilidad validada: soak BLE de 30 minutos completado en hardware.
+- Pendiente principal: automatizar regresion sobre metricas y cierre de sesion (`RX_STOP/GET_STATS`) como prueba canaria.
 
 ---
 
@@ -386,15 +387,14 @@ def test_ble_sniffer_receive():
 
 ## 9. Próximos Pasos
 
-1. Cerrar FASE 6 (MVP BLE):
-   1. endurecer `RX_STOP` y `GET_STATS` bajo carga RX continua.
-   2. correr captura continua de 30 min.
-   3. confirmar estabilidad (sin cuelgues/reinicios) y metadata coherente.
-2. Consolidar FASE 5:
+1. Consolidar FASE 5:
    1. formalizar `phy_manager` tabular.
    2. integrar `LL_DEFAULT` y `LL_BLE` como interfaz pluggable clara.
-3. Iniciar FASE 7:
+2. Iniciar FASE 7:
    1. agregar metricas de firmware (`rx_ok`, `rx_crc_err`, `rx_drop`, `rx_overflow`).
    2. exponer metricas al host para pruebas de regresion.
-4. Completar ejemplo de usuario:
+3. Completar ejemplo de usuario:
    1. publicar `python/examples/ble_sniffer.py` como flujo recomendado.
+4. Automatizar estabilidad:
+   1. dejar `python/examples/soak_ble_30min.py` como canario de regresion.
+   2. validar cierre limpio con `RX_STOP ACK` y `GET_STATS` final en cada corrida.

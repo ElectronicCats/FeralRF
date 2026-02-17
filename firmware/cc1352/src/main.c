@@ -12,6 +12,7 @@
 #include <ti/devices/cc13x2x7_cc26x2x7/driverlib/prcm.h>
 #include <ti/devices/cc13x2x7_cc26x2x7/driverlib/sys_ctrl.h>
 #include <ti/devices/cc13x2x7_cc26x2x7/driverlib/systick.h>
+#include <ti/drivers/Power.h>
 
 #include "command_processor.h"
 #include "config.h"
@@ -60,6 +61,7 @@ int main(void) {
     uint32_t systick_cycles_per_blink = 0;
 
     board_power_init();
+    Power_init();
     board_gpio_init();
     HostIF_init();
     TaskEvent_init();

@@ -2,6 +2,7 @@
 FeralRF - Radio interface
 """
 
+import time
 from dataclasses import dataclass
 from typing import Iterator, Optional, Set
 
@@ -113,18 +114,39 @@ class Radio:
         """Responses occupy 0x80-0xFF range; commands are below 0x80."""
         return cmd_id >= 0x80
 
-    def _read_response(self, timeout: float = 1.0, expected: Optional[Set[int]] = None) -> tuple:
+    def _read_response(
+        self, timeout: Optional[float] = 1.0, expected: Optional[Set[int]] = None
+    ) -> tuple:
         """Read and parse a response"""
         if not self._serial:
             raise ConnectionError("Not connected")
 
-        self._serial.timeout = timeout
+        deadline = None if timeout is None else (time.monotonic() + max(timeout, 0.0))
         ignored_command_frames = 0
         ignored_unexpected_responses = 0
         last_unexpected_response = None
 
         # Read until we get a complete frame (0x00 delimiter)
         while True:
+            if deadline is not None:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0.0:
+                    details = []
+                    if ignored_command_frames:
+                        details.append(f"ignored {ignored_command_frames} command-frame echoes")
+                    if ignored_unexpected_responses and last_unexpected_response is not None:
+                        details.append(
+                            f"ignored {ignored_unexpected_responses} unexpected response(s), "
+                            f"last=0x{last_unexpected_response:02X}"
+                        )
+                    if details:
+                        raise TimeoutError(f"Response timeout ({'; '.join(details)})")
+                    raise TimeoutError("Response timeout")
+                # Bound each serial read wait so we can enforce absolute deadline.
+                self._serial.timeout = min(remaining, 0.1)
+            else:
+                self._serial.timeout = None
+
             byte = self._serial.read(1)
             if not byte:
                 details = []
@@ -247,11 +269,26 @@ class Radio:
         if cmd_id != Response.ACK:
             raise ProtocolError(f"Unexpected response to RX_STOP: 0x{cmd_id:02X}")
 
-    def read_packets(self, timeout: float = 1.0) -> Iterator[Packet]:
-        """Read received packets"""
+    def read_packets(self, timeout: Optional[float] = 1.0) -> Iterator[Packet]:
+        """
+        Read received packets.
+
+        If timeout is a float, it is treated as a total read window in seconds.
+        If timeout is None, packets are streamed indefinitely until caller stops iteration.
+        """
+        end_time = None if timeout is None else (time.monotonic() + max(timeout, 0.0))
+
         while True:
+            if end_time is not None:
+                remaining = end_time - time.monotonic()
+                if remaining <= 0.0:
+                    break
+                read_timeout = remaining
+            else:
+                read_timeout = None
+
             try:
-                cmd_id, seq, payload = self._read_response(timeout)
+                cmd_id, seq, payload = self._read_response(read_timeout)
 
                 if cmd_id == Response.RX_PACKET:
                     # Parse packet

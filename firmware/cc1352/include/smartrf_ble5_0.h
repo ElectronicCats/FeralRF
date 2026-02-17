@@ -1,0 +1,25 @@
+#ifndef SMARTRF_BLE5_0_H
+#define SMARTRF_BLE5_0_H
+
+#include <ti/devices/DeviceFamily.h>
+/* clang-format off */
+#include DeviceFamily_constructPath(driverlib/rf_ble_cmd.h)
+#include DeviceFamily_constructPath(driverlib/rf_common_cmd.h)
+#include DeviceFamily_constructPath(driverlib/rf_mailbox.h)
+/* clang-format on */
+#include <ti/drivers/rf/RF.h>
+
+extern RF_Mode Ble5_0_mode;
+
+extern rfc_CMD_BLE5_RADIO_SETUP_PA_t Ble5_0_cmdBle5RadioSetup;
+extern rfc_CMD_FS_t Ble5_0_cmdFs;
+extern rfc_CMD_BLE5_GENERIC_RX_t Ble5_0_cmdBle5GenericRx;
+
+extern uint32_t Ble5_0_pOverridesCommon[];
+extern uint32_t Ble5_0_pOverrides1Mbps[];
+extern uint32_t Ble5_0_pOverrides2Mbps[];
+extern uint32_t Ble5_0_pOverridesCoded[];
+extern uint32_t Ble5_0_pOverridesTxStd[];
+extern uint32_t Ble5_0_pOverridesTx20[];
+
+#endif /* SMARTRF_BLE5_0_H */

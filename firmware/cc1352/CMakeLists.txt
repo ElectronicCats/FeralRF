@@ -32,6 +32,9 @@ set(CMAKE_EXE_LINKER_FLAGS "-T ${CMAKE_CURRENT_SOURCE_DIR}/linker/cc1352p.ld -no
 # Include paths from SDK
 set(SDK_INCLUDE_DIRS
     ${TI_SDK_PATH}/source
+    ${TI_SDK_PATH}/kernel/nortos
+    ${TI_SDK_PATH}/kernel/nortos/dpl
+    ${TI_SDK_PATH}/kernel/nortos/posix
     ${TI_SDK_PATH}/source/ti/devices/cc13x2x7_cc26x2x7
     ${TI_SDK_PATH}/source/ti/devices/cc13x2x7_cc26x2x7/inc
     ${TI_SDK_PATH}/source/ti/devices/cc13x2x7_cc26x2x7/driverlib
@@ -42,6 +45,10 @@ set(SDK_INCLUDE_DIRS
 # DriverLib library (pre-compiled for GCC)
 set(DRIVERLIB_LIB
     ${TI_SDK_PATH}/source/ti/devices/cc13x2x7_cc26x2x7/driverlib/bin/gcc/driverlib.lib
+)
+
+set(RF_MULTI_MODE_LIB
+    ${TI_SDK_PATH}/source/ti/drivers/rf/lib/gcc/m4f/rf_multiMode_cc13x2.a
 )
 
 # Source files
@@ -57,8 +64,32 @@ set(SOURCES
     src/packet_queue.c
     src/protocol.c
     src/radio_if.c
+    src/smartrf_ble5_0.c
+    src/ti_rf_config_min.c
     src/startup_cc13x2_cc26x2_gcc.c
     src/task_event.c
+
+    # TI NoRTOS DPL sources required by RF multiMode
+    ${TI_SDK_PATH}/kernel/nortos/dpl/ClockPTimer_nortos.c
+    ${TI_SDK_PATH}/kernel/nortos/dpl/DebugP_nortos.c
+    ${TI_SDK_PATH}/kernel/nortos/dpl/HwiPCC26XX_nortos.c
+    ${TI_SDK_PATH}/kernel/nortos/dpl/QueueP_nortos.c
+    ${TI_SDK_PATH}/kernel/nortos/dpl/SemaphoreP_nortos.c
+    ${TI_SDK_PATH}/kernel/nortos/dpl/SwiP_nortos.c
+    ${TI_SDK_PATH}/kernel/nortos/dpl/SystemP_nortos.c
+    ${TI_SDK_PATH}/kernel/nortos/dpl/TimerPCC26XX_nortos.c
+    ${TI_SDK_PATH}/kernel/nortos/dpl/TimestampPCC26XX_nortos.c
+    ${TI_SDK_PATH}/kernel/nortos/dpl/PowerCC26X2_nortos.c
+
+    # TI driver sources required by RF multiMode
+    ${TI_SDK_PATH}/source/ti/drivers/ITM.c
+    ${TI_SDK_PATH}/source/ti/drivers/Temperature.c
+    ${TI_SDK_PATH}/source/ti/drivers/utils/List.c
+    ${TI_SDK_PATH}/source/ti/drivers/power/PowerCC26X2.c
+    ${TI_SDK_PATH}/source/ti/drivers/power/PowerCC26X2_helpers.c
+    ${TI_SDK_PATH}/source/ti/drivers/power/PowerCC26X2_calibrateRCOSC.c
+    ${TI_SDK_PATH}/source/ti/drivers/power/PowerCC26X2_calibrateRCOSC_helpers.c
+    ${TI_SDK_PATH}/source/ti/drivers/temperature/TemperatureCC26X2.c
 )
 
 # Include directories
@@ -76,6 +107,7 @@ target_compile_definitions(${CMAKE_PROJECT_NAME}.elf PRIVATE
 
 target_link_libraries(${CMAKE_PROJECT_NAME}.elf PRIVATE
     ${DRIVERLIB_LIB}
+    ${RF_MULTI_MODE_LIB}
 )
 
 # Set output suffix

@@ -16,7 +16,7 @@
 #include "command_processor.h"
 #include "config.h"
 #include "host_if.h"
-#include "protocol.h"
+#include "host_if_task.h"
 
 static void board_power_init(void) {
     PRCMPowerDomainOn(PRCM_DOMAIN_PERIPH | PRCM_DOMAIN_SERIAL);
@@ -52,9 +52,6 @@ static void systick_timebase_init(void) {
 }
 
 int main(void) {
-    uint8_t encoded_frame[COBS_MAX_ENCODED];
-    size_t encoded_len = 0;
-    bool overflow = false;
     uint32_t systick_last = 0;
     uint32_t systick_cycles_accum = 0;
     uint32_t systick_cycles_per_blink = 0;
@@ -63,6 +60,7 @@ int main(void) {
     board_gpio_init();
     HostIF_init();
     CommandProcessor_init();
+    HostIFTask_init();
     systick_timebase_init();
     systick_last = SysTickValueGet();
     systick_cycles_per_blink = (SysCtrlClockGet() / 1000u) * LED_BLINK_MS;
@@ -87,35 +85,6 @@ int main(void) {
             GPIO_toggleDio(LED_PIN);
         }
 
-        int32_t ch = HostIF_readByteNonBlocking();
-        if (ch < 0) {
-            continue;
-        }
-
-        uint8_t byte = (uint8_t)ch;
-        if (byte == 0x00u) {
-            if (overflow) {
-                overflow = false;
-                encoded_len = 0;
-                CommandProcessor_sendFrameTooLongError();
-                continue;
-            }
-
-            if (encoded_len == 0) {
-                continue;
-            }
-
-            CommandProcessor_processEncodedFrame(encoded_frame, encoded_len);
-            encoded_len = 0;
-            continue;
-        }
-
-        if (!overflow) {
-            if (encoded_len < sizeof(encoded_frame)) {
-                encoded_frame[encoded_len++] = byte;
-            } else {
-                overflow = true;
-            }
-        }
+        HostIFTask_poll();
     }
 }

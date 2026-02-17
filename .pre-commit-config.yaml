@@ -2,8 +2,9 @@
 # Install: pip install pre-commit && pre-commit install
 # Run manually: pre-commit run --all-files
 
+exclude: ^(docs/|firmware/rp2040/)
+
 repos:
-  exclude: ^(docs/|firmware/rp2040/)
 
   # ============= General Checks =============
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -28,7 +29,7 @@ repos:
     rev: v17.0.6
     hooks:
       - id: clang-format
-        files: ^firmware/(cc1352|rp2040)/.*\.(c|h)$
+        files: ^firmware/cc1352/.*\.(c|h)$
         exclude: ^firmware/sdk/
 
   - repo: local
@@ -37,7 +38,7 @@ repos:
         name: cppcheck (C static analysis)
         entry: cppcheck
         language: system
-        files: ^firmware/(cc1352|rp2040)/.*\.c$
+        files: ^firmware/cc1352/.*\.c$
         exclude: ^firmware/sdk/
         args:
           - '--enable=warning,performance,portability'
@@ -46,8 +47,6 @@ repos:
           - '--error-exitcode=1'
           - '-I'
           - 'firmware/cc1352/include'
-          - '-I'
-          - 'firmware/rp2040/include'
 
   # ============= Python =============
   - repo: https://github.com/psf/black

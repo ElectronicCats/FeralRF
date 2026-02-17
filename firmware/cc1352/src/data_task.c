@@ -8,6 +8,7 @@
 
 #include <stdint.h>
 
+#include "ll_manager.h"
 #include "output_if.h"
 #include "radio_if.h"
 #include "task_event.h"
@@ -68,6 +69,7 @@ void DataTask_poll(void) {
     if (s_rx_active) {
         RadioIF_RxPacket pkt;
         while (RadioIF_popRxPacket(&pkt)) {
+            LLManager_processRxPacket(&pkt);
             DataTask_emitRxPacket(&pkt);
         }
     }

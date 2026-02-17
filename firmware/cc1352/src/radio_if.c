@@ -8,6 +8,7 @@
 #include "radio_if.h"
 
 #include "config.h"
+#include "phy_manager.h"
 #include "smartrf_ble5_0.h"
 
 #include <stddef.h>
@@ -156,7 +157,7 @@ static bool RadioIF_isBleAdvChannel(uint16_t channel) {
 
 static void RadioIF_updateBleHopMode(void) {
 #if RADIO_IF_BLE_ADV_HOP_ENABLE
-    if ((s_selected_phy == 0u) && RadioIF_isBleAdvChannel(s_channel)) {
+    if (PhyManager_isBlePhy(s_selected_phy) && RadioIF_isBleAdvChannel(s_channel)) {
         s_ble_adv_hop_enabled = true;
         s_ble_adv_hop_index = (uint8_t)(s_channel - 37u);
         return;
@@ -577,14 +578,15 @@ void RadioIF_setPhy(uint8_t phy, uint16_t channel, uint32_t frequency_hz) {
     s_selected_phy = phy;
 
     if (channel != 0u) {
-        s_channel = (phy == 0u) ? RadioIF_convertToBleChannel((uint8_t)channel) : channel;
+        s_channel =
+            PhyManager_isBlePhy(phy) ? RadioIF_convertToBleChannel((uint8_t)channel) : channel;
     }
 
     if (frequency_hz != 0u) {
         s_frequency_hz = frequency_hz;
     }
 
-    if (s_selected_phy == 0u) {
+    if (PhyManager_isBlePhy(s_selected_phy)) {
         RadioIF_applyBleChannelConfig((uint8_t)s_channel);
     }
 
@@ -593,15 +595,17 @@ void RadioIF_setPhy(uint8_t phy, uint16_t channel, uint32_t frequency_hz) {
         RadioIF_initBleHopCadence();
     }
 
-    if ((s_backend == RADIO_IF_BACKEND_RF) && (s_rf_handle != NULL) && (s_selected_phy == 0u)) {
+    if ((s_backend == RADIO_IF_BACKEND_RF) && (s_rf_handle != NULL) &&
+        PhyManager_isBlePhy(s_selected_phy)) {
         (void)RadioIF_restartRfRx();
     }
 }
 
 void RadioIF_setChannel(uint8_t channel) {
-    s_channel = (s_selected_phy == 0u) ? RadioIF_convertToBleChannel(channel) : channel;
+    s_channel =
+        PhyManager_isBlePhy(s_selected_phy) ? RadioIF_convertToBleChannel(channel) : channel;
 
-    if (s_selected_phy == 0u) {
+    if (PhyManager_isBlePhy(s_selected_phy)) {
         RadioIF_applyBleChannelConfig((uint8_t)s_channel);
     }
 
@@ -610,7 +614,8 @@ void RadioIF_setChannel(uint8_t channel) {
         RadioIF_initBleHopCadence();
     }
 
-    if ((s_backend == RADIO_IF_BACKEND_RF) && (s_rf_handle != NULL) && (s_selected_phy == 0u)) {
+    if ((s_backend == RADIO_IF_BACKEND_RF) && (s_rf_handle != NULL) &&
+        PhyManager_isBlePhy(s_selected_phy)) {
         (void)RadioIF_restartRfRx();
     }
 }
@@ -623,8 +628,8 @@ bool RadioIF_startRx(void) {
     s_rx_running = true;
     RadioIF_resetRxQueue();
 
-    /* Current real backend supports BLE 1M (phy = 0 in host contract). */
-    if (s_selected_phy == 0u && RadioIF_startRfBackend()) {
+    /* Real RF backend currently supports BLE 1M only; others use synthetic fallback. */
+    if (PhyManager_supportsRfBackendRx(s_selected_phy) && RadioIF_startRfBackend()) {
         s_backend = RADIO_IF_BACKEND_RF;
         RadioIF_updateBleHopMode();
         if (s_ble_adv_hop_enabled) {

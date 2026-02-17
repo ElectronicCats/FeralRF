@@ -59,9 +59,11 @@ set(SOURCES
     src/data_task.c
     src/host_if.c
     src/host_if_task.c
+    src/ll_manager.c
     src/main.c
     src/output_if.c
     src/packet_queue.c
+    src/phy_manager.c
     src/protocol.c
     src/radio_if.c
     src/smartrf_ble5_0.c

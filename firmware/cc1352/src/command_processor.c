@@ -116,8 +116,11 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
             send_error(seq, ERR_INVALID_PAYLOAD);
             return;
         }
-        ControlTask_onSetPhy(payload[0], payload_len >= 3 ? read_u16_le(&payload[1]) : 0u,
-                             payload_len == 7 ? read_u32_le(&payload[3]) : 0u);
+        if (!ControlTask_onSetPhy(payload[0], payload_len >= 3 ? read_u16_le(&payload[1]) : 0u,
+                                  payload_len == 7 ? read_u32_le(&payload[3]) : 0u)) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            return;
+        }
         send_ack(seq);
         return;
 

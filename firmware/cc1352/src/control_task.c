@@ -7,6 +7,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "ll_manager.h"
+#include "phy_manager.h"
 #include "radio_if.h"
 #include "task_event.h"
 
@@ -25,6 +27,10 @@ static bool s_rx_enabled = false;
 static const uint8_t s_serial[8] = {'F', 'E', 'R', 'A', 'L', 'R', 'F', '1'};
 
 void ControlTask_init(void) {
+    PhyManager_init();
+    LLManager_init();
+    LLManager_select(PhyManager_getSelectedLinkLayer());
+
     s_selected_phy = 0;
     s_channel = 0;
     s_tx_power_dbm = 0;
@@ -37,11 +43,18 @@ void ControlTask_onRadioInit(void) {
     RadioIF_resetMetrics();
 }
 
-void ControlTask_onSetPhy(uint8_t phy, uint16_t channel, uint32_t frequency_hz) {
+bool ControlTask_onSetPhy(uint8_t phy, uint16_t channel, uint32_t frequency_hz) {
+    if (!PhyManager_select(phy)) {
+        return false;
+    }
+
+    LLManager_select(PhyManager_getSelectedLinkLayer());
+
     s_selected_phy = phy;
     s_channel = channel;
     s_frequency_hz = frequency_hz;
     RadioIF_setPhy(phy, channel, frequency_hz);
+    return true;
 }
 
 void ControlTask_onSetChannel(uint8_t channel) {

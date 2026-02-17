@@ -10,7 +10,7 @@
 
 void ControlTask_init(void);
 void ControlTask_onRadioInit(void);
-void ControlTask_onSetPhy(uint8_t phy, uint16_t channel, uint32_t frequency_hz);
+bool ControlTask_onSetPhy(uint8_t phy, uint16_t channel, uint32_t frequency_hz);
 void ControlTask_onSetChannel(uint8_t channel);
 void ControlTask_onSetPower(int8_t power_dbm);
 void ControlTask_onRxStart(void);

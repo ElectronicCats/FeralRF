@@ -191,13 +191,13 @@ Dejar base lista para Zigbee/Sub-1GHz, jamming y spectrum.
    2. pendiente: ejecutar captura con emisor Zigbee/Thread activo para confirmar paquetes reales (no solo control path).
    3. criterio de done: `SET_PHY(802.15.4)` + `RX_START` entrega paquetes reales de forma estable.
 3. Tarea 3 (avance Fase 7 - regresion automatizada):
-   1. agregar script canario que ejecute smoke + soak corto + validacion de stats LL.
-   2. fijar umbrales de aceptacion (sin timeout, `RX_STOP ACK`, contadores monotonos).
-   3. criterio de done: script repetible local y en CI manual.
+   1. `OK`: agregar script canario que ejecute smoke + soak corto + validacion de stats LL (`python/examples/canary_regression.py`).
+   2. `OK`: umbrales de aceptacion implementados (sin timeout, `RX_STOP ACK`, contadores monotonos, `min_packets` configurable).
+   3. `OK`: validacion HW base completada (`CANARY PASS`, 60s, `packets_total=8150`).
 4. Tarea 4 (documentacion de contrato):
-   1. crear `docs/protocol.md` con formato actualizado de `RSP_RX_PACKET` y `RSP_STATS`.
-   2. documentar capabilities (`0x01`, `0x02`, `0x04`) y reglas de compatibilidad.
-   3. criterio de done: host y firmware referencian la misma especificacion.
+   1. `OK`: crear `docs/protocol.md` con formato actualizado de `RSP_RX_PACKET` y `RSP_STATS`.
+   2. `OK`: documentar capabilities (`0x01`, `0x02`, `0x04`) y reglas de compatibilidad.
+   3. `OK`: host y firmware referencian la misma especificacion.
 5. Tarea 5 (gate de release interna BLE):
    1. checklist de validacion HW: smoke, soak 30 min, clasificacion LL, cierre limpio.
    2. congelar baseline para abrir Zigbee/Sub-1GHz/TX/jamming sin regresion BLE.

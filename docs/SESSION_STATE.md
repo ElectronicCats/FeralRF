@@ -48,6 +48,7 @@
    4. `ll_total unk=0 adv=7601 scan=2068 conn=0 data=0`
 6. Validacion de parser LL ampliado: `OK` (captura real muestra subtipos `ADV_IND`, `ADV_NONCONN_IND`, `ADV_EXT_IND`, `SCAN_REQ`, `SCAN_RSP` en canales 37/38/39).
 7. Barrido PHY 4 IEEE 802.15.4 (CH 11/15/20/25, 15s c/u): `OK` sin cuelgues ni timeouts; `packets=0` en ambiente actual (sin trafico 802.15.4 observable).
+8. Canary regresion (BLE, 60s): `OK` en hardware (`CANARY PASS`) con monotonia de stats, `RX_STOP ACK` y `packets_total=8150`.
 
 ## Riesgo abierto actual
 
@@ -59,7 +60,7 @@
    2. reintentos en `stop_rx()`.
    3. script soak tolerante a timeout puntual de stats.
 4. Pendiente de calidad:
-   1. automatizar soak canario y criterio de cierre limpio.
+   1. canario automatizado implementado y validado en corrida base HW; pendiente fijar umbral definitivo por entorno para CI manual.
 
 ## Scripts y comandos vigentes
 
@@ -67,6 +68,8 @@
    `PYTHONPATH=python python3 python/examples/soak_ble_30min.py -p /dev/ttyACM0 --baudrate 921600 --phy 0 --channel 37 --duration 1800 --report-every 30 --stats-timeout 3 --stats-retries 5`
 2. Smoke fase 2:
    `python examples/smoke_phase2.py -p /dev/ttyACM0 --baudrate 921600 --phy 0 --channel 37 --power 0`
+3. Canary regresion:
+   `PYTHONPATH=python python3 python/examples/canary_regression.py -p /dev/ttyACM0 --baudrate 921600 --phy 0 --channel 37 --power 0 --soak-duration 60 --report-every 15 --stats-timeout 2 --stats-retries 3 --min-packets 1`
 
 ## Archivos clave tocados en este bloque
 
@@ -83,9 +86,13 @@
 3. Planes:
    1. `docs/PLAN_FASES_DESDE_REPORTE.md`
    2. `docs/PLAN_MAESTRO.md`
+4. Canary:
+   1. `python/examples/canary_regression.py`
+5. Protocolo:
+   1. `docs/protocol.md`
 
 ## Siguiente paso inmediato recomendado
 
 1. Generar/capturar trafico real Zigbee/Thread para cerrar evidencia de paquetes reales en `SET_PHY(4)`.
-2. Cerrar Fase 7 (regresion automatizada con criterios de aceptacion).
-3. Publicar `docs/protocol.md` con contrato vigente y capacidades.
+2. Definir umbral operativo final de `--min-packets` para regresion canaria segun entorno.
+3. Conectar el canario a flujo CI/manual de release interna.

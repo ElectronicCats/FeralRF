@@ -15,7 +15,9 @@ Firmware universal para CatSniffer (CC1352P + RP2040) con capacidades de sniffin
 - Parser LL BLE ampliado para subtipos advertising/extended y deteccion de tipos reservados.
 - Backend RF real `IEEE_802_15_4` (RX) integrado y validado en hardware a nivel control path (`SET_PHY/RX_START/RX_STOP`) en CH 11/15/20/25.
 - Estabilidad validada: soak BLE de 30 minutos completado en hardware.
-- Pendiente principal: automatizar regresion sobre metricas y cierre de sesion (`RX_STOP/GET_STATS`) como prueba canaria.
+- Canary de regresion validado en hardware (`CANARY PASS`, 60s, monotonia de stats y `RX_STOP ACK`).
+- `docs/protocol.md` publicado con contrato vigente host<->firmware.
+- Pendiente principal: evidencia de captura real 802.15.4 (no solo control path) y fijar umbral canario por entorno.
 
 ---
 
@@ -399,9 +401,9 @@ def test_ble_sniffer_receive():
    2. pendiente: validar captura real con trafico Zigbee/Thread cercano.
    3. fallback sintetico solo en PHY aun no implementados.
 3. Ejecutar FASE 7 (regresion):
-   1. automatizar smoke + soak corto + validacion de stats LL.
-   2. fijar umbrales de aceptacion y salida no-cero en regresion.
+   1. `OK` automatizar smoke + soak corto + validacion de stats LL (`python/examples/canary_regression.py`).
+   2. `OK` umbrales y salida no-cero implementados (timeout, `RX_STOP ACK`, monotonia, `min_packets`).
 4. Documentacion de protocolo:
-   1. publicar `docs/protocol.md` con contrato actualizado (`RSP_RX_PACKET`, `RSP_STATS`, capabilities).
+   1. `OK` publicar `docs/protocol.md` con contrato actualizado (`RSP_RX_PACKET`, `RSP_STATS`, capabilities).
 5. Gate de release BLE:
    1. checklist HW: smoke, soak 30 min, clasificacion LL y cierre limpio de sesion.

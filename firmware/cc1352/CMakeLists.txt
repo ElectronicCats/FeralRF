@@ -48,11 +48,17 @@ set(DRIVERLIB_LIB
 set(SOURCES
     ccfg.c
     src/command_processor.c
+    src/control_task.c
+    src/data_task.c
     src/host_if.c
     src/host_if_task.c
     src/main.c
+    src/output_if.c
+    src/packet_queue.c
     src/protocol.c
+    src/radio_if.c
     src/startup_cc13x2_cc26x2_gcc.c
+    src/task_event.c
 )
 
 # Include directories

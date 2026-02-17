@@ -40,7 +40,7 @@ class Radio:
     Synchronous Radio interface for FeralRF
     """
 
-    def __init__(self, port: Optional[str] = None, baudrate: int = 3000000):
+    def __init__(self, port: Optional[str] = None, baudrate: int = 921600):
         self.port = port
         self.baudrate = baudrate
         self._serial: Optional[serial.Serial] = None

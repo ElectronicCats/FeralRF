@@ -4,67 +4,64 @@ FeralRF - Command builders
 
 import struct
 
-from feralrf.enums import Command
-
-
 class CommandBuilder:
     """Build command payloads"""
 
     @staticmethod
     def radio_init() -> bytes:
-        """Initialize radio subsystem"""
-        return bytes([Command.RADIO_INIT])
+        """No payload for RADIO_INIT"""
+        return b""
 
     @staticmethod
     def set_channel(channel: int) -> bytes:
-        """Set RF channel"""
-        return bytes([Command.SET_CHANNEL, channel])
+        """Payload for SET_CHANNEL"""
+        return bytes([channel & 0xFF])
 
     @staticmethod
     def set_power(power_dbm: int) -> bytes:
-        """Set TX power in dBm"""
-        return bytes([Command.SET_POWER, power_dbm & 0xFF])
+        """Payload for SET_POWER"""
+        return bytes([power_dbm & 0xFF])
 
     @staticmethod
     def set_phy(phy: int, channel: int = 0, frequency_hz: int = 0) -> bytes:
-        """Set PHY type and channel"""
-        return struct.pack("<BBHI", Command.SET_PHY, phy, channel, frequency_hz)
+        """Payload for SET_PHY"""
+        return struct.pack("<BHI", phy & 0xFF, channel & 0xFFFF, frequency_hz & 0xFFFFFFFF)
 
     @staticmethod
     def get_info() -> bytes:
-        """Get device info"""
-        return bytes([Command.GET_INFO])
+        """No payload for GET_INFO"""
+        return b""
 
     @staticmethod
     def rx_start() -> bytes:
-        """Start receiving"""
-        return bytes([Command.RX_START])
+        """No payload for RX_START"""
+        return b""
 
     @staticmethod
     def rx_stop() -> bytes:
-        """Stop receiving"""
-        return bytes([Command.RX_STOP])
+        """No payload for RX_STOP"""
+        return b""
 
     @staticmethod
     def rx_set_promiscuous(enable: bool) -> bytes:
-        """Set promiscuous mode"""
-        return bytes([Command.RX_SET_PROMISCUOUS, 1 if enable else 0])
+        """Payload for RX_SET_PROMISCUOUS"""
+        return bytes([1 if enable else 0])
 
     @staticmethod
     def tx_raw(packet: bytes, power_dbm: int = -128) -> bytes:
-        """Transmit raw packet"""
+        """Payload for TX_RAW"""
         length = len(packet)
-        return bytes([Command.TX_RAW, length]) + packet + bytes([power_dbm & 0xFF])
+        return bytes([length & 0xFF]) + packet + bytes([power_dbm & 0xFF])
 
     @staticmethod
     def jam_continuous(channel: int, power_dbm: int = 0) -> bytes:
-        """Start continuous wave jamming"""
-        return bytes([Command.JAM_CONTINUOUS, channel, power_dbm & 0xFF])
+        """Payload for JAM_CONTINUOUS"""
+        return bytes([channel & 0xFF, power_dbm & 0xFF])
 
     @staticmethod
     def jam_stop() -> bytes:
-        """Stop jamming"""
-        return bytes([Command.JAM_STOP])
+        """No payload for JAM_STOP"""
+        return b""
 
     @staticmethod
     def spectrum_scan(
@@ -74,18 +71,17 @@ class CommandBuilder:
         samples: int = 10,
         dwell_ms: int = 10,
     ) -> bytes:
-        """Start spectrum scan"""
+        """Payload for SPECTRUM_SCAN"""
         return struct.pack(
-            "<BIIHBB",
-            Command.SPECTRUM_SCAN,
-            start_freq_hz,
-            end_freq_hz,
-            step_khz,
-            samples,
-            dwell_ms,
+            "<IIHBB",
+            start_freq_hz & 0xFFFFFFFF,
+            end_freq_hz & 0xFFFFFFFF,
+            step_khz & 0xFFFF,
+            samples & 0xFF,
+            dwell_ms & 0xFF,
         )
 
     @staticmethod
     def spectrum_stop() -> bytes:
-        """Stop spectrum scan"""
-        return bytes([Command.SPECTRUM_STOP])
+        """No payload for SPECTRUM_STOP"""
+        return b""

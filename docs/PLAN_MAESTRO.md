@@ -2,6 +2,14 @@
 
 Firmware universal para CatSniffer (CC1352P + RP2040) con capacidades de sniffing, TX/RX, jamming y spectrum analysis para BLE, Zigbee y Sub-1GHz.
 
+## Estado Actual (2026-02-17)
+
+- Base de comunicacion CC1352 estable a `921600` con `COBS + CRC16`.
+- Smoke test de fase 2 en verde (`RADIO_INIT`, `GET_INFO`, `SET_PHY`, `SET_CHANNEL`, `SET_POWER`, `RX_START`, `RX_STOP`).
+- RX BLE real operativo en hardware (ya no sintetico), con parser robusto y filtro CRC.
+- BLE adv hopping basico activo en firmware (`37/38/39`, dwell configurable).
+- Pendiente de cierre: estabilidad 30 min + metricas de calidad para regresion.
+
 ---
 
 ## 1. Arquitectura del Sistema
@@ -255,11 +263,11 @@ feralrf/
 - [x] Documentación actualizada (CLAUDE.md, PLAN_MAESTRO.md, PINOUT.md)
 
 ### FASE 1: MVP BLE Sniffer (Semanas 2-3)
-- [ ] COBS implementation (C + Python)
-- [ ] Command processor funcional
-- [ ] BLE PHY initialization
-- [ ] RX streaming vía UART
-- [ ] Python API básica (sync)
+- [x] COBS implementation (C + Python)
+- [x] Command processor funcional
+- [x] BLE PHY initialization
+- [x] RX streaming via UART
+- [x] Python API basica (sync)
 - [ ] Ejemplo: `ble_sniffer.py`
 
 ### FASE 2: TX + Jamming Básico (Semanas 4-5)
@@ -376,8 +384,14 @@ def test_ble_sniffer_receive():
 
 ## 9. Próximos Pasos
 
-1. ~~Confirmar decisiones pendientes~~ ✅
-2. Crear estructura del proyecto
-3. Configurar Docker + CMake
-4. Implementar FASE 0
-5. Primera iteración: Blinky + UART echo
+1. Cerrar FASE 6 (MVP BLE):
+   1. correr captura continua de 30 min.
+   2. confirmar estabilidad (sin cuelgues/reinicios) y metadata coherente.
+2. Consolidar FASE 5:
+   1. formalizar `phy_manager` tabular.
+   2. integrar `LL_DEFAULT` y `LL_BLE` como interfaz pluggable clara.
+3. Iniciar FASE 7:
+   1. agregar metricas de firmware (`rx_ok`, `rx_crc_err`, `rx_drop`, `rx_overflow`).
+   2. exponer metricas al host para pruebas de regresion.
+4. Completar ejemplo de usuario:
+   1. publicar `python/examples/ble_sniffer.py` como flujo recomendado.

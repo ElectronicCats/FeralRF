@@ -8,6 +8,18 @@
 
 ---
 
+## Estado actual (2026-02-17)
+
+1. Fase 1: `COMPLETA` (contrato COBS+CRC16 estable y API Python funcional).
+2. Fase 2: `COMPLETA` (UART 921600 + comandos base + smoke test en verde).
+3. Fase 3: `COMPLETA (alcance MVP)` (pipeline `control_task + data_task + host_if_task` activo).
+4. Fase 4: `COMPLETA (alcance MVP)` (RF BLE real, data queue, manejo de overflow, restart RX).
+5. Fase 5: `PARCIAL` (hay seleccion BLE funcional, falta manager tabular formal y LL pluggable completo).
+6. Fase 6: `PARCIAL` (sniffing BLE end-to-end funcional, pendiente cierre de estabilidad de 30 min).
+7. Fase 7: `PENDIENTE`.
+
+---
+
 ## Fase 1: Contrato de protocolo y API Python
 
 ### Objetivo
@@ -165,12 +177,16 @@ Dejar base lista para Zigbee/Sub-1GHz, jamming y spectrum.
 
 ---
 
-## Orden recomendado de ejecucion inmediata
+## Orden recomendado de ejecucion inmediata (actualizado)
 
-1. Fase 1 completa.
-2. Fase 2 minima (GET_INFO + ACK/ERROR).
-3. Fase 3 parcial (control + host_if_task).
-4. Fase 4 minima (RX pipeline).
-5. Fase 5 y 6 en iteraciones cortas.
+1. Cierre Fase 6:
+   1. test de captura continua por 30 minutos (BLE adv hopping 37/38/39).
+   2. validacion de metadata por paquete (timestamp, canal, RSSI, CRC).
+2. Avance Fase 5:
+   1. consolidar `phy_manager` tabular (BLE primero).
+   2. integrar `LL_DEFAULT` y `LL_BLE` con interfaz limpia.
+3. Arranque Fase 7:
+   1. agregar metricas firmware (`rx_ok`, `rx_crc_err`, `rx_drop`, `rx_overflow`).
+   2. exponer metrica minima al host para regresion HW automatizable.
 
-Este orden minimiza retrabajo y evita acoplar el firmware a un contrato de protocolo incorrecto.
+Este orden prioriza cerrar MVP BLE estable antes de abrir Zigbee/Sub-1GHz.

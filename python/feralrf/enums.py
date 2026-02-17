@@ -27,6 +27,7 @@ class Command(IntEnum):
     SET_POWER = 0x03
     SET_PHY = 0x04
     GET_INFO = 0x05
+    GET_STATS = 0x06
 
     # RX Operations
     RX_START = 0x10

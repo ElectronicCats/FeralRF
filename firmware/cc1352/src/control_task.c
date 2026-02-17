@@ -34,6 +34,7 @@ void ControlTask_init(void) {
 
 void ControlTask_onRadioInit(void) {
     s_rx_enabled = false;
+    RadioIF_resetMetrics();
 }
 
 void ControlTask_onSetPhy(uint8_t phy, uint16_t channel, uint32_t frequency_hz) {

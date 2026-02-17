@@ -65,6 +65,7 @@ static bool s_timebase_ready = false;
 static uint32_t s_systick_last = 0;
 static uint32_t s_systick_cycles_accum = 0;
 static uint32_t s_systick_cycles_per_packet = 0;
+static RadioIF_Metrics s_metrics = {0u, 0u, 0u, 0u};
 
 static RadioIF_Backend s_backend = RADIO_IF_BACKEND_SYNTH;
 
@@ -229,6 +230,21 @@ static bool RadioIF_enqueuePacket(const RadioIF_RxPacket *pkt) {
     s_rx_head = (uint8_t)((s_rx_head + 1u) % RADIO_IF_RX_QUEUE_DEPTH);
     s_rx_count++;
     return true;
+}
+
+void RadioIF_getMetrics(RadioIF_Metrics *out) {
+    if (out == NULL) {
+        return;
+    }
+
+    *out = s_metrics;
+}
+
+void RadioIF_resetMetrics(void) {
+    s_metrics.rx_ok = 0u;
+    s_metrics.rx_crc_err = 0u;
+    s_metrics.rx_drop = 0u;
+    s_metrics.rx_overflow = 0u;
 }
 
 static uint32_t RadioIF_getElapsedCycles(void) {
@@ -475,6 +491,7 @@ static void RadioIF_processRfPackets(void) {
         entry_data = raw_entry + RF_QUEUE_ENTRY_LEN_FIELD_SIZE;
 
         if (entry_len < (uint16_t)(BLE_ADV_HEADER_LEN + BLE_APPENDED_TOTAL_LEN)) {
+            s_metrics.rx_drop++;
             RadioIF_rfConsumeEntry();
             continue;
         }
@@ -494,6 +511,7 @@ static void RadioIF_processRfPackets(void) {
         }
 
         if (!layout_ok) {
+            s_metrics.rx_drop++;
             RadioIF_rfConsumeEntry();
             continue;
         }
@@ -517,13 +535,18 @@ static void RadioIF_processRfPackets(void) {
         pkt.lqi = 0u;
         pkt.crc_ok = (status0 & 0x80u) == 0u;
         if (!pkt.crc_ok) {
+            s_metrics.rx_crc_err++;
             RadioIF_rfConsumeEntry();
             continue;
         }
         pkt.data_len = (pdu_len > RADIO_IF_MAX_PACKET_DATA) ? RADIO_IF_MAX_PACKET_DATA : pdu_len;
         memcpy(pkt.data, &entry_data[pdu_offset], pkt.data_len);
 
-        (void)RadioIF_enqueuePacket(&pkt);
+        if (RadioIF_enqueuePacket(&pkt)) {
+            s_metrics.rx_ok++;
+        } else {
+            s_metrics.rx_drop++;
+        }
         RadioIF_rfConsumeEntry();
     }
 }
@@ -544,6 +567,7 @@ void RadioIF_init(void) {
     s_rf_rx_cmd = RF_SCHEDULE_CMD_ERROR;
     s_rf_event_flags = 0u;
     s_rf_read_entry = NULL;
+    RadioIF_resetMetrics();
     s_ble_adv_hop_enabled = false;
     s_ble_adv_hop_index = 0u;
     RadioIF_initBleHopCadence();
@@ -644,6 +668,7 @@ void RadioIF_poll(void) {
         s_rf_event_flags = 0u;
 
         if ((events & RADIO_IF_RF_EVENT_RX_BUF_FULL) != 0u && s_rf_handle != NULL) {
+            s_metrics.rx_overflow++;
             (void)RadioIF_restartRfRx();
         }
 

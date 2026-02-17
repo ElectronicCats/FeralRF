@@ -11,6 +11,7 @@
 #include "control_task.h"
 #include "output_if.h"
 #include "protocol.h"
+#include "radio_if.h"
 #include "task_event.h"
 
 /* Commands (match python/feralrf/enums.py) */
@@ -19,12 +20,14 @@
 #define CMD_SET_POWER 0x03u
 #define CMD_SET_PHY 0x04u
 #define CMD_GET_INFO 0x05u
+#define CMD_GET_STATS 0x06u
 #define CMD_RX_START 0x10u
 #define CMD_RX_STOP 0x11u
 
 /* Responses (match python/feralrf/enums.py) */
 #define RSP_ACK 0x80u
 #define RSP_ERROR 0x81u
+#define RSP_STATS 0x93u
 #define RSP_INFO 0x94u
 
 /* Error codes */
@@ -39,6 +42,13 @@ static uint16_t read_u16_le(const uint8_t *p) {
 
 static uint32_t read_u32_le(const uint8_t *p) {
     return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+}
+
+static void write_u32_le(uint8_t *p, uint32_t v) {
+    p[0] = (uint8_t)(v & 0xFFu);
+    p[1] = (uint8_t)((v >> 8) & 0xFFu);
+    p[2] = (uint8_t)((v >> 16) & 0xFFu);
+    p[3] = (uint8_t)((v >> 24) & 0xFFu);
 }
 
 static void send_response(uint8_t rsp_cmd, uint8_t seq, const uint8_t *payload,
@@ -62,6 +72,18 @@ static void send_info(uint8_t seq) {
     send_response(RSP_INFO, seq, payload, sizeof(payload));
 }
 
+static void send_stats(uint8_t seq) {
+    uint8_t payload[16];
+    RadioIF_Metrics metrics;
+
+    RadioIF_getMetrics(&metrics);
+    write_u32_le(&payload[0], metrics.rx_ok);
+    write_u32_le(&payload[4], metrics.rx_crc_err);
+    write_u32_le(&payload[8], metrics.rx_drop);
+    write_u32_le(&payload[12], metrics.rx_overflow);
+    send_response(RSP_STATS, seq, payload, sizeof(payload));
+}
+
 static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uint16_t payload_len) {
     switch (cmd) {
     case CMD_RADIO_INIT:
@@ -79,6 +101,14 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
             return;
         }
         send_info(seq);
+        return;
+
+    case CMD_GET_STATS:
+        if (payload_len != 0) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            return;
+        }
+        send_stats(seq);
         return;
 
     case CMD_SET_PHY:

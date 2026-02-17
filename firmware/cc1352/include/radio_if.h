@@ -24,6 +24,13 @@ typedef struct {
     uint8_t data[RADIO_IF_MAX_PACKET_DATA];
 } RadioIF_RxPacket;
 
+typedef struct {
+    uint32_t rx_ok;
+    uint32_t rx_crc_err;
+    uint32_t rx_drop;
+    uint32_t rx_overflow;
+} RadioIF_Metrics;
+
 void RadioIF_init(void);
 void RadioIF_setPhy(uint8_t phy, uint16_t channel, uint32_t frequency_hz);
 void RadioIF_setChannel(uint8_t channel);
@@ -33,5 +40,7 @@ void RadioIF_stopRx(void);
 bool RadioIF_isRxRunning(void);
 void RadioIF_poll(void);
 bool RadioIF_popRxPacket(RadioIF_RxPacket *out);
+void RadioIF_getMetrics(RadioIF_Metrics *out);
+void RadioIF_resetMetrics(void);
 
 #endif /* RADIO_IF_H */

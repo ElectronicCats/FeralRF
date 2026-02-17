@@ -36,6 +36,16 @@ class DeviceInfo:
     serial: str
 
 
+@dataclass
+class DeviceStats:
+    """Device RX metrics"""
+
+    rx_ok: int
+    rx_crc_err: int
+    rx_drop: int
+    rx_overflow: int
+
+
 class Radio:
     """
     Synchronous Radio interface for FeralRF
@@ -248,6 +258,25 @@ class Radio:
             raise CommandError("Set power failed", payload[0] if payload else 0)
         if cmd_id != Response.ACK:
             raise ProtocolError(f"Unexpected response to SET_POWER: 0x{cmd_id:02X}")
+
+    def get_stats(self) -> DeviceStats:
+        """Get device RX metrics"""
+        self._send_command(Command.GET_STATS)
+        cmd_id, seq, payload = self._read_response(expected={Response.STATS, Response.ERROR})
+
+        if cmd_id == Response.ERROR:
+            raise CommandError("Get stats failed", payload[0] if payload else 0)
+        if cmd_id != Response.STATS:
+            raise ProtocolError(f"Unexpected response to GET_STATS: 0x{cmd_id:02X}")
+        if len(payload) < 16:
+            raise ProtocolError(f"STATS payload too short: {len(payload)}")
+
+        return DeviceStats(
+            rx_ok=int.from_bytes(payload[0:4], "little"),
+            rx_crc_err=int.from_bytes(payload[4:8], "little"),
+            rx_drop=int.from_bytes(payload[8:12], "little"),
+            rx_overflow=int.from_bytes(payload[12:16], "little"),
+        )
 
     def start_rx(self) -> None:
         """Start receiving"""

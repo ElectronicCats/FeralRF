@@ -77,6 +77,13 @@ void DataTask_poll(void) {
         TaskEvent_clear(TASK_EVENT_CONTROL_TX_RAW);
     }
 
+    if (TaskEvent_isSet(TASK_EVENT_CONTROL_TX_BURST)) {
+        ControlTask_processTxBurst();
+        if (!ControlTask_isTxBurstPending()) {
+            TaskEvent_clear(TASK_EVENT_CONTROL_TX_BURST);
+        }
+    }
+
     if (TaskEvent_isSet(TASK_EVENT_CONTROL_RX_START)) {
         s_rx_active = RadioIF_startRx();
         if (s_rx_active) {

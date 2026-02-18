@@ -2,6 +2,11 @@
 
 ## Ultima actualizacion: 2026-02-18
 
+## Fuente de plan activa
+
+1. Plan activo detallado: `docs/NUEVO_PLAN_MAESTRO.md`.
+2. Plan consolidado/historico: `docs/PLAN_MAESTRO.md`.
+
 ## Resumen ejecutivo
 
 1. Base host<->firmware estable a `921600` con `COBS + CRC16`.

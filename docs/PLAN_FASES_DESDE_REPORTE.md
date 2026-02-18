@@ -212,6 +212,7 @@ Dejar base lista para Zigbee/Sub-1GHz, jamming y spectrum.
    4. `OK`: validación RF over-the-air para BLE completada (receptor externo confirma advertising emitido; marcador `beef01`, `marker_hits=24`).
    5. `OK`: canario multi-PHY formalizado en comando único (`python/examples/release_gate_multi_phy.py`) para BLE gate + PHY4 RX/TX smoke + BLE TX smoke.
    6. `OK`: canario multi-PHY validado en hardware (`MULTI-PHY RELEASE GATE PASS`).
-   7. siguiente: robustecer estabilidad post-switch PHY/TX y abrir `TX_BURST`/`TX_CONTINUOUS` manteniendo el gate multi-PHY obligatorio.
+   7. `OK`: `CMD_TX_BURST` integrado y validado en hardware (`TX_BURST ACK`, `TX BURST SMOKE PASS`, paso burst en `release_gate_multi_phy.py`).
+   8. siguiente: robustecer estabilidad post-switch PHY/TX y abrir `TX_CONTINUOUS`/`TX_FRAME` manteniendo el gate multi-PHY obligatorio.
 
 Este orden prioriza mantener baseline BLE estable mientras se abre Zigbee/Sub-1GHz/TX por incrementos.

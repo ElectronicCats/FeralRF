@@ -463,6 +463,31 @@ class Radio:
         if cmd_id != Response.ACK:
             raise ProtocolError(f"Unexpected response to TX_RAW: 0x{cmd_id:02X}")
 
+    def transmit_burst(
+        self,
+        packet: bytes,
+        count: int,
+        interval_us: int = 0,
+        timeout: float = 5.0,
+    ) -> None:
+        """Schedule a TX burst in firmware."""
+        if len(packet) == 0:
+            raise ValueError("packet must not be empty")
+        if count <= 0 or count > 0xFFFF:
+            raise ValueError("count must be in range 1..65535")
+        if interval_us < 0 or interval_us > 0xFFFFFFFF:
+            raise ValueError("interval_us must be in range 0..4294967295")
+
+        self._send_command(Command.TX_BURST, CommandBuilder.tx_burst(packet, count, interval_us))
+        cmd_id, seq, payload = self._read_response(
+            timeout=timeout, expected={Response.ACK, Response.ERROR}
+        )
+
+        if cmd_id == Response.ERROR:
+            raise CommandError("Transmit burst failed", payload[0] if payload else 0)
+        if cmd_id != Response.ACK:
+            raise ProtocolError(f"Unexpected response to TX_BURST: 0x{cmd_id:02X}")
+
     def __enter__(self):
         self.connect()
         return self

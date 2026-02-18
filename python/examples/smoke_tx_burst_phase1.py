@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 """
-FeralRF - OTA TX burst helper
-
-Use this script on the transmitter radio while another radio listens with
-`ota_rx_probe.py`.
+FeralRF - TX burst smoke (phase 1)
 """
 
 import argparse
@@ -22,84 +19,71 @@ def fail(msg: str) -> None:
     print(f"[FAIL] {msg}")
 
 
-def parse_payload_hex(payload_hex: str) -> bytes:
-    normalized = payload_hex.replace(" ", "").replace(":", "").strip()
+def parse_packet_hex(packet_hex: str) -> bytes:
+    normalized = packet_hex.replace(" ", "").replace(":", "").strip()
     if len(normalized) == 0:
-        raise ValueError("empty payload")
+        raise ValueError("empty packet")
     if len(normalized) % 2 != 0:
         raise ValueError("hex length must be even")
     return bytes.fromhex(normalized)
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="FeralRF OTA TX burst helper")
+    parser = argparse.ArgumentParser(description="FeralRF TX burst smoke (phase 1)")
     parser.add_argument("--port", "-p", help="Serial port (auto-detect if omitted)", default=None)
     parser.add_argument("--baudrate", "-b", help="UART baudrate", type=int, default=921600)
-    parser.add_argument("--phy", help="PHY id (0=BLE_1M, 4=IEEE_802_15_4)", type=int, default=4)
+    parser.add_argument("--phy", help="PHY id (phase 1 supports PHY 4)", type=int, default=4)
     parser.add_argument("--channel", "-c", help="RF channel", type=int, default=25)
     parser.add_argument("--power", help="TX power dBm", type=int, default=0)
-    parser.add_argument(
-        "--payload-hex",
-        help="Raw payload bytes in hex",
-        required=True,
-    )
-    parser.add_argument(
-        "--count",
-        help="Number of TX frames to send",
-        type=int,
-        default=40,
-    )
-    parser.add_argument(
-        "--interval-us",
-        help="Inter-frame interval in microseconds",
-        type=int,
-        default=25000,
-    )
-    parser.add_argument(
-        "--interval-ms",
-        help="Inter-frame interval in milliseconds (legacy alias for --interval-us)",
-        type=float,
-        default=None,
-    )
     parser.add_argument(
         "--tx-timeout",
         help="Timeout waiting TX ACK (seconds)",
         type=float,
         default=5.0,
     )
+    parser.add_argument(
+        "--packet-hex",
+        help="Raw packet bytes in hex (without 0x, default: 01020304)",
+        default="01020304",
+    )
+    parser.add_argument(
+        "--count",
+        help="Burst packet count (1..65535)",
+        type=int,
+        default=5,
+    )
+    parser.add_argument(
+        "--interval-us",
+        help="Inter-packet interval in microseconds",
+        type=int,
+        default=5000,
+    )
     args = parser.parse_args()
 
-    from feralrf import PHY, Radio
-    from feralrf.exceptions import ConnectionError, FeralRFError, TimeoutError
-
-    if args.count <= 0:
-        fail("count must be > 0")
+    try:
+        packet = parse_packet_hex(args.packet_hex)
+    except ValueError as exc:
+        fail(f"Invalid packet hex: {exc}")
         return 2
-    if args.interval_ms is not None:
-        args.interval_us = int(max(args.interval_ms, 0.0) * 1000.0)
 
+    if args.count <= 0 or args.count > 0xFFFF:
+        fail("count must be in range 1..65535")
+        return 2
     if args.interval_us < 0:
         fail("interval-us must be >= 0")
         return 2
 
-    try:
-        payload = parse_payload_hex(args.payload_hex)
-    except ValueError as exc:
-        fail(f"Invalid payload hex: {exc}")
-        return 2
-
-    if args.phy == int(PHY.BLE_1M) and args.channel not in (37, 38, 39):
-        fail("For BLE TX, channel must be 37, 38 or 39")
-        return 2
-
-    print("FeralRF OTA TX Burst")
-    print("====================")
+    print("FeralRF TX Burst Smoke Test (Phase 1)")
+    print("======================================")
     print(
         f"port={args.port or 'auto'} baudrate={args.baudrate} phy={args.phy} "
-        f"channel={args.channel} power={args.power} len={len(payload)} "
-        f"count={args.count} interval_us={args.interval_us} tx_timeout={args.tx_timeout}s"
+        f"channel={args.channel} power={args.power} len={len(packet)} "
+        f"count={args.count} interval_us={args.interval_us}"
     )
     print()
+
+    from feralrf import PHY, Radio
+    from feralrf.exceptions import ConnectionError, FeralRFError, TimeoutError
 
     radio = Radio(port=args.port, baudrate=args.baudrate)
 
@@ -117,21 +101,19 @@ def main() -> int:
         radio.set_power(args.power)
         ok("Config ACK")
 
-        step("TX burst")
+        step("TX_BURST")
         radio.transmit_burst(
-            payload,
+            packet,
             count=args.count,
             interval_us=args.interval_us,
             timeout=args.tx_timeout,
         )
+        ok("TX_BURST ACK")
 
         print()
-        ok(f"TX BURST PASS scheduled={args.count}")
+        ok("TX BURST SMOKE PASS")
         return 0
 
-    except ValueError as exc:
-        fail(f"Invalid argument: {exc}")
-        return 2
     except ConnectionError as exc:
         fail(f"Connection error: {exc}")
         return 3

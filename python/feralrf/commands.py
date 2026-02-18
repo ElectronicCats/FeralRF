@@ -55,6 +55,16 @@ class CommandBuilder:
         return bytes([length & 0xFF]) + packet + bytes([power_dbm & 0xFF])
 
     @staticmethod
+    def tx_burst(packet: bytes, count: int, interval_us: int) -> bytes:
+        """Payload for TX_BURST"""
+        length = len(packet)
+        return (
+            bytes([length & 0xFF])
+            + packet
+            + struct.pack("<HI", count & 0xFFFF, interval_us & 0xFFFFFFFF)
+        )
+
+    @staticmethod
     def jam_continuous(channel: int, power_dbm: int = 0) -> bytes:
         """Payload for JAM_CONTINUOUS"""
         return bytes([channel & 0xFF, power_dbm & 0xFF])

@@ -414,7 +414,8 @@ def test_ble_sniffer_receive():
    1. `OK` baseline BLE estable congelado.
    2. `OK` gate multi-PHY formalizado y validado en hardware (`python/examples/release_gate_multi_phy.py`, `MULTI-PHY RELEASE GATE PASS`).
    3. `OK` validación TX over-the-air cerrada (PHY4: marcador `a1b2c3d4`, `marker_hits=80`; BLE: marcador `beef01`, `marker_hits=24`).
-   4. siguiente: endurecer recuperación/estabilidad tras cambios de PHY/TX y abrir `TX_BURST`/`TX_CONTINUOUS`/`TX_FRAME`.
+   4. `OK` `TX_BURST` integrado y validado en hardware (smoke dedicado + paso burst en gate multi-PHY).
+   5. siguiente: endurecer recuperación/estabilidad tras cambios de PHY/TX y abrir `TX_CONTINUOUS`/`TX_FRAME`.
 
 ---
 
@@ -425,9 +426,9 @@ def test_ble_sniffer_receive():
    2. Pipeline de RX robusto con métricas y parser LL BLE ampliado.
    3. Soak BLE prolongado y canario de regresión en hardware.
 2. En progreso:
-   1. IEEE 802.15.4 + BLE TX raw: `TX_RAW ACK` + validación over-the-air + gate multi-PHY ya validados; faltan `TX_BURST/TX_CONTINUOUS/TX_FRAME` y criterios finales de release RF extendido.
+   1. IEEE 802.15.4 + BLE TX raw/burst: `TX_RAW ACK` + validación over-the-air + `TX_BURST ACK` + gate multi-PHY validados; faltan `TX_CONTINUOUS/TX_FRAME` y criterios finales de release RF extendido.
 3. No iniciado respecto al plan original amplio:
-   1. TX features pendientes (`TX_BURST/TX_CONTINUOUS/TX_FRAME`) en firmware.
+   1. TX features pendientes (`TX_CONTINUOUS/TX_FRAME`) en firmware.
    2. Jamming (`CW/reactivo/patrones`) y policy engine autónomo.
    3. Spectrum analyzer (scan + visualización).
    4. Sub-1GHz operativo.

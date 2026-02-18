@@ -537,6 +537,44 @@ class Radio:
         if cmd_id != Response.ACK:
             raise ProtocolError(f"Unexpected response to TX_STOP: 0x{cmd_id:02X}")
 
+    def start_jam(
+        self,
+        channel: int,
+        power_dbm: int = 20,
+        duration_ms: int = 3000,
+        timeout: float = 5.0,
+    ) -> None:
+        """Start continuous jamming-style TX stream (firmware auto-stops by duration)."""
+        if channel < 0 or channel > 255:
+            raise ValueError("channel must be in range 0..255")
+        if duration_ms <= 0 or duration_ms > 30000:
+            raise ValueError("duration_ms must be in range 1..30000")
+
+        self._send_command(
+            Command.JAM_CONTINUOUS,
+            CommandBuilder.jam_continuous(channel, power_dbm, duration_ms),
+        )
+        cmd_id, seq, payload = self._read_response(
+            timeout=timeout, expected={Response.ACK, Response.ERROR}
+        )
+
+        if cmd_id == Response.ERROR:
+            raise CommandError("JAM_CONTINUOUS failed", payload[0] if payload else 0)
+        if cmd_id != Response.ACK:
+            raise ProtocolError(f"Unexpected response to JAM_CONTINUOUS: 0x{cmd_id:02X}")
+
+    def stop_jam(self, timeout: float = 5.0) -> None:
+        """Stop active jamming stream."""
+        self._send_command(Command.JAM_STOP, CommandBuilder.jam_stop())
+        cmd_id, seq, payload = self._read_response(
+            timeout=timeout, expected={Response.ACK, Response.ERROR}
+        )
+
+        if cmd_id == Response.ERROR:
+            raise CommandError("JAM_STOP failed", payload[0] if payload else 0)
+        if cmd_id != Response.ACK:
+            raise ProtocolError(f"Unexpected response to JAM_STOP: 0x{cmd_id:02X}")
+
     def __enter__(self):
         self.connect()
         return self

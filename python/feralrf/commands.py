@@ -82,9 +82,9 @@ class CommandBuilder:
         return b""
 
     @staticmethod
-    def jam_continuous(channel: int, power_dbm: int = 0) -> bytes:
+    def jam_continuous(channel: int, power_dbm: int = 20, duration_ms: int = 3000) -> bytes:
         """Payload for JAM_CONTINUOUS"""
-        return bytes([channel & 0xFF, power_dbm & 0xFF])
+        return bytes([channel & 0xFF, power_dbm & 0xFF]) + struct.pack("<H", duration_ms & 0xFFFF)
 
     @staticmethod
     def jam_stop() -> bytes:

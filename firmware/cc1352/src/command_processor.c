@@ -29,6 +29,8 @@
 #define CMD_TX_BURST 0x22u
 #define CMD_TX_FRAME 0x23u
 #define CMD_TX_STOP 0x24u
+#define CMD_JAM_CONTINUOUS 0x30u
+#define CMD_JAM_STOP 0x33u
 
 /* Responses (match python/feralrf/enums.py) */
 #define RSP_ACK 0x80u
@@ -278,6 +280,28 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
             return;
         }
         ControlTask_onTxStop();
+        send_ack(seq);
+        return;
+
+    case CMD_JAM_CONTINUOUS:
+        if (payload_len != 4u) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            return;
+        }
+        if (!ControlTask_onJamContinuous(payload[0], (int8_t)payload[1],
+                                         read_u16_le(&payload[2]))) {
+            send_error(seq, ERR_INVALID_STATE);
+            return;
+        }
+        send_ack(seq);
+        return;
+
+    case CMD_JAM_STOP:
+        if (payload_len != 0u) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            return;
+        }
+        ControlTask_onJamStop();
         send_ack(seq);
         return;
 

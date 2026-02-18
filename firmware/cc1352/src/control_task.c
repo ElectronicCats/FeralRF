@@ -27,6 +27,9 @@
     (FW_CAPABILITY_RX_STATS | FW_CAPABILITY_LL_PDU_META | FW_CAPABILITY_LL_STATS_EXT)
 #define CONTROL_TASK_TX_RAW_MAX_LEN 125u
 #define CONTROL_TASK_SYSTICK_MAX 0x00FFFFFFu
+#define CONTROL_TASK_JAM_MAX_DURATION_MS 30000u
+#define CONTROL_TASK_JAM_BLE_PAYLOAD_LEN 31u
+#define CONTROL_TASK_JAM_IEEE154_PAYLOAD_LEN 125u
 
 static uint8_t s_selected_phy = 0;
 static uint16_t s_channel = 0;
@@ -55,6 +58,9 @@ static uint32_t s_tx_systick_last = 0u;
 static uint32_t s_tx_cycles_per_us = 1u;
 static uint32_t s_tx_cycles_carry = 0u;
 static uint64_t s_tx_time_us = 0u;
+static bool s_jam_active = false;
+static uint64_t s_jam_stop_due_us = 0u;
+static uint8_t s_jam_payload[CONTROL_TASK_TX_RAW_MAX_LEN];
 
 static const uint8_t s_serial[8] = {'F', 'E', 'R', 'A', 'L', 'R', 'F', '1'};
 
@@ -120,6 +126,9 @@ void ControlTask_init(void) {
     s_tx_continuous_interval_us = 0u;
     s_tx_continuous_next_due_us = 0u;
     s_tx_continuous_power_dbm = 0;
+    s_jam_active = false;
+    s_jam_stop_due_us = 0u;
+    memset(s_jam_payload, 0xFF, sizeof(s_jam_payload));
 }
 
 void ControlTask_onRadioInit(void) {
@@ -138,6 +147,8 @@ void ControlTask_onRadioInit(void) {
     s_tx_continuous_interval_us = 0u;
     s_tx_continuous_next_due_us = 0u;
     s_tx_continuous_power_dbm = 0;
+    s_jam_active = false;
+    s_jam_stop_due_us = 0u;
     TaskEvent_clear(TASK_EVENT_CONTROL_RX_START);
     TaskEvent_clear(TASK_EVENT_CONTROL_TX_RAW);
     TaskEvent_clear(TASK_EVENT_CONTROL_TX_BURST);
@@ -239,6 +250,39 @@ void ControlTask_onTxStop(void) {
     s_tx_continuous_interval_us = 0u;
     s_tx_continuous_next_due_us = 0u;
     TaskEvent_clear(TASK_EVENT_CONTROL_TX_CONTINUOUS);
+    s_jam_active = false;
+    s_jam_stop_due_us = 0u;
+}
+
+bool ControlTask_onJamContinuous(uint8_t channel, int8_t power_dbm, uint16_t duration_ms) {
+    uint8_t jam_payload_len = 0u;
+
+    if (duration_ms == 0u || duration_ms > CONTROL_TASK_JAM_MAX_DURATION_MS || s_rx_enabled ||
+        s_tx_raw_pending || s_tx_burst_pending || s_tx_continuous_pending) {
+        return false;
+    }
+
+    if (PhyManager_isBlePhy(s_selected_phy)) {
+        jam_payload_len = CONTROL_TASK_JAM_BLE_PAYLOAD_LEN;
+    } else if (s_selected_phy == PHY_MANAGER_PHY_IEEE_802_15_4) {
+        jam_payload_len = CONTROL_TASK_JAM_IEEE154_PAYLOAD_LEN;
+    } else {
+        return false;
+    }
+
+    ControlTask_onSetChannel(channel);
+    ControlTask_onSetPower(power_dbm);
+    if (!ControlTask_onTxContinuous(s_jam_payload, jam_payload_len, 0u)) {
+        return false;
+    }
+
+    s_jam_active = true;
+    s_jam_stop_due_us = ControlTask_getTimeUs() + ((uint64_t)duration_ms * 1000u);
+    return true;
+}
+
+void ControlTask_onJamStop(void) {
+    ControlTask_onTxStop();
 }
 
 void ControlTask_processTxRaw(void) {
@@ -294,6 +338,10 @@ void ControlTask_processTxContinuous(void) {
     }
 
     now_us = ControlTask_getTimeUs();
+    if (s_jam_active && now_us >= s_jam_stop_due_us) {
+        ControlTask_onTxStop();
+        return;
+    }
     if (now_us < s_tx_continuous_next_due_us) {
         return;
     }
@@ -303,6 +351,8 @@ void ControlTask_processTxContinuous(void) {
                              s_tx_continuous_power_dbm)) {
         s_tx_continuous_pending = false;
         s_tx_continuous_len = 0u;
+        s_jam_active = false;
+        s_jam_stop_due_us = 0u;
         return;
     }
 

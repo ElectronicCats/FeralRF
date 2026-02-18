@@ -19,6 +19,8 @@ bool ControlTask_onTxBurst(const uint8_t *payload, uint8_t payload_len, uint16_t
                            uint32_t interval_us);
 bool ControlTask_onTxContinuous(const uint8_t *payload, uint8_t payload_len, uint32_t interval_us);
 void ControlTask_onTxStop(void);
+bool ControlTask_onJamContinuous(uint8_t channel, int8_t power_dbm, uint16_t duration_ms);
+void ControlTask_onJamStop(void);
 void ControlTask_processTxRaw(void);
 void ControlTask_processTxBurst(void);
 void ControlTask_processTxContinuous(void);

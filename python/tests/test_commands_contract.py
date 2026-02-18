@@ -27,7 +27,7 @@ def test_command_builder_returns_payload_only():
         "<BHI", PHY.BLE_1M, 37, 2402000000
     )
     assert CommandBuilder.tx_raw(b"\xAA\xBB", power_dbm=-10) == b"\x02\xAA\xBB\xF6"
-    assert CommandBuilder.jam_continuous(20, 5) == b"\x14\x05"
+    assert CommandBuilder.jam_continuous(20, 5, 3000) == b"\x14\x05\xb8\x0b"
     assert CommandBuilder.spectrum_scan(2400000000, 2480000000, 1000, 10, 10) == struct.pack(
         "<IIHBB", 2400000000, 2480000000, 1000, 10, 10
     )

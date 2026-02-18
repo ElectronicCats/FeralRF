@@ -64,17 +64,27 @@ def stats_monotonic(curr: DeviceStats, prev: DeviceStats) -> bool:
     if curr.rx_overflow < prev.rx_overflow:
         return False
 
-    if prev.ll_kind_adv is None or curr.ll_kind_adv is None:
-        return True
-    if curr.ll_kind_unknown < (prev.ll_kind_unknown or 0):
+    prev_ll_kind_unknown = prev.ll_kind_unknown or 0
+    prev_ll_kind_adv = prev.ll_kind_adv or 0
+    prev_ll_kind_scan = prev.ll_kind_scan or 0
+    prev_ll_kind_connect = prev.ll_kind_connect or 0
+    prev_ll_kind_data = prev.ll_kind_data or 0
+
+    curr_ll_kind_unknown = curr.ll_kind_unknown or 0
+    curr_ll_kind_adv = curr.ll_kind_adv or 0
+    curr_ll_kind_scan = curr.ll_kind_scan or 0
+    curr_ll_kind_connect = curr.ll_kind_connect or 0
+    curr_ll_kind_data = curr.ll_kind_data or 0
+
+    if curr_ll_kind_unknown < prev_ll_kind_unknown:
         return False
-    if curr.ll_kind_adv < prev.ll_kind_adv:
+    if curr_ll_kind_adv < prev_ll_kind_adv:
         return False
-    if curr.ll_kind_scan < (prev.ll_kind_scan or 0):
+    if curr_ll_kind_scan < prev_ll_kind_scan:
         return False
-    if curr.ll_kind_connect < (prev.ll_kind_connect or 0):
+    if curr_ll_kind_connect < prev_ll_kind_connect:
         return False
-    if curr.ll_kind_data < (prev.ll_kind_data or 0):
+    if curr_ll_kind_data < prev_ll_kind_data:
         return False
     return True
 

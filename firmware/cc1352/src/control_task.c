@@ -6,6 +6,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 
 #include "ll_manager.h"
 #include "phy_manager.h"
@@ -21,12 +22,17 @@
 #define FW_CAPABILITY_LL_STATS_EXT 0x04u
 #define FW_CAPABILITIES \
     (FW_CAPABILITY_RX_STATS | FW_CAPABILITY_LL_PDU_META | FW_CAPABILITY_LL_STATS_EXT)
+#define CONTROL_TASK_TX_RAW_MAX_LEN 125u
 
 static uint8_t s_selected_phy = 0;
 static uint16_t s_channel = 0;
 static int8_t s_tx_power_dbm = 0;
 static uint32_t s_frequency_hz = 0;
 static bool s_rx_enabled = false;
+static bool s_tx_raw_pending = false;
+static uint8_t s_tx_raw_payload[CONTROL_TASK_TX_RAW_MAX_LEN];
+static uint8_t s_tx_raw_len = 0u;
+static int8_t s_tx_raw_power_dbm = 0;
 
 static const uint8_t s_serial[8] = {'F', 'E', 'R', 'A', 'L', 'R', 'F', '1'};
 
@@ -40,10 +46,20 @@ void ControlTask_init(void) {
     s_tx_power_dbm = 0;
     s_frequency_hz = 0;
     s_rx_enabled = false;
+    s_tx_raw_pending = false;
+    s_tx_raw_len = 0u;
+    s_tx_raw_power_dbm = 0;
 }
 
 void ControlTask_onRadioInit(void) {
     s_rx_enabled = false;
+    s_tx_raw_pending = false;
+    s_tx_raw_len = 0u;
+    TaskEvent_clear(TASK_EVENT_CONTROL_RX_START);
+    TaskEvent_clear(TASK_EVENT_CONTROL_TX_RAW);
+    TaskEvent_set(TASK_EVENT_CONTROL_RX_STOP);
+    TaskEvent_clear(TASK_EVENT_DATA_RX_ACTIVE);
+    RadioIF_stopRx();
     RadioIF_resetMetrics();
     LLManager_resetStats();
 }
@@ -70,6 +86,33 @@ void ControlTask_onSetChannel(uint8_t channel) {
 void ControlTask_onSetPower(int8_t power_dbm) {
     s_tx_power_dbm = power_dbm;
     RadioIF_setPower(power_dbm);
+}
+
+bool ControlTask_onTxRaw(const uint8_t *payload, uint8_t payload_len, int8_t power_dbm) {
+    if (payload == NULL || payload_len == 0u || payload_len > CONTROL_TASK_TX_RAW_MAX_LEN ||
+        s_rx_enabled || s_tx_raw_pending) {
+        return false;
+    }
+
+    memcpy(s_tx_raw_payload, payload, payload_len);
+    s_tx_raw_len = payload_len;
+    s_tx_raw_power_dbm = power_dbm;
+    s_tx_raw_pending = true;
+    TaskEvent_set(TASK_EVENT_CONTROL_TX_RAW);
+    return true;
+}
+
+void ControlTask_processTxRaw(void) {
+    if (!s_tx_raw_pending) {
+        return;
+    }
+
+    s_tx_power_dbm = s_tx_raw_power_dbm;
+    RadioIF_setPower(s_tx_raw_power_dbm);
+    (void)RadioIF_transmitRaw(s_tx_raw_payload, s_tx_raw_len, s_tx_raw_power_dbm);
+
+    s_tx_raw_pending = false;
+    s_tx_raw_len = 0u;
 }
 
 void ControlTask_onRxStart(void) {

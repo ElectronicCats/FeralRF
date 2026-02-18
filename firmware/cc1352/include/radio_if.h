@@ -38,6 +38,7 @@ void RadioIF_init(void);
 void RadioIF_setPhy(uint8_t phy, uint16_t channel, uint32_t frequency_hz);
 void RadioIF_setChannel(uint8_t channel);
 void RadioIF_setPower(int8_t power_dbm);
+bool RadioIF_transmitRaw(const uint8_t *data, uint8_t data_len, int8_t power_dbm);
 bool RadioIF_startRx(void);
 void RadioIF_stopRx(void);
 bool RadioIF_isRxRunning(void);

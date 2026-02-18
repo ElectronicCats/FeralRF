@@ -420,10 +420,12 @@ class Radio:
             except TimeoutError:
                 break
 
-    def transmit(self, packet: bytes, power_dbm: int = -128) -> None:
+    def transmit(self, packet: bytes, power_dbm: int = -128, timeout: float = 5.0) -> None:
         """Transmit a packet"""
         self._send_command(Command.TX_RAW, CommandBuilder.tx_raw(packet, power_dbm))
-        cmd_id, seq, payload = self._read_response(expected={Response.ACK, Response.ERROR})
+        cmd_id, seq, payload = self._read_response(
+            timeout=timeout, expected={Response.ACK, Response.ERROR}
+        )
 
         if cmd_id == Response.ERROR:
             raise CommandError("Transmit failed", payload[0] if payload else 0)

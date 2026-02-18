@@ -1,6 +1,6 @@
 # FeralRF - Estado de Sesion
 
-## Ultima actualizacion: 2026-02-17
+## Ultima actualizacion: 2026-02-18
 
 ## Resumen ejecutivo
 
@@ -20,7 +20,8 @@
 10. `GET_STATS` extendido (compat): incluye contadores LL por tipo (`unknown/adv/scan/connect/data`) cuando capability lo anuncia.
 11. Parser `LL_BLE` ampliado: subtipos advertising (`ADV_IND`, `ADV_SCAN_IND`, `ADV_EXT_IND`, etc.) y bandera de casos reservados.
 12. Backend RF real `IEEE_802_15_4` (RX) integrado en `radio_if` con settings SmartRF dedicados y fallback sintetico para PHY no soportados.
-13. Validacion HW PHY 4: `OK` en CH 11/15/20/25 para flujo de control/estabilidad (`SET_PHY`, `RX_START`, `RX_STOP`) sin timeouts.
+13. Validacion HW PHY 4: `OK` con captura real (`packets>0`, `delta_ok>0`) y barrido `11..26` en hardware.
+14. `TX_RAW` fase 1 en PHY4: `OK` en smoke de control (`TX_RAW ACK`) con ejecucion diferida no bloqueante.
 
 ## Estado por fase
 
@@ -28,7 +29,7 @@
 2. Fase 2: `COMPLETA`.
 3. Fase 3: `COMPLETA (alcance MVP)`.
 4. Fase 4: `COMPLETA (alcance MVP)`.
-5. Fase 5: `PARCIAL`.
+5. Fase 5: `COMPLETA`.
 6. Fase 6: `COMPLETA (MVP BLE validado en hardware)`.
 7. Fase 7: `EN PROGRESO` (metricas base implementadas).
 
@@ -47,10 +48,11 @@
    3. `stats_total ok=9669 crc_err=1291 drop=64 ovf=0`
    4. `ll_total unk=0 adv=7601 scan=2068 conn=0 data=0`
 6. Validacion de parser LL ampliado: `OK` (captura real muestra subtipos `ADV_IND`, `ADV_NONCONN_IND`, `ADV_EXT_IND`, `SCAN_REQ`, `SCAN_RSP` en canales 37/38/39).
-7. Barrido PHY 4 IEEE 802.15.4 (CH 11/15/20/25, 15s c/u): `OK` sin cuelgues ni timeouts; `packets=0` en ambiente actual (sin trafico 802.15.4 observable).
+7. Barrido PHY 4 IEEE 802.15.4 (CH 11..26, 8s c/u): `OK` con deteccion real en CH 11, 12 y 25; caso objetivo CH25 validado con `packets=34`, `delta_ok=34`, `drop=0`, `ovf=0`.
 8. Canary regresion (BLE, 60s): `OK` en hardware (`CANARY PASS`) con monotonia de stats, `RX_STOP ACK` y `packets_total=8150`.
 9. Gate BLE unificado (`release_gate_ble.py`, 60s, `ci_manual`) corrida 1/2: `OK` (smoke + canary en verde, `packets_total=5304`, `stats_total ok=5390 crc_err=919 drop=37 ovf=0`).
 10. Gate BLE unificado (`release_gate_ble.py`, 60s, `ci_manual`) corrida 2/2: `OK` (smoke + canary en verde, `packets_total=5623`, `stats_total ok=5733 crc_err=778 drop=37 ovf=0`).
+11. TX smoke fase 1 (`smoke_tx_phase1.py`, PHY4 CH25): `OK` (`TX_RAW ACK`, `TX SMOKE PASS`).
 
 ## Riesgo abierto actual
 
@@ -81,6 +83,10 @@
    `PYTHONPATH=python python3 python/examples/canary_regression.py -p /dev/ttyACM0 --baudrate 921600 --phy 0 --channel 37 --power 0 --soak-duration 60 --report-every 15 --stats-timeout 2 --stats-retries 3 --profile ci_manual`
 4. Gate release BLE (comando unico):
    `PYTHONPATH=python python3 python/examples/release_gate_ble.py -p /dev/ttyACM0 --baudrate 921600 --phy 0 --channel 37 --power 0 --soak-duration 60 --report-every 15 --stats-timeout 2 --stats-retries 3 --profile ci_manual`
+5. Sweep IEEE 802.15.4:
+   `PYTHONPATH=python python3 python/examples/sweep_phy4_ieee154.py -p /dev/ttyACM0 -b 921600 --ch-min 11 --ch-max 26 --duration 8 --retries 2`
+6. TX smoke fase 1:
+   `PYTHONPATH=python python3 python/examples/smoke_tx_phase1.py -p /dev/ttyACM0 -b 921600 --phy 4 --channel 25 --power 0 --packet-hex 01020304 --tx-timeout 10`
 
 ## Archivos clave tocados en este bloque
 
@@ -104,7 +110,7 @@
 
 ## Siguiente paso inmediato recomendado
 
-1. Generar/capturar trafico real Zigbee/Thread para cerrar evidencia de paquetes reales en `SET_PHY(4)`.
-2. Ejecutar el workflow manual HW (`ble_release_gate_hw.yml`) al menos una vez en GitHub Actions para validar runner/artefactos.
-3. Afinar perfil objetivo (`lab` vs `ci_manual`) para cada tipo de validacion de release.
-4. Configurar en GitHub branch/tag protection los checks del gate como obligatorios segun politica del equipo.
+1. Validar TX over-the-air en PHY4 (receptor externo confirmando tramas emitidas en CH25).
+2. Extender `TX_RAW` a BLE (PHY0) y agregar smoke equivalente.
+3. Definir canario multi-PHY (BLE RX + PHY4 RX/TX smoke) manteniendo gate BLE como obligatorio.
+4. Ejecutar el workflow manual HW (`ble_release_gate_hw.yml`) al menos una vez en GitHub Actions para validar runner/artefactos.

@@ -2,7 +2,7 @@
 
 Firmware universal para CatSniffer (CC1352P + RP2040) con capacidades de sniffing, TX/RX, jamming y spectrum analysis para BLE, Zigbee y Sub-1GHz.
 
-## Estado Actual (2026-02-17)
+## Estado Actual (2026-02-18)
 
 - Base de comunicacion CC1352 estable a `921600` con `COBS + CRC16`.
 - Smoke test de fase 2 en verde (`RADIO_INIT`, `GET_INFO`, `SET_PHY`, `SET_CHANNEL`, `SET_POWER`, `RX_START`, `RX_STOP`).
@@ -13,11 +13,12 @@ Firmware universal para CatSniffer (CC1352P + RP2040) con capacidades de sniffin
 - Metadata LL en `RSP_RX_PACKET` (capability-gated): clasificacion `ADV/SCAN/CONNECT/DATA` + tipo PDU.
 - `GET_STATS` extendido (compat) con contadores LL por tipo para regresion automatizada.
 - Parser LL BLE ampliado para subtipos advertising/extended y deteccion de tipos reservados.
-- Backend RF real `IEEE_802_15_4` (RX) integrado y validado en hardware a nivel control path (`SET_PHY/RX_START/RX_STOP`) en CH 11/15/20/25.
+- Backend RF real `IEEE_802_15_4` (RX) integrado y validado en hardware con captura real (`packets>0`, `delta_ok>0`) y barrido por canales (`11..26`).
+- `TX_RAW` fase 1 operativo en PHY4 (802.15.4): `ACK` estable y ruta no bloqueante en firmware.
 - Estabilidad validada: soak BLE de 30 minutos completado en hardware.
 - Canary de regresion validado en hardware (`CANARY PASS`, 60s, monotonia de stats y `RX_STOP ACK`).
 - `docs/protocol.md` publicado con contrato vigente host<->firmware.
-- Pendiente principal: evidencia de captura real 802.15.4 (no solo control path) y conexion del canario al gate de release.
+- Pendiente principal: validar TX over-the-air (PHY4) y extender `TX_RAW` a BLE manteniendo gate de no-regresion.
 
 ---
 
@@ -280,7 +281,7 @@ feralrf/
 - [x] Ejemplo: `ble_sniffer.py`
 
 ### FASE 2: TX + Jamming Básico (Semanas 4-5)
-- [ ] TX raw packets
+- [~] TX raw packets (fase 1 ACK path en PHY4 listo; falta validación RF over-the-air + BLE TX)
 - [ ] Jamming continuo (CW)
 - [ ] Power control (-20 a +20 dBm)
 - [ ] Regulatory warnings
@@ -291,7 +292,7 @@ feralrf/
 - [ ] Python visualization (matplotlib)
 
 ### FASE 4: Zigbee + Multi-PHY (Semanas 7-8)
-- [~] IEEE 802.15.4 RX/TX (RX integrado y estable en control path, falta evidencia de captura real + TX)
+- [~] IEEE 802.15.4 RX/TX (RX real validado; TX_RAW ACK path validado, falta validación TX over-the-air)
 - [ ] PHY switching dinámico
 - [ ] Channel translation
 
@@ -393,10 +394,7 @@ def test_ble_sniffer_receive():
 
 ## 9. Próximos Pasos
 
-1. Cerrar FASE 5 (multi-PHY real):
-   1. `OK` estabilidad HW del backend `IEEE_802_15_4` RX (control path) en CH 11/15/20/25.
-   2. pendiente: evidencia de captura real 802.15.4 con emisor Zigbee/Thread activo.
-2. Cerrar FASE 7 (regresión/gate):
+1. Mantener baseline BLE (no-regresion):
    1. `OK` canario smoke+soak+stats LL implementado (`python/examples/canary_regression.py`).
    2. `OK` perfiles por entorno (`lab/ci_manual/quiet`) y piso dinámico por duración.
    3. `OK` gate operativo de release formalizado (`python/examples/release_gate_ble.py`).
@@ -405,9 +403,12 @@ def test_ble_sniffer_receive():
    6. `OK` integrado a flujo manual/CI:
       1. workflow HW manual `ble_release_gate_hw.yml` (runner `self-hosted, feralrf-hw`).
       2. validacion CI de scripts gate (`--help`) en `build.yml`.
-3. Baseline BLE:
+2. Cerrar FASE 5 (multi-PHY real):
+   1. `OK` backend `IEEE_802_15_4` RX estable en hardware (control path + captura real).
+   2. `OK` barrido `11..26` con deteccion de actividad en canales reales (`python/examples/sweep_phy4_ieee154.py`).
+3. Siguiente vertical:
    1. `OK` baseline BLE estable congelado.
-   2. siguiente: abrir verticales nuevos bajo gate BLE obligatorio.
+   2. siguiente: abrir TX (BLE/802.15.4) bajo gate BLE obligatorio.
 
 ---
 
@@ -418,7 +419,7 @@ def test_ble_sniffer_receive():
    2. Pipeline de RX robusto con métricas y parser LL BLE ampliado.
    3. Soak BLE prolongado y canario de regresión en hardware.
 2. En progreso:
-   1. IEEE 802.15.4 RX real: control path estable, falta evidencia de tráfico real capturado.
+   1. IEEE 802.15.4 multi-PHY: RX real validado; falta completar TX y criterios de release para PHY4.
 3. No iniciado respecto al plan original amplio:
    1. TX features (`TX_RAW/TX_BURST/TX_CONTINUOUS`) en firmware.
    2. Jamming (`CW/reactivo/patrones`) y policy engine autónomo.
@@ -426,5 +427,5 @@ def test_ble_sniffer_receive():
    4. Sub-1GHz operativo.
    5. Bootloader custom/OTA y gate de release completo.
 4. Ajuste recomendado de alcance:
-   1. cerrar primero baseline BLE + 802.15.4 RX real.
-   2. luego abrir verticales nuevas una por una (TX -> spectrum -> jamming -> Sub-1GHz).
+   1. baseline BLE + 802.15.4 RX real ya cerrado.
+   2. abrir verticales nuevas una por una (TX -> spectrum -> jamming -> Sub-1GHz).

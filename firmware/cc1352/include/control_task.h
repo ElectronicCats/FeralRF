@@ -13,6 +13,8 @@ void ControlTask_onRadioInit(void);
 bool ControlTask_onSetPhy(uint8_t phy, uint16_t channel, uint32_t frequency_hz);
 void ControlTask_onSetChannel(uint8_t channel);
 void ControlTask_onSetPower(int8_t power_dbm);
+bool ControlTask_onTxRaw(const uint8_t *payload, uint8_t payload_len, int8_t power_dbm);
+void ControlTask_processTxRaw(void);
 void ControlTask_onRxStart(void);
 void ControlTask_onRxStop(void);
 bool ControlTask_isRxEnabled(void);

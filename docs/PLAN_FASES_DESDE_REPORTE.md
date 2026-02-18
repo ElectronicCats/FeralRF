@@ -8,15 +8,15 @@
 
 ---
 
-## Estado actual (2026-02-17)
+## Estado actual (2026-02-18)
 
 1. Fase 1: `COMPLETA` (contrato COBS+CRC16 estable y API Python funcional).
 2. Fase 2: `COMPLETA` (UART 921600 + comandos base + smoke test en verde).
 3. Fase 3: `COMPLETA (alcance MVP)` (pipeline `control_task + data_task + host_if_task` activo).
 4. Fase 4: `COMPLETA (alcance MVP)` (RF BLE real, data queue, manejo de overflow, restart RX).
-5. Fase 5: `PARCIAL` (base tabular `phy_manager` + `LL_DEFAULT/LL_BLE` integrada, parser LL BLE ampliado con subtipos advertising/extended y casos reservados, metricas LL por tipo en `GET_STATS`; backend RF real `IEEE_802_15_4` RX validado en HW a nivel control/estabilidad `SET_PHY/RX_START/RX_STOP` en CH 11/15/20/25, pendiente captura real de trafico 802.15.4).
+5. Fase 5: `COMPLETA` (base tabular `phy_manager` + `LL_DEFAULT/LL_BLE` integrada, parser LL BLE ampliado con subtipos advertising/extended y casos reservados, metricas LL por tipo en `GET_STATS`; backend RF real `IEEE_802_15_4` RX validado en HW con captura real y barrido por canales).
 6. Fase 6: `COMPLETA (MVP BLE)` (sniffing BLE funcional validado con captura continua de 30 min en hardware).
-7. Fase 7: `EN PROGRESO` (metricas base `rx_ok/rx_crc_err/rx_drop/rx_overflow` expuestas por comando host).
+7. Fase 7: `EN PROGRESO` (metricas base `rx_ok/rx_crc_err/rx_drop/rx_overflow` expuestas por comando host + `TX_RAW` fase 1 con `ACK` estable en PHY4).
 
 ---
 
@@ -188,8 +188,8 @@ Dejar base lista para Zigbee/Sub-1GHz, jamming y spectrum.
    3. `OK`: clasificacion consistente validada en captura real multi-canal.
 2. Tarea 2 (cierre tecnico Fase 5 - multi-PHY real):
    1. `OK`: validar en hardware el backend RF real para `IEEE_802_15_4` (RX) ya integrado (sin timeouts de cierre).
-   2. pendiente: ejecutar captura con emisor Zigbee/Thread activo para confirmar paquetes reales (no solo control path).
-   3. criterio de done: `SET_PHY(802.15.4)` + `RX_START` entrega paquetes reales de forma estable.
+   2. `OK`: captura real con emisor Zigbee/Thread activo (ej.: canal 25 con `packets>0`, `delta_ok>0`).
+   3. `OK`: barrido `11..26` operativo (`python/examples/sweep_phy4_ieee154.py`) con deteccion en canales activos.
 3. Tarea 3 (avance Fase 7 - regresion automatizada):
    1. `OK`: agregar script canario que ejecute smoke + soak corto + validacion de stats LL (`python/examples/canary_regression.py`).
    2. `OK`: umbrales de aceptacion implementados (sin timeout, `RX_STOP ACK`, contadores monotonos, `min_packets` configurable + perfiles `lab/ci_manual/quiet`).
@@ -205,5 +205,9 @@ Dejar base lista para Zigbee/Sub-1GHz, jamming y spectrum.
    4. `OK`: baseline BLE congelado.
    5. `OK`: gate conectado a flujo manual/CI (`.github/workflows/ble_release_gate_hw.yml` + validacion en `build.yml`).
    6. pendiente: abrir Zigbee/Sub-1GHz/TX/jamming manteniendo gate BLE como no-regresion.
+6. Tarea 6 (arranque vertical TX):
+   1. `OK`: `CMD_TX_RAW` integrado en firmware con ruta no bloqueante (ACK inmediato) y smoke host `python/examples/smoke_tx_phase1.py`.
+   2. pendiente: validación RF over-the-air para PHY4 (receptor externo confirma trama emitida).
+   3. pendiente: extender `TX_RAW` a PHY BLE (PHY 0) con smoke equivalente.
 
-Este orden prioriza cerrar MVP BLE estable antes de abrir Zigbee/Sub-1GHz.
+Este orden prioriza mantener baseline BLE estable mientras se abre Zigbee/Sub-1GHz/TX por incrementos.

@@ -24,6 +24,7 @@
 #define CMD_GET_STATS 0x06u
 #define CMD_RX_START 0x10u
 #define CMD_RX_STOP 0x11u
+#define CMD_TX_RAW 0x20u
 
 /* Responses (match python/feralrf/enums.py) */
 #define RSP_ACK 0x80u
@@ -36,6 +37,7 @@
 #define ERR_INVALID_PAYLOAD 0x02u
 #define ERR_INVALID_FRAME 0x03u
 #define ERR_FRAME_TOO_LONG 0x04u
+#define ERR_INVALID_STATE 0x05u
 
 static uint16_t read_u16_le(const uint8_t *p) {
     return (uint16_t)p[0] | ((uint16_t)p[1] << 8);
@@ -165,6 +167,28 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
             return;
         }
         ControlTask_onRxStop();
+        send_ack(seq);
+        return;
+
+    case CMD_TX_RAW:
+        if (payload_len < 2u) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            return;
+        }
+        {
+            uint8_t tx_len = payload[0];
+            uint16_t expected_payload_len = (uint16_t)tx_len + 2u;
+
+            if (tx_len == 0u || expected_payload_len != payload_len) {
+                send_error(seq, ERR_INVALID_PAYLOAD);
+                return;
+            }
+
+            if (!ControlTask_onTxRaw(&payload[1], tx_len, (int8_t)payload[1u + tx_len])) {
+                send_error(seq, ERR_INVALID_STATE);
+                return;
+            }
+        }
         send_ack(seq);
         return;
 

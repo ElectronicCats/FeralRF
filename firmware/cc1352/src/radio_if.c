@@ -50,6 +50,7 @@
 #define IEEE_15_4_DEFAULT_CHANNEL IEEE_15_4_CHANNEL_MIN
 #define IEEE_15_4_FS_BASE_FREQUENCY_MHZ 2405u
 #define IEEE_15_4_FS_STEP_MHZ 5u
+#define IEEE_15_4_TX_MAX_PAYLOAD_LEN 125u
 #define IEEE_15_4_APPENDED_RSSI_LEN 1u
 #define IEEE_15_4_APPENDED_CORRCRC_LEN 1u
 #define IEEE_15_4_APPENDED_TIMESTAMP_LEN 4u
@@ -109,6 +110,11 @@ static uint32_t s_ble_hop_systick_last = 0u;
 static uint32_t s_ble_hop_cycles_accum = 0u;
 static uint32_t s_ble_hop_cycles_per_step = 0u;
 static const uint8_t s_ble_adv_hop_channels[3] = {37u, 38u, 39u};
+#if defined(__GNUC__)
+static uint8_t s_ieee154_tx_buffer[IEEE_15_4_TX_MAX_PAYLOAD_LEN] __attribute__((aligned(4)));
+#else
+static uint8_t s_ieee154_tx_buffer[IEEE_15_4_TX_MAX_PAYLOAD_LEN];
+#endif
 
 #if defined(__GNUC__)
 static uint8_t s_rf_rx_data_buffer[RF_QUEUE_DATA_BUFFER_SIZE] __attribute__((aligned(4)));
@@ -195,6 +201,50 @@ static void RadioIF_applyIeee154ChannelConfig(uint16_t channel) {
     Ieee154_0_cmdIeeeRx.channel = ieee_channel;
     Ieee154_0_cmdFs.frequency = RadioIF_ieee154ChannelToFrequency(ieee_channel);
     Ieee154_0_cmdFs.fractFreq = 0u;
+}
+
+static bool RadioIF_transmitIeee154Raw(const uint8_t *payload, uint8_t payload_len) {
+    RF_Object tx_rf_object;
+    RF_Params rf_params;
+    RF_Handle tx_rf_handle = NULL;
+    RF_EventMask result = 0u;
+    const RF_EventMask term_events =
+        RF_EventLastCmdDone | RF_EventCmdCancelled | RF_EventCmdAborted | RF_EventCmdStopped;
+
+    if (payload == NULL || payload_len == 0u || payload_len > IEEE_15_4_TX_MAX_PAYLOAD_LEN) {
+        return false;
+    }
+
+    memcpy(s_ieee154_tx_buffer, payload, payload_len);
+
+    RadioIF_applyIeee154ChannelConfig(s_channel);
+
+    Ieee154_0_cmdIeeeTx.pPayload = s_ieee154_tx_buffer;
+    Ieee154_0_cmdIeeeTx.payloadLen = payload_len;
+    Ieee154_0_cmdIeeeTx.startTrigger.triggerType = TRIG_NOW;
+    Ieee154_0_cmdIeeeTx.startTrigger.pastTrig = 1u;
+    Ieee154_0_cmdIeeeTx.condition.rule = COND_NEVER;
+    Ieee154_0_cmdIeeeTx.pNextOp = 0;
+
+    RF_Params_init(&rf_params);
+    tx_rf_handle = RF_open(&tx_rf_object, &Ieee154_0_mode,
+                           (RF_RadioSetup *)&Ieee154_0_cmdRadioSetup, &rf_params);
+    if (tx_rf_handle == NULL) {
+        return false;
+    }
+
+    result =
+        RF_runCmd(tx_rf_handle, (RF_Op *)&Ieee154_0_cmdFs, RF_PriorityNormal, NULL, term_events);
+    if ((result & RF_EventLastCmdDone) == 0u) {
+        RF_close(tx_rf_handle);
+        return false;
+    }
+
+    result = RF_runCmd(tx_rf_handle, (RF_Op *)&Ieee154_0_cmdIeeeTx, RF_PriorityNormal, NULL,
+                       term_events);
+    RF_close(tx_rf_handle);
+
+    return (result & RF_EventLastCmdDone) != 0u;
 }
 
 static bool RadioIF_isBleAdvChannel(uint16_t channel) {
@@ -867,6 +917,21 @@ void RadioIF_setChannel(uint8_t channel) {
 
 void RadioIF_setPower(int8_t power_dbm) {
     s_tx_power_dbm = power_dbm;
+}
+
+bool RadioIF_transmitRaw(const uint8_t *data, uint8_t data_len, int8_t power_dbm) {
+    s_tx_power_dbm = power_dbm;
+
+    if (s_rx_running) {
+        return false;
+    }
+
+    if (RadioIF_isIeee154PhySelected()) {
+        return RadioIF_transmitIeee154Raw(data, data_len);
+    }
+
+    /* Phase 1 TX support: IEEE 802.15.4 one-shot path. */
+    return false;
 }
 
 bool RadioIF_startRx(void) {

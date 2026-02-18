@@ -18,6 +18,7 @@
 #define TASK_EVENT_CONTROL_RX_START 0x00000020u
 #define TASK_EVENT_CONTROL_RX_STOP 0x00000040u
 #define TASK_EVENT_DATA_RX_ACTIVE 0x00000080u
+#define TASK_EVENT_CONTROL_TX_RAW 0x00000100u
 
 void TaskEvent_init(void);
 void TaskEvent_set(uint32_t event_mask);

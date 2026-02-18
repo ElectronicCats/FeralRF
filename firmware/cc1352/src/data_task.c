@@ -8,6 +8,7 @@
 
 #include <stdint.h>
 
+#include "control_task.h"
 #include "ll_manager.h"
 #include "output_if.h"
 #include "protocol.h"
@@ -64,19 +65,24 @@ void DataTask_init(void) {
 }
 
 void DataTask_poll(void) {
+    if (TaskEvent_isSet(TASK_EVENT_CONTROL_RX_STOP)) {
+        s_rx_active = false;
+        RadioIF_stopRx();
+        TaskEvent_clear(TASK_EVENT_DATA_RX_ACTIVE);
+        TaskEvent_clear(TASK_EVENT_CONTROL_RX_STOP);
+    }
+
+    if (TaskEvent_isSet(TASK_EVENT_CONTROL_TX_RAW)) {
+        ControlTask_processTxRaw();
+        TaskEvent_clear(TASK_EVENT_CONTROL_TX_RAW);
+    }
+
     if (TaskEvent_isSet(TASK_EVENT_CONTROL_RX_START)) {
         s_rx_active = RadioIF_startRx();
         if (s_rx_active) {
             TaskEvent_set(TASK_EVENT_DATA_RX_ACTIVE);
         }
         TaskEvent_clear(TASK_EVENT_CONTROL_RX_START);
-    }
-
-    if (TaskEvent_isSet(TASK_EVENT_CONTROL_RX_STOP)) {
-        s_rx_active = false;
-        RadioIF_stopRx();
-        TaskEvent_clear(TASK_EVENT_DATA_RX_ACTIVE);
-        TaskEvent_clear(TASK_EVENT_CONTROL_RX_STOP);
     }
 
     RadioIF_poll();

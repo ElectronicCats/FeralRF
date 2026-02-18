@@ -142,3 +142,22 @@ rfc_CMD_IEEE_RX_t Ieee154_0_cmdIeeeRx = {
     .endTrigger.pastTrig = 0x0,
     .endTime = 0x00000000,
 };
+
+rfc_CMD_IEEE_TX_t Ieee154_0_cmdIeeeTx = {
+    .commandNo = 0x2C01,
+    .status = 0x0000,
+    .pNextOp = 0,
+    .startTime = 0x00000000,
+    .startTrigger.triggerType = 0x0,
+    .startTrigger.bEnaCmd = 0x0,
+    .startTrigger.triggerNo = 0x0,
+    .startTrigger.pastTrig = 0x0,
+    .condition.rule = 0x1,
+    .condition.nSkip = 0x0,
+    .txOpt.bIncludePhyHdr = 0x0,
+    .txOpt.bIncludeCrc = 0x0,
+    .txOpt.payloadLenMsb = 0x0,
+    .payloadLen = 0x00,
+    .pPayload = 0,
+    .timeStamp = 0x00000000,
+};

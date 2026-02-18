@@ -14,6 +14,7 @@ extern RF_Mode Ieee154_0_mode;
 extern rfc_CMD_RADIO_SETUP_PA_t Ieee154_0_cmdRadioSetup;
 extern rfc_CMD_FS_t Ieee154_0_cmdFs;
 extern rfc_CMD_IEEE_RX_t Ieee154_0_cmdIeeeRx;
+extern rfc_CMD_IEEE_TX_t Ieee154_0_cmdIeeeTx;
 
 extern uint32_t Ieee154_0_pOverrides[];
 

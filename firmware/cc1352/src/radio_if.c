@@ -48,7 +48,6 @@
 #define IEEE_15_4_CHANNEL_MIN 11u
 #define IEEE_15_4_CHANNEL_MAX 26u
 #define IEEE_15_4_DEFAULT_CHANNEL IEEE_15_4_CHANNEL_MIN
-#define IEEE_15_4_RFCORE_CHAN_OFFSET IEEE_15_4_CHANNEL_MIN
 #define IEEE_15_4_FS_BASE_FREQUENCY_MHZ 2405u
 #define IEEE_15_4_FS_STEP_MHZ 5u
 #define IEEE_15_4_APPENDED_RSSI_LEN 1u
@@ -193,7 +192,7 @@ static void RadioIF_applyBleChannelConfig(uint8_t channel) {
 static void RadioIF_applyIeee154ChannelConfig(uint16_t channel) {
     uint8_t ieee_channel = RadioIF_convertToIeee154Channel(channel);
 
-    Ieee154_0_cmdIeeeRx.channel = (uint8_t)(ieee_channel - IEEE_15_4_RFCORE_CHAN_OFFSET);
+    Ieee154_0_cmdIeeeRx.channel = ieee_channel;
     Ieee154_0_cmdFs.frequency = RadioIF_ieee154ChannelToFrequency(ieee_channel);
     Ieee154_0_cmdFs.fractFreq = 0u;
 }

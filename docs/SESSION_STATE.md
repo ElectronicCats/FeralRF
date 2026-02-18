@@ -23,6 +23,7 @@
 13. Validacion HW PHY 4: `OK` con captura real (`packets>0`, `delta_ok>0`) y barrido `11..26` en hardware.
 14. `TX_RAW` fase 1 en PHY4: `OK` en smoke de control (`TX_RAW ACK`) con ejecucion diferida no bloqueante.
 15. `TX_RAW` fase 1 en BLE (PHY0 ADV): `OK` en smoke de control (`TX_RAW ACK`, `TX BLE SMOKE PASS`).
+16. `MULTI-PHY RELEASE GATE`: `OK` en hardware (BLE baseline + PHY4 RX + PHY4 TX + BLE TX en una sola corrida).
 
 ## Estado por fase
 
@@ -56,6 +57,11 @@
 11. TX smoke fase 1 (`smoke_tx_phase1.py`, PHY4 CH25): `OK` (`TX_RAW ACK`, `TX SMOKE PASS`).
 12. TX smoke BLE fase 1 (`smoke_tx_ble_phase1.py`, PHY0 CH37): `OK` (`TX_RAW ACK`, `TX BLE SMOKE PASS`).
 13. Gate multi-PHY creado (`release_gate_multi_phy.py`): orquesta BLE gate + PHY4 RX/TX smoke + BLE TX smoke en un comando.
+14. Gate multi-PHY ejecutado y aprobado (`MULTI-PHY RELEASE GATE PASS`, 2026-02-18):
+   1. BLE baseline gate: `PASS` (smoke + canary 60s, `packets_total=2862`, `stats_total ok=2921 crc_err=198 drop=7 ovf=0`).
+   2. PHY4 RX smoke CH25: `PASS` (`packets=45`, `RX_STOP ACK`).
+   3. PHY4 TX smoke CH25: `PASS` (`TX_RAW ACK`).
+   4. BLE TX smoke CH37: `PASS` (`TX_RAW ACK`).
 
 ## Riesgo abierto actual
 
@@ -119,5 +125,5 @@
 
 1. Validar TX over-the-air en PHY4 (receptor externo confirmando tramas emitidas en CH25).
 2. Validar TX over-the-air en BLE (receptor externo confirmando advertising en CH37/38/39).
-3. Ejecutar y validar en hardware el canario multi-PHY (`release_gate_multi_phy.py`) manteniendo gate BLE como obligatorio.
+3. Mantener `release_gate_multi_phy.py` como no-regresión obligatoria antes de cambios RF/TX.
 4. Ejecutar el workflow manual HW (`ble_release_gate_hw.yml`) al menos una vez en GitHub Actions para validar runner/artefactos.

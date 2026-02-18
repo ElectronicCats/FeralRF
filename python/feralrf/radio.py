@@ -108,6 +108,11 @@ class Radio:
                 timeout=1.0,
                 write_timeout=1.0,
             )
+            # Give USB CDC bridge time to settle after open to avoid losing
+            # the very first command frame on some host/bridge combinations.
+            time.sleep(1.0)
+            self._serial.reset_input_buffer()
+            self._serial.reset_output_buffer()
         except serial.SerialException as e:
             raise ConnectionError(f"Failed to connect to {self.port}: {e}")
 
@@ -215,15 +220,41 @@ class Radio:
 
     def init(self) -> DeviceInfo:
         """Initialize radio and get device info"""
-        self.connect()
-        self._send_command(Command.RADIO_INIT)
+        last_timeout: Optional[TimeoutError] = None
+        attempts = 3
 
-        # Wait for ACK/ERROR
-        cmd_id, seq, payload = self._read_response(expected={Response.ACK, Response.ERROR})
-        if cmd_id == Response.ERROR:
-            raise CommandError("Radio init failed", payload[0] if payload else 0)
-        if cmd_id != Response.ACK:
+        for attempt in range(attempts):
+            if attempt > 0:
+                # Re-open the serial link on retry to recover from bad bridge state.
+                self.disconnect()
+                time.sleep(0.2)
+            self.connect()
+
+            self._send_command(Command.RADIO_INIT)
+
+            try:
+                # First init exchange can be delayed right after serial open.
+                cmd_id, seq, payload = self._read_response(
+                    timeout=2.5, expected={Response.ACK, Response.ERROR}
+                )
+            except TimeoutError as exc:
+                last_timeout = exc
+                if self._serial is not None:
+                    self._serial.reset_input_buffer()
+                if attempt < attempts - 1:
+                    time.sleep(0.4 + (0.4 * attempt))
+                    continue
+                raise
+
+            if cmd_id == Response.ERROR:
+                raise CommandError("Radio init failed", payload[0] if payload else 0)
+            if cmd_id == Response.ACK:
+                break
             raise ProtocolError(f"Unexpected response to RADIO_INIT: 0x{cmd_id:02X}")
+        else:
+            if last_timeout is not None:
+                raise last_timeout
+            raise TimeoutError("Response timeout")
 
         # Get device info
         self._send_command(Command.GET_INFO)

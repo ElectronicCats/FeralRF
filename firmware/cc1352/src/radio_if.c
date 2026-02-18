@@ -97,6 +97,7 @@ static RadioIF_RfMode s_rf_mode = RADIO_IF_RF_MODE_NONE;
 static RF_Object s_rf_object;
 static RF_Handle s_rf_handle = NULL;
 static RF_CmdHandle s_rf_rx_cmd = RF_SCHEDULE_CMD_ERROR;
+static RF_Object s_rf_tx_object;
 
 /* RF event flags produced by callback, consumed in poll() */
 static volatile uint32_t s_rf_event_flags = 0u;
@@ -214,12 +215,13 @@ static void RadioIF_applyIeee154ChannelConfig(uint16_t channel) {
 static bool RadioIF_isBleAdvChannel(uint16_t channel);
 
 static bool RadioIF_transmitIeee154Raw(const uint8_t *payload, uint8_t payload_len) {
-    RF_Object tx_rf_object;
     RF_Params rf_params;
     RF_Handle tx_rf_handle = NULL;
     RF_EventMask result = 0u;
-    const RF_EventMask term_events =
-        RF_EventLastCmdDone | RF_EventCmdCancelled | RF_EventCmdAborted | RF_EventCmdStopped;
+    const RF_EventMask term_events = RF_EventLastCmdDone | RF_EventLastFGCmdDone | RF_EventTxDone |
+                                     RF_EventCmdCancelled | RF_EventCmdAborted | RF_EventCmdStopped;
+    const RF_EventMask success_events =
+        RF_EventLastCmdDone | RF_EventLastFGCmdDone | RF_EventTxDone;
 
     if (payload == NULL || payload_len == 0u || payload_len > IEEE_15_4_TX_MAX_PAYLOAD_LEN) {
         return false;
@@ -237,7 +239,7 @@ static bool RadioIF_transmitIeee154Raw(const uint8_t *payload, uint8_t payload_l
     Ieee154_0_cmdIeeeTx.pNextOp = 0;
 
     RF_Params_init(&rf_params);
-    tx_rf_handle = RF_open(&tx_rf_object, &Ieee154_0_mode,
+    tx_rf_handle = RF_open(&s_rf_tx_object, &Ieee154_0_mode,
                            (RF_RadioSetup *)&Ieee154_0_cmdRadioSetup, &rf_params);
     if (tx_rf_handle == NULL) {
         return false;
@@ -245,7 +247,7 @@ static bool RadioIF_transmitIeee154Raw(const uint8_t *payload, uint8_t payload_l
 
     result =
         RF_runCmd(tx_rf_handle, (RF_Op *)&Ieee154_0_cmdFs, RF_PriorityNormal, NULL, term_events);
-    if ((result & RF_EventLastCmdDone) == 0u) {
+    if ((result & success_events) == 0u) {
         RF_close(tx_rf_handle);
         return false;
     }
@@ -254,17 +256,18 @@ static bool RadioIF_transmitIeee154Raw(const uint8_t *payload, uint8_t payload_l
                        term_events);
     RF_close(tx_rf_handle);
 
-    return (result & RF_EventLastCmdDone) != 0u;
+    return (result & success_events) != 0u;
 }
 
 static bool RadioIF_transmitBleAdvRaw(const uint8_t *payload, uint8_t payload_len) {
-    RF_Object tx_rf_object;
     RF_Params rf_params;
     RF_Handle tx_rf_handle = NULL;
     RF_EventMask result = 0u;
     uint8_t ble_channel = RadioIF_convertToBleChannel((uint8_t)s_channel);
-    const RF_EventMask term_events =
-        RF_EventLastCmdDone | RF_EventCmdCancelled | RF_EventCmdAborted | RF_EventCmdStopped;
+    const RF_EventMask term_events = RF_EventLastCmdDone | RF_EventLastFGCmdDone | RF_EventTxDone |
+                                     RF_EventCmdCancelled | RF_EventCmdAborted | RF_EventCmdStopped;
+    const RF_EventMask success_events =
+        RF_EventLastCmdDone | RF_EventLastFGCmdDone | RF_EventTxDone;
 
     if (payload == NULL || payload_len == 0u || payload_len > BLE_ADV_TX_MAX_PAYLOAD_LEN) {
         return false;
@@ -300,14 +303,14 @@ static bool RadioIF_transmitBleAdvRaw(const uint8_t *payload, uint8_t payload_le
     Ble5_0_cmdBle5AdvNc.pParams->pWhiteList = NULL;
 
     RF_Params_init(&rf_params);
-    tx_rf_handle = RF_open(&tx_rf_object, &Ble5_0_mode, (RF_RadioSetup *)&Ble5_0_cmdBle5RadioSetup,
-                           &rf_params);
+    tx_rf_handle = RF_open(&s_rf_tx_object, &Ble5_0_mode,
+                           (RF_RadioSetup *)&Ble5_0_cmdBle5RadioSetup, &rf_params);
     if (tx_rf_handle == NULL) {
         return false;
     }
 
     result = RF_runCmd(tx_rf_handle, (RF_Op *)&Ble5_0_cmdFs, RF_PriorityNormal, NULL, term_events);
-    if ((result & RF_EventLastCmdDone) == 0u) {
+    if ((result & success_events) == 0u) {
         RF_close(tx_rf_handle);
         return false;
     }
@@ -316,7 +319,7 @@ static bool RadioIF_transmitBleAdvRaw(const uint8_t *payload, uint8_t payload_le
                        term_events);
     RF_close(tx_rf_handle);
 
-    return (result & RF_EventLastCmdDone) != 0u;
+    return (result & success_events) != 0u;
 }
 
 static bool RadioIF_isBleAdvChannel(uint16_t channel) {
@@ -994,7 +997,7 @@ void RadioIF_setPower(int8_t power_dbm) {
 bool RadioIF_transmitRaw(const uint8_t *data, uint8_t data_len, int8_t power_dbm) {
     s_tx_power_dbm = power_dbm;
 
-    if (s_rx_running) {
+    if (s_rx_running || (s_rf_handle != NULL)) {
         return false;
     }
 

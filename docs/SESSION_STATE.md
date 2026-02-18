@@ -55,6 +55,7 @@
 10. Gate BLE unificado (`release_gate_ble.py`, 60s, `ci_manual`) corrida 2/2: `OK` (smoke + canary en verde, `packets_total=5623`, `stats_total ok=5733 crc_err=778 drop=37 ovf=0`).
 11. TX smoke fase 1 (`smoke_tx_phase1.py`, PHY4 CH25): `OK` (`TX_RAW ACK`, `TX SMOKE PASS`).
 12. TX smoke BLE fase 1 (`smoke_tx_ble_phase1.py`, PHY0 CH37): `OK` (`TX_RAW ACK`, `TX BLE SMOKE PASS`).
+13. Gate multi-PHY creado (`release_gate_multi_phy.py`): orquesta BLE gate + PHY4 RX/TX smoke + BLE TX smoke en un comando.
 
 ## Riesgo abierto actual
 
@@ -91,6 +92,8 @@
    `PYTHONPATH=python python3 python/examples/smoke_tx_phase1.py -p /dev/ttyACM0 -b 921600 --phy 4 --channel 25 --power 0 --packet-hex 01020304 --tx-timeout 10`
 7. TX smoke BLE fase 1:
    `PYTHONPATH=python python3 python/examples/smoke_tx_ble_phase1.py -p /dev/ttyACM0 -b 921600 --channel 37 --power 0 --payload-hex 020106 --tx-timeout 10`
+8. Gate multi-PHY (comando único):
+   `PYTHONPATH=python python3 python/examples/release_gate_multi_phy.py -p /dev/ttyACM0 -b 921600 --ble-soak-duration 60 --ble-report-every 15 --ble-profile ci_manual --phy4-rx-channel 25 --phy4-rx-duration 10 --phy4-tx-channel 25 --phy4-tx-packet-hex 01020304 --ble-tx-channel 37 --ble-tx-payload-hex 020106`
 
 ## Archivos clave tocados en este bloque
 
@@ -116,5 +119,5 @@
 
 1. Validar TX over-the-air en PHY4 (receptor externo confirmando tramas emitidas en CH25).
 2. Validar TX over-the-air en BLE (receptor externo confirmando advertising en CH37/38/39).
-3. Definir canario multi-PHY (BLE RX + PHY4 RX/TX smoke + BLE TX smoke) manteniendo gate BLE como obligatorio.
+3. Ejecutar y validar en hardware el canario multi-PHY (`release_gate_multi_phy.py`) manteniendo gate BLE como obligatorio.
 4. Ejecutar el workflow manual HW (`ble_release_gate_hw.yml`) al menos una vez en GitHub Actions para validar runner/artefactos.

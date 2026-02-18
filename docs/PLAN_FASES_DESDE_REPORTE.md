@@ -207,10 +207,11 @@ Dejar base lista para Zigbee/Sub-1GHz, jamming y spectrum.
    6. pendiente: abrir Zigbee/Sub-1GHz/TX/jamming manteniendo gate BLE como no-regresion.
 6. Tarea 6 (arranque vertical TX):
    1. `OK`: `CMD_TX_RAW` integrado en firmware con ruta no bloqueante (ACK inmediato) y smoke host `python/examples/smoke_tx_phase1.py`.
-   2. pendiente: validación RF over-the-air para PHY4 (receptor externo confirma trama emitida).
+   2. `OK`: validación RF over-the-air para PHY4 completada (receptor externo confirma trama emitida; `ota_rx_probe.py`, marcador `a1b2c3d4`, `marker_hits=80`).
    3. `OK`: extensión `TX_RAW` a PHY BLE (PHY 0) con smoke equivalente (`python/examples/smoke_tx_ble_phase1.py`, `TX BLE SMOKE PASS`).
-   4. pendiente: validación RF over-the-air para BLE (receptor externo confirma advertising emitido en canal 37/38/39).
+   4. `OK`: validación RF over-the-air para BLE completada (receptor externo confirma advertising emitido; marcador `beef01`, `marker_hits=24`).
    5. `OK`: canario multi-PHY formalizado en comando único (`python/examples/release_gate_multi_phy.py`) para BLE gate + PHY4 RX/TX smoke + BLE TX smoke.
    6. `OK`: canario multi-PHY validado en hardware (`MULTI-PHY RELEASE GATE PASS`).
+   7. siguiente: robustecer estabilidad post-switch PHY/TX y abrir `TX_BURST`/`TX_CONTINUOUS` manteniendo el gate multi-PHY obligatorio.
 
 Este orden prioriza mantener baseline BLE estable mientras se abre Zigbee/Sub-1GHz/TX por incrementos.

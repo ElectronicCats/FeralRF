@@ -24,6 +24,9 @@
 14. `TX_RAW` fase 1 en PHY4: `OK` en smoke de control (`TX_RAW ACK`) con ejecucion diferida no bloqueante.
 15. `TX_RAW` fase 1 en BLE (PHY0 ADV): `OK` en smoke de control (`TX_RAW ACK`, `TX BLE SMOKE PASS`).
 16. `MULTI-PHY RELEASE GATE`: `OK` en hardware (BLE baseline + PHY4 RX + PHY4 TX + BLE TX en una sola corrida).
+17. Validacion over-the-air cerrada para TX:
+   1. PHY4: `OK` con `python/examples/ota_rx_probe.py` (marcador `a1b2c3d4`, `marker_hits=80`).
+   2. BLE: `OK` con `python/examples/ota_rx_probe.py` (marcador `beef01`, `marker_hits=24`, `crc_ok=2110/2110`).
 
 ## Estado por fase
 
@@ -123,7 +126,7 @@
 
 ## Siguiente paso inmediato recomendado
 
-1. Validar TX over-the-air en PHY4 (receptor externo confirmando tramas emitidas en CH25).
-2. Validar TX over-the-air en BLE (receptor externo confirmando advertising en CH37/38/39).
-3. Mantener `release_gate_multi_phy.py` como no-regresión obligatoria antes de cambios RF/TX.
+1. Mantener `python/examples/release_gate_multi_phy.py` como no-regresión obligatoria antes y después de cambios RF/TX.
+2. Endurecer recuperación post-switch de PHY/TX (timeouts/reintentos y limpieza de estado RF) para reducir bloqueos intermitentes.
+3. Abrir vertical TX siguiente: implementar `TX_BURST` y luego `TX_CONTINUOUS` con smoke + gate dedicados.
 4. Ejecutar el workflow manual HW (`ble_release_gate_hw.yml`) al menos una vez en GitHub Actions para validar runner/artefactos.

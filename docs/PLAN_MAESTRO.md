@@ -1,5 +1,7 @@
 # FeralRF - Plan Maestro Consolidado
 
+> Referencia: el plan activo detallado es `docs/NUEVO_PLAN_MAESTRO.md`. Este documento queda como consolidado/histórico de avance.
+
 Firmware universal para CatSniffer (CC1352P + RP2040) con capacidades de sniffing, TX/RX, jamming y spectrum analysis para BLE, Zigbee y Sub-1GHz.
 
 ## Estado Actual (2026-02-18)
@@ -20,7 +22,7 @@ Firmware universal para CatSniffer (CC1352P + RP2040) con capacidades de sniffin
 - Estabilidad validada: soak BLE de 30 minutos completado en hardware.
 - Canary de regresion validado en hardware (`CANARY PASS`, 60s, monotonia de stats y `RX_STOP ACK`).
 - `docs/protocol.md` publicado con contrato vigente host<->firmware.
-- Pendiente principal: validar TX over-the-air (PHY4 + BLE) manteniendo gate de no-regresion.
+- Pendiente principal: endurecer estabilidad post-switch PHY/TX y expandir TX (`BURST/CONTINUOUS/FRAME`) manteniendo gate de no-regresion.
 
 ---
 
@@ -283,7 +285,7 @@ feralrf/
 - [x] Ejemplo: `ble_sniffer.py`
 
 ### FASE 2: TX + Jamming Básico (Semanas 4-5)
-- [~] TX raw packets (fase 1 ACK path + gate multi-PHY en HW listos; falta validación RF over-the-air)
+- [x] TX raw packets (fase 1 ACK path + validación RF over-the-air en PHY4 y BLE completadas)
 - [ ] Jamming continuo (CW)
 - [ ] Power control (-20 a +20 dBm)
 - [ ] Regulatory warnings
@@ -294,7 +296,7 @@ feralrf/
 - [ ] Python visualization (matplotlib)
 
 ### FASE 4: Zigbee + Multi-PHY (Semanas 7-8)
-- [~] IEEE 802.15.4 RX/TX (RX real validado; TX_RAW ACK path + gate multi-PHY validados, falta validación TX over-the-air)
+- [x] IEEE 802.15.4 RX/TX (RX real validado; TX_RAW ACK path + validación TX over-the-air completadas)
 - [ ] PHY switching dinámico
 - [ ] Channel translation
 
@@ -411,7 +413,8 @@ def test_ble_sniffer_receive():
 3. Siguiente vertical:
    1. `OK` baseline BLE estable congelado.
    2. `OK` gate multi-PHY formalizado y validado en hardware (`python/examples/release_gate_multi_phy.py`, `MULTI-PHY RELEASE GATE PASS`).
-   3. siguiente: cerrar validación TX over-the-air (BLE/802.15.4) bajo gate BLE obligatorio.
+   3. `OK` validación TX over-the-air cerrada (PHY4: marcador `a1b2c3d4`, `marker_hits=80`; BLE: marcador `beef01`, `marker_hits=24`).
+   4. siguiente: endurecer recuperación/estabilidad tras cambios de PHY/TX y abrir `TX_BURST`/`TX_CONTINUOUS`/`TX_FRAME`.
 
 ---
 
@@ -422,9 +425,9 @@ def test_ble_sniffer_receive():
    2. Pipeline de RX robusto con métricas y parser LL BLE ampliado.
    3. Soak BLE prolongado y canario de regresión en hardware.
 2. En progreso:
-   1. IEEE 802.15.4 + BLE TX: `TX_RAW ACK` + gate multi-PHY validados; falta validación over-the-air y criterios finales de release RF.
+   1. IEEE 802.15.4 + BLE TX raw: `TX_RAW ACK` + validación over-the-air + gate multi-PHY ya validados; faltan `TX_BURST/TX_CONTINUOUS/TX_FRAME` y criterios finales de release RF extendido.
 3. No iniciado respecto al plan original amplio:
-   1. TX features (`TX_RAW/TX_BURST/TX_CONTINUOUS`) en firmware.
+   1. TX features pendientes (`TX_BURST/TX_CONTINUOUS/TX_FRAME`) en firmware.
    2. Jamming (`CW/reactivo/patrones`) y policy engine autónomo.
    3. Spectrum analyzer (scan + visualización).
    4. Sub-1GHz operativo.

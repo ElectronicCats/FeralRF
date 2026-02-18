@@ -1,8 +1,10 @@
 # FeralRF - Nuevo Plan Maestro (Estado Real)
 
-**Versión:** 2.0 | **Fecha:** 2026-02-17
+**Versión:** 2.1 | **Fecha:** 2026-02-18
 
 Firmware universal para CatSniffer (CC1352P + RP2040) con capacidades de sniffing, TX/RX, jamming y spectrum analysis para BLE, Zigbee y Sub-1GHz.
+
+> Este documento es el plan activo. `PLAN_MAESTRO.md` queda como referencia/histórico.
 
 ---
 
@@ -21,7 +23,7 @@ Firmware universal para CatSniffer (CC1352P + RP2040) con capacidades de sniffin
 
 ---
 
-## Estado Real del Proyecto (2026-02-17)
+## Estado Real del Proyecto (2026-02-18)
 
 ### Implementado y Funcional
 
@@ -35,14 +37,18 @@ Firmware universal para CatSniffer (CC1352P + RP2040) con capacidades de sniffin
 | BLE advertising hopping | ✅ | Canales 37/38/39 |
 | Python API | ✅ | Sync/async, comando básicos |
 | BLE Release Gate | ✅ | Soak test 30min, canary regression |
+| TX_RAW PHY4/BLE | ✅ | ACK path validado en smoke |
+| TX over-the-air PHY4 | ✅ | `ota_rx_probe.py` (`marker_hits=80`, marcador `a1b2c3d4`) |
+| TX over-the-air BLE | ✅ | `ota_rx_probe.py` (`marker_hits=24`, marcador `beef01`) |
+| Multi-PHY Release Gate | ✅ | `MULTI-PHY RELEASE GATE PASS` |
 
-### NO Implementado (a pesar de lo que dice el plan anterior)
+### Brecha vs plan anterior (estado actual)
 
 | Componente | Estado Plan Anterior | Estado Real |
 |------------|---------------------|-------------|
-| TX_RAW | "Completado" | ❌ No implementado |
+| TX_RAW | "Completado" | ✅ Implementado + validado OTA |
 | TX_FRAME | No definido | ❌ No existe |
-| TX_CONTINUOUS/BURST | "Completado" | ❌ No implementado |
+| TX_CONTINUOUS/BURST | "Completado" | ❌ No implementado (siguiente vertical) |
 | Jamming CW | "Completado" | ❌ No implementado |
 | Jamming Reactivo | "Completado" | ❌ No implementado |
 | Spectrum Analyzer | "Completado MVP" | ❌ No implementado |
@@ -133,16 +139,18 @@ Frame format (pre-COBS):
 // ============= RX Operations (IMPLEMENTADOS) =============
 #define CMD_RX_START            0x10  // ✅
 #define CMD_RX_STOP             0x11  // ✅
+
+// ============= TX Operations (IMPLEMENTADOS) =============
+#define CMD_TX_RAW              0x20  // ✅
 ```
 
 ### Comandos Pendientes de Implementación
 
 ```c
 // ============= TX Operations (PENDIENTES) =============
-#define CMD_TX_RAW              0x20  // ❌ CRÍTICO - TX bytes crudos
-#define CMD_TX_CONTINUOUS       0x21  // ❌ TX continuo
-#define CMD_TX_BURST            0x22  // ❌ Burst de N paquetes
-#define CMD_TX_FRAME            0x23  // ❌ NUEVO - TX con framing PHY
+#define CMD_TX_CONTINUOUS       0x21  // ❌ TX continuo (prioridad alta)
+#define CMD_TX_BURST            0x22  // ❌ Burst de N paquetes (prioridad alta)
+#define CMD_TX_FRAME            0x23  // ❌ TX con framing PHY (prioridad alta)
 #define CMD_TX_STOP             0x24  // ❌ Detener TX continuo/burst
 
 // ============= Jamming (PENDIENTES) =============
@@ -392,12 +400,13 @@ Replay de paquete capturado.
 - [x] Barrido de canales 11-26
 
 ### FASE 3: TX Vertical 🔄 EN PROGRESO (Nueva prioridad)
-- [ ] CMD_TX_RAW implementado
-- [ ] CMD_TX_FRAME implementado
-- [ ] Smoke test TX BLE
-- [ ] Smoke test TX 802.15.4
-- [ ] CMD_TX_CONTINUOUS
+- [x] CMD_TX_RAW implementado
+- [x] Smoke test TX BLE (`TX BLE SMOKE PASS`)
+- [x] Smoke test TX 802.15.4 (`TX SMOKE PASS`)
+- [x] Validación over-the-air TX BLE + 802.15.4 (`ota_rx_probe.py`)
 - [ ] CMD_TX_BURST
+- [ ] CMD_TX_CONTINUOUS
+- [ ] CMD_TX_FRAME
 - [ ] CMD_TX_STOP
 
 ### FASE 4: BLE Attacks ⏳ PENDIENTE
@@ -478,20 +487,22 @@ Replay de paquete capturado.
 
 ## Próximos Pasos Inmediatos
 
-### Prioridad 1: TX_RAW (Semana 1-2)
-1. Implementar `CMD_TX_RAW` en `firmware/cc1352/src/radio_if.c`
-2. Añadir comando a `command_processor.c`
-3. Actualizar Python API en `feralrf/radio.py`
-4. Crear smoke test `python/examples/smoke_tx_raw.py`
-5. Validar con segundo dispositivo o SDR
+### Prioridad 1: Endurecimiento post-switch PHY/TX
+1. Robustecer recuperación tras cambios BLE <-> PHY4 (reintentos + limpieza de estado RF).
+2. Mantener `release_gate_multi_phy.py` como no-regresión obligatoria.
+3. Verificar corrida estable consecutiva sin bloqueo (smoke BLE -> TX PHY4 -> smoke BLE + gate multi-PHY).
 
-### Prioridad 2: TX_FRAME (Semana 2-3)
-1. Implementar framing automático según PHY
-2. Validar CRC correcto
-3. Smoke test BLE advertising TX
-4. Smoke test 802.15.4 TX
+### Prioridad 2: TX_BURST y TX_CONTINUOUS
+1. Implementar `CMD_TX_BURST` + smoke dedicado.
+2. Implementar `CMD_TX_CONTINUOUS` + `CMD_TX_STOP` seguro.
+3. Integrar ambos al gate multi-PHY.
 
-### Prioridad 3: BLE Deauth (Semana 3-4)
+### Prioridad 3: TX_FRAME (framing por PHY)
+1. Definir contrato final de framing por PHY (BLE/802.15.4).
+2. Implementar `CMD_TX_FRAME` con validación de payload por PHY.
+3. Añadir smoke BLE + 802.15.4 para `TX_FRAME` y validar OTA.
+
+### Prioridad 4: BLE Deauth (Semana siguiente)
 1. Implementar `CMD_BLE_DEAUTH`
 2. Tracking de conexiones en firmware
 3. Ejemplo Python de uso
@@ -513,5 +524,5 @@ Replay de paquete capturado.
 
 | Fecha | Versión | Cambios |
 |-------|---------|---------|
-| 2026-02-17 | 2.0 | Reescritura completa con estado real, nuevos comandos TX/ataque |
-| 2026-02-18 | 1.x | Versión anterior (marcaba fases incompletas como completadas) |
+| 2026-02-18 | 2.1 | Sincronización completa con estado real: `TX_RAW` implementado/validado OTA, gate multi-PHY en verde, roadmap actualizado (`TX_BURST`/`TX_CONTINUOUS`/`TX_FRAME`). |
+| 2026-02-17 | 2.0 | Reescritura inicial del nuevo plan maestro. |

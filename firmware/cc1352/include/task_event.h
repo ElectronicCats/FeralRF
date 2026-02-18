@@ -20,6 +20,7 @@
 #define TASK_EVENT_DATA_RX_ACTIVE 0x00000080u
 #define TASK_EVENT_CONTROL_TX_RAW 0x00000100u
 #define TASK_EVENT_CONTROL_TX_BURST 0x00000200u
+#define TASK_EVENT_CONTROL_TX_CONTINUOUS 0x00000400u
 
 void TaskEvent_init(void);
 void TaskEvent_set(uint32_t event_mask);

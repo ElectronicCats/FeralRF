@@ -488,6 +488,40 @@ class Radio:
         if cmd_id != Response.ACK:
             raise ProtocolError(f"Unexpected response to TX_BURST: 0x{cmd_id:02X}")
 
+    def transmit_continuous(
+        self,
+        packet: bytes,
+        interval_us: int = 0,
+        timeout: float = 5.0,
+    ) -> None:
+        """Start continuous TX in firmware until TX_STOP."""
+        if len(packet) == 0:
+            raise ValueError("packet must not be empty")
+        if interval_us < 0 or interval_us > 0xFFFFFFFF:
+            raise ValueError("interval_us must be in range 0..4294967295")
+
+        self._send_command(Command.TX_CONTINUOUS, CommandBuilder.tx_continuous(packet, interval_us))
+        cmd_id, seq, payload = self._read_response(
+            timeout=timeout, expected={Response.ACK, Response.ERROR}
+        )
+
+        if cmd_id == Response.ERROR:
+            raise CommandError("Transmit continuous failed", payload[0] if payload else 0)
+        if cmd_id != Response.ACK:
+            raise ProtocolError(f"Unexpected response to TX_CONTINUOUS: 0x{cmd_id:02X}")
+
+    def stop_transmit(self, timeout: float = 5.0) -> None:
+        """Stop active TX stream (continuous/burst when supported by firmware)."""
+        self._send_command(Command.TX_STOP, CommandBuilder.tx_stop())
+        cmd_id, seq, payload = self._read_response(
+            timeout=timeout, expected={Response.ACK, Response.ERROR}
+        )
+
+        if cmd_id == Response.ERROR:
+            raise CommandError("TX_STOP failed", payload[0] if payload else 0)
+        if cmd_id != Response.ACK:
+            raise ProtocolError(f"Unexpected response to TX_STOP: 0x{cmd_id:02X}")
+
     def __enter__(self):
         self.connect()
         return self

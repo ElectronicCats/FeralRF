@@ -25,7 +25,9 @@
 #define CMD_RX_START 0x10u
 #define CMD_RX_STOP 0x11u
 #define CMD_TX_RAW 0x20u
+#define CMD_TX_CONTINUOUS 0x21u
 #define CMD_TX_BURST 0x22u
+#define CMD_TX_STOP 0x24u
 
 /* Responses (match python/feralrf/enums.py) */
 #define RSP_ACK 0x80u
@@ -158,6 +160,10 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
             send_error(seq, ERR_INVALID_PAYLOAD);
             return;
         }
+        if (ControlTask_isTxBusy()) {
+            send_error(seq, ERR_INVALID_STATE);
+            return;
+        }
         ControlTask_onRxStart();
         send_ack(seq);
         return;
@@ -216,6 +222,39 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
                 return;
             }
         }
+        send_ack(seq);
+        return;
+
+    case CMD_TX_CONTINUOUS:
+        if (payload_len < 6u) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            return;
+        }
+        {
+            uint8_t tx_len = payload[0];
+            uint16_t expected_payload_len = (uint16_t)tx_len + 5u;
+            uint32_t interval_us = 0u;
+
+            if (tx_len == 0u || expected_payload_len != payload_len) {
+                send_error(seq, ERR_INVALID_PAYLOAD);
+                return;
+            }
+
+            interval_us = read_u32_le(&payload[1u + tx_len]);
+            if (!ControlTask_onTxContinuous(&payload[1], tx_len, interval_us)) {
+                send_error(seq, ERR_INVALID_STATE);
+                return;
+            }
+        }
+        send_ack(seq);
+        return;
+
+    case CMD_TX_STOP:
+        if (payload_len != 0) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            return;
+        }
+        ControlTask_onTxStop();
         send_ack(seq);
         return;
 

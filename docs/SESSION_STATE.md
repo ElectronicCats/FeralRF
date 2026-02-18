@@ -32,6 +32,7 @@
 17. Validacion over-the-air cerrada para TX:
    1. PHY4: `OK` con `python/examples/ota_rx_probe.py` (marcador `a1b2c3d4`, `marker_hits=80`).
    2. BLE: `OK` con `python/examples/ota_rx_probe.py` (marcador `beef01`, `marker_hits=24`, `crc_ok=2110/2110`).
+18. `CMD_TX_BURST` fase 1: `OK` en hardware (`TX_BURST ACK`, `TX BURST SMOKE PASS`) e integrado al gate multi-PHY (`PHY4 TX burst smoke PASS`).
 
 ## Estado por fase
 
@@ -70,6 +71,9 @@
    2. PHY4 RX smoke CH25: `PASS` (`packets=45`, `RX_STOP ACK`).
    3. PHY4 TX smoke CH25: `PASS` (`TX_RAW ACK`).
    4. BLE TX smoke CH37: `PASS` (`TX_RAW ACK`).
+15. Gate multi-PHY actualizado con TX burst (`MULTI-PHY RELEASE GATE PASS`, 2026-02-18):
+   1. `PHY4 TX burst smoke`: `PASS` (`TX_BURST ACK`, `count=5`, `interval_us=5000`).
+   2. Corrida completa en verde con baseline BLE + PHY4 RX + PHY4 TX + PHY4 TX burst + BLE TX.
 
 ## Riesgo abierto actual
 
@@ -106,7 +110,9 @@
    `PYTHONPATH=python python3 python/examples/smoke_tx_phase1.py -p /dev/ttyACM0 -b 921600 --phy 4 --channel 25 --power 0 --packet-hex 01020304 --tx-timeout 10`
 7. TX smoke BLE fase 1:
    `PYTHONPATH=python python3 python/examples/smoke_tx_ble_phase1.py -p /dev/ttyACM0 -b 921600 --channel 37 --power 0 --payload-hex 020106 --tx-timeout 10`
-8. Gate multi-PHY (comando único):
+8. TX burst smoke fase 1:
+   `PYTHONPATH=python python3 python/examples/smoke_tx_burst_phase1.py -p /dev/ttyACM0 -b 921600 --phy 4 --channel 25 --power 0 --packet-hex 01020304 --count 5 --interval-us 5000 --tx-timeout 10`
+9. Gate multi-PHY (comando único):
    `PYTHONPATH=python python3 python/examples/release_gate_multi_phy.py -p /dev/ttyACM0 -b 921600 --ble-soak-duration 60 --ble-report-every 15 --ble-profile ci_manual --phy4-rx-channel 25 --phy4-rx-duration 10 --phy4-tx-channel 25 --phy4-tx-packet-hex 01020304 --ble-tx-channel 37 --ble-tx-payload-hex 020106`
 
 ## Archivos clave tocados en este bloque
@@ -133,5 +139,5 @@
 
 1. Mantener `python/examples/release_gate_multi_phy.py` como no-regresión obligatoria antes y después de cambios RF/TX.
 2. Endurecer recuperación post-switch de PHY/TX (timeouts/reintentos y limpieza de estado RF) para reducir bloqueos intermitentes.
-3. Abrir vertical TX siguiente: implementar `TX_BURST` y luego `TX_CONTINUOUS` con smoke + gate dedicados.
+3. Abrir vertical TX siguiente: implementar `TX_CONTINUOUS` (con `TX_STOP`) y luego `TX_FRAME`, con smoke + gate dedicados.
 4. Ejecutar el workflow manual HW (`ble_release_gate_hw.yml`) al menos una vez en GitHub Actions para validar runner/artefactos.

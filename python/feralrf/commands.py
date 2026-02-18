@@ -65,6 +65,17 @@ class CommandBuilder:
         )
 
     @staticmethod
+    def tx_continuous(packet: bytes, interval_us: int) -> bytes:
+        """Payload for TX_CONTINUOUS"""
+        length = len(packet)
+        return bytes([length & 0xFF]) + packet + struct.pack("<I", interval_us & 0xFFFFFFFF)
+
+    @staticmethod
+    def tx_stop() -> bytes:
+        """No payload for TX_STOP"""
+        return b""
+
+    @staticmethod
     def jam_continuous(channel: int, power_dbm: int = 0) -> bytes:
         """Payload for JAM_CONTINUOUS"""
         return bytes([channel & 0xFF, power_dbm & 0xFF])

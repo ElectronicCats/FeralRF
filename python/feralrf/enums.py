@@ -39,6 +39,7 @@ class Command(IntEnum):
     TX_RAW = 0x20
     TX_CONTINUOUS = 0x21
     TX_BURST = 0x22
+    TX_STOP = 0x24
 
     # Jamming
     JAM_CONTINUOUS = 0x30

@@ -16,9 +16,14 @@ void ControlTask_onSetPower(int8_t power_dbm);
 bool ControlTask_onTxRaw(const uint8_t *payload, uint8_t payload_len, int8_t power_dbm);
 bool ControlTask_onTxBurst(const uint8_t *payload, uint8_t payload_len, uint16_t count,
                            uint32_t interval_us);
+bool ControlTask_onTxContinuous(const uint8_t *payload, uint8_t payload_len, uint32_t interval_us);
+void ControlTask_onTxStop(void);
 void ControlTask_processTxRaw(void);
 void ControlTask_processTxBurst(void);
+void ControlTask_processTxContinuous(void);
 bool ControlTask_isTxBurstPending(void);
+bool ControlTask_isTxContinuousPending(void);
+bool ControlTask_isTxBusy(void);
 void ControlTask_onRxStart(void);
 void ControlTask_onRxStop(void);
 bool ControlTask_isRxEnabled(void);

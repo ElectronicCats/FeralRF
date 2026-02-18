@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-FeralRF - Multi-PHY release gate (BLE baseline + PHY4 RX/TX + BLE TX)
+FeralRF - Multi-PHY release gate (BLE baseline + PHY4 RX/TX/burst/continuous + BLE TX)
 """
 
 import argparse
@@ -73,6 +73,12 @@ def main() -> int:
         type=int,
         default=2,
     )
+    parser.add_argument(
+        "--phy4-tx-cont-attempts",
+        help="Retries for PHY4 TX continuous smoke",
+        type=int,
+        default=2,
+    )
     parser.add_argument("--ble-tx-attempts", help="Retries for BLE TX smoke", type=int, default=2)
     parser.add_argument(
         "--ble-tx-recovery-smoke-attempts",
@@ -102,6 +108,8 @@ def main() -> int:
     parser.add_argument("--phy4-tx-timeout", type=float, default=10.0)
     parser.add_argument("--phy4-tx-burst-count", type=int, default=5)
     parser.add_argument("--phy4-tx-burst-interval-us", type=int, default=5000)
+    parser.add_argument("--phy4-tx-cont-interval-us", type=int, default=5000)
+    parser.add_argument("--phy4-tx-cont-run-seconds", type=float, default=1.0)
 
     parser.add_argument("--ble-tx-channel", type=int, default=37)
     parser.add_argument("--ble-tx-power", type=int, default=0)
@@ -120,6 +128,7 @@ def main() -> int:
     phy4_rx_script = examples_dir / "smoke_phy4_ieee154.py"
     phy4_tx_script = examples_dir / "smoke_tx_phase1.py"
     phy4_tx_burst_script = examples_dir / "smoke_tx_burst_phase1.py"
+    phy4_tx_cont_script = examples_dir / "smoke_tx_continuous_phase1.py"
     ble_tx_script = examples_dir / "smoke_tx_ble_phase1.py"
 
     print("FeralRF Multi-PHY Release Gate")
@@ -129,6 +138,7 @@ def main() -> int:
         f"ble_attempts={args.ble_attempts} phy4_rx_attempts={args.phy4_rx_attempts} "
         f"phy4_tx_attempts={args.phy4_tx_attempts} "
         f"phy4_tx_burst_attempts={args.phy4_tx_burst_attempts} "
+        f"phy4_tx_cont_attempts={args.phy4_tx_cont_attempts} "
         f"ble_tx_attempts={args.ble_tx_attempts} "
         f"ble_tx_recovery_smoke_attempts={args.ble_tx_recovery_smoke_attempts}"
     )
@@ -138,6 +148,7 @@ def main() -> int:
         f"phy4_rx(ch={args.phy4_rx_channel},dur={args.phy4_rx_duration}s) "
         f"phy4_tx(ch={args.phy4_tx_channel},power={args.phy4_tx_power}) "
         f"phy4_tx_burst(count={args.phy4_tx_burst_count},interval_us={args.phy4_tx_burst_interval_us}) "
+        f"phy4_tx_cont(interval_us={args.phy4_tx_cont_interval_us},run={args.phy4_tx_cont_run_seconds}s) "
         f"ble_tx(ch={args.ble_tx_channel},power={args.ble_tx_power})"
     )
     print()
@@ -257,6 +268,40 @@ def main() -> int:
         fail(f"PHY4 TX burst smoke failed (exit={rc})")
         return 35
     ok("PHY4 TX burst smoke PASS")
+    print()
+
+    step("PHY4 TX continuous smoke")
+    phy4_tx_cont_cmd = [
+        sys.executable,
+        str(phy4_tx_cont_script),
+        "--baudrate",
+        str(args.baudrate),
+        "--phy",
+        "4",
+        "--channel",
+        str(args.phy4_tx_channel),
+        "--power",
+        str(args.phy4_tx_power),
+        "--packet-hex",
+        args.phy4_tx_packet_hex,
+        "--interval-us",
+        str(args.phy4_tx_cont_interval_us),
+        "--run-seconds",
+        str(args.phy4_tx_cont_run_seconds),
+        "--tx-timeout",
+        str(args.phy4_tx_timeout),
+        *maybe_port_args(args.port),
+    ]
+    rc = run_with_retries(
+        "PHY4 TX continuous smoke",
+        phy4_tx_cont_cmd,
+        args.phy4_tx_cont_attempts,
+        args.retry_delay,
+    )
+    if rc != 0:
+        fail(f"PHY4 TX continuous smoke failed (exit={rc})")
+        return 37
+    ok("PHY4 TX continuous smoke PASS")
     print()
 
     step("BLE TX smoke")

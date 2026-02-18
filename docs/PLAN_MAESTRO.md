@@ -417,7 +417,8 @@ def test_ble_sniffer_receive():
    4. `OK` `TX_BURST` integrado y validado en hardware (smoke dedicado + paso burst en gate multi-PHY).
    5. `OK` `TX_CONTINUOUS` + `TX_STOP` integrados y validados en hardware (smoke dedicado + paso continuous en gate multi-PHY).
    6. `OK` `TX_FRAME` integrado y validado en hardware (smoke dedicado PHY4/BLE + paso frame en gate multi-PHY).
-   7. siguiente: endurecer recuperación/estabilidad tras cambios de PHY/TX y cerrar evidencia OTA dedicada para `TX_FRAME`.
+   7. `OK` evidencia OTA dedicada de `TX_FRAME` cerrada en hardware (PHY4 CH25 `marker_hits=40`, BLE CH37 `marker_hits=14`).
+   8. siguiente: endurecer recuperación/estabilidad tras cambios de PHY/TX y formalizar contrato final de `TX_FRAME`.
 
 ---
 
@@ -428,9 +429,9 @@ def test_ble_sniffer_receive():
    2. Pipeline de RX robusto con métricas y parser LL BLE ampliado.
    3. Soak BLE prolongado y canario de regresión en hardware.
 2. En progreso:
-   1. IEEE 802.15.4 + BLE TX raw/frame/burst/continuous: `TX_RAW ACK` + `TX_FRAME ACK` + `TX_BURST ACK` + `TX_CONTINUOUS ACK` + `TX_STOP ACK` + gate multi-PHY validados; pendiente cerrar criterios finales de release RF extendido (evidencia OTA dedicada para `TX_FRAME` + hardening).
+   1. IEEE 802.15.4 + BLE TX raw/frame/burst/continuous: `TX_RAW ACK` + `TX_FRAME ACK` + `TX_BURST ACK` + `TX_CONTINUOUS ACK` + `TX_STOP ACK` + gate multi-PHY + evidencia OTA dedicada validados; pendiente hardening y criterios finales de release RF extendido.
 3. No iniciado respecto al plan original amplio:
-   1. TX features pendientes de alto nivel: cerrar contrato final/evidencia OTA de `TX_FRAME` y capas de ataque superiores.
+   1. TX features pendientes de alto nivel: formalizar contrato final de `TX_FRAME` y capas de ataque superiores.
    2. Jamming (`CW/reactivo/patrones`) y policy engine autónomo.
    3. Spectrum analyzer (scan + visualización).
    4. Sub-1GHz operativo.

@@ -35,6 +35,9 @@
 18. `CMD_TX_BURST` fase 1: `OK` en hardware (`TX_BURST ACK`, `TX BURST SMOKE PASS`) e integrado al gate multi-PHY (`PHY4 TX burst smoke PASS`).
 19. `CMD_TX_CONTINUOUS` + `CMD_TX_STOP` fase 1: `OK` en hardware (`TX_CONTINUOUS ACK`, `TX_STOP ACK`, `TX CONTINUOUS SMOKE PASS`) e integrado al gate multi-PHY (`PHY4 TX continuous smoke PASS`).
 20. `CMD_TX_FRAME` fase 1: `OK` en hardware (`TX_FRAME ACK`, `TX FRAME SMOKE PASS`) para PHY4 y BLE, e integrado al gate multi-PHY (`PHY4 TX frame smoke PASS`, `BLE TX frame smoke PASS`).
+21. Evidencia OTA dedicada de `TX_FRAME`: `OK` en hardware con `ota_tx_frame.py` + `ota_rx_probe.py`:
+   1. PHY4 CH25 marcador `a1b2c3d4`: `marker_hits=40`, `crc_ok=86/86`.
+   2. BLE CH37 marcador `beef01`: `marker_hits=14`, `crc_ok=1427/1427`.
 
 ## Estado por fase
 
@@ -83,6 +86,9 @@
    1. `PHY4 TX frame smoke`: `PASS` (`TX_FRAME ACK`).
    2. `BLE TX frame smoke`: `PASS` (`TX_FRAME ACK`).
    3. Corrida completa en verde con baseline BLE + PHY4 RX + PHY4 TX + PHY4 TX frame + PHY4 TX burst + PHY4 TX continuous + BLE TX frame + BLE TX raw.
+18. OTA dedicada de `TX_FRAME` validada (2026-02-18):
+   1. PHY4 CH25: `packets_total=86`, `crc_ok=86`, `marker_hits=40`, `RX_STOP ACK`.
+   2. BLE CH37: `packets_total=1427`, `crc_ok=1427`, `marker_hits=14`, `RX_STOP ACK`.
 
 ## Riesgo abierto actual
 
@@ -127,6 +133,10 @@
    `PYTHONPATH=python python3 python/examples/smoke_tx_frame_phase1.py -p /dev/ttyACM0 -b 921600 --phy 4 --channel 25 --power 0 --frame-hex 01020304 --tx-timeout 10`
 11. Gate multi-PHY (comando único):
    `PYTHONPATH=python python3 python/examples/release_gate_multi_phy.py -p /dev/ttyACM0 -b 921600 --ble-soak-duration 60 --ble-report-every 15 --ble-profile ci_manual --phy4-rx-channel 25 --phy4-rx-duration 10 --phy4-tx-channel 25 --phy4-tx-packet-hex 01020304 --phy4-tx-burst-count 5 --phy4-tx-burst-interval-us 5000 --phy4-tx-cont-interval-us 5000 --phy4-tx-cont-run-seconds 1.0 --ble-tx-channel 37 --ble-tx-payload-hex 020106`
+12. OTA TX frame helper (transmisor):
+   `PYTHONPATH=python python3 python/examples/ota_tx_frame.py -p /dev/ttyACM0 -b 921600 --phy 4 --channel 25 --power 0 --payload-hex a1b2c3d4 --count 40 --interval-us 25000`
+13. OTA RX probe helper (receptor):
+   `PYTHONPATH=python python3 python/examples/ota_rx_probe.py -p /dev/ttyACM1 -b 921600 --phy 4 --channel 25 --duration 12 --marker-hex a1b2c3d4 --min-hits 1`
 
 ## Archivos clave tocados en este bloque
 
@@ -152,5 +162,5 @@
 
 1. Mantener `python/examples/release_gate_multi_phy.py` como no-regresión obligatoria antes y después de cambios RF/TX.
 2. Endurecer recuperación post-switch de PHY/TX (timeouts/reintentos y limpieza de estado RF) para reducir bloqueos intermitentes.
-3. Cerrar evidencia OTA dedicada para `TX_FRAME` (PHY4 + BLE) y consolidar contrato final por PHY.
+3. Consolidar contrato final de `TX_FRAME` por PHY en documentación/protocolo y mantener validación OTA como criterio de release.
 4. Ejecutar el workflow manual HW (`ble_release_gate_hw.yml`) al menos una vez en GitHub Actions para validar runner/artefactos.

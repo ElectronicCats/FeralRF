@@ -3,7 +3,7 @@
 FeralRF - OTA RX probe helper
 
 Use this script on the receiver radio while another radio transmits with
-`ota_tx_burst.py`.
+`ota_tx_burst.py` or `ota_tx_frame.py`.
 """
 
 import argparse

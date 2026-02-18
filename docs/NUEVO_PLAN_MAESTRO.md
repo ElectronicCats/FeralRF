@@ -1,6 +1,6 @@
 # FeralRF - Nuevo Plan Maestro (Estado Real)
 
-**Versión:** 2.4 | **Fecha:** 2026-02-18
+**Versión:** 2.5 | **Fecha:** 2026-02-18
 
 Firmware universal para CatSniffer (CC1352P + RP2040) con capacidades de sniffing, TX/RX, jamming y spectrum analysis para BLE, Zigbee y Sub-1GHz.
 
@@ -38,8 +38,8 @@ Firmware universal para CatSniffer (CC1352P + RP2040) con capacidades de sniffin
 | Python API | ✅ | Sync/async, comando básicos |
 | BLE Release Gate | ✅ | Soak test 30min, canary regression |
 | TX_RAW PHY4/BLE | ✅ | ACK path validado en smoke |
-| TX over-the-air PHY4 | ✅ | `ota_rx_probe.py` (`marker_hits=80`, marcador `a1b2c3d4`) |
-| TX over-the-air BLE | ✅ | `ota_rx_probe.py` (`marker_hits=24`, marcador `beef01`) |
+| TX over-the-air PHY4 | ✅ | `ota_rx_probe.py` (`marker_hits=80` TX_RAW, `marker_hits=40` TX_FRAME, marcador `a1b2c3d4`) |
+| TX over-the-air BLE | ✅ | `ota_rx_probe.py` (`marker_hits=24` TX_RAW, `marker_hits=14` TX_FRAME, marcador `beef01`) |
 | Multi-PHY Release Gate | ✅ | `MULTI-PHY RELEASE GATE PASS` |
 
 ### Brecha vs plan anterior (estado actual)
@@ -406,6 +406,7 @@ Replay de paquete capturado.
 - [x] CMD_TX_BURST implementado (`TX_BURST ACK`) + smoke + integración al gate multi-PHY
 - [x] CMD_TX_CONTINUOUS + CMD_TX_STOP implementados (`TX_CONTINUOUS ACK` + `TX_STOP ACK`) + smoke + integración al gate multi-PHY
 - [x] CMD_TX_FRAME implementado (`TX_FRAME ACK`) + smoke BLE/PHY4 + integración al gate multi-PHY
+- [x] Evidencia OTA dedicada de `TX_FRAME` cerrada (PHY4: `marker_hits=40`; BLE: `marker_hits=14`)
 
 ### FASE 4: BLE Attacks ⏳ PENDIENTE
 - [ ] CMD_BLE_DEAUTH
@@ -490,10 +491,10 @@ Replay de paquete capturado.
 2. Mantener `release_gate_multi_phy.py` como no-regresión obligatoria.
 3. Verificar corrida estable consecutiva sin bloqueo (smoke BLE -> TX PHY4 -> smoke BLE + gate multi-PHY).
 
-### Prioridad 2: Cierre TX_FRAME (contrato + OTA)
-1. Definir contrato final de `TX_FRAME` por PHY (BLE/802.15.4) en documentación.
-2. Validar `TX_FRAME` over-the-air con probe dedicado (PHY4 + BLE) y criterios de pase.
-3. Dejar canario/gate con evidencia reproducible de TX_FRAME más allá de ACK path.
+### Prioridad 2: Cierre contractual de TX_FRAME
+1. Definir contrato final de `TX_FRAME` por PHY (BLE/802.15.4) en documentación/protocolo.
+2. Documentar criterios de pase OTA ya validados (`marker_hits`/`crc_ok` por PHY).
+3. Mantener evidencia reproducible con `ota_tx_frame.py` + `ota_rx_probe.py`.
 
 ### Prioridad 3: BLE Deauth (Semana siguiente)
 1. Implementar `CMD_BLE_DEAUTH`
@@ -517,6 +518,7 @@ Replay de paquete capturado.
 
 | Fecha | Versión | Cambios |
 |-------|---------|---------|
+| 2026-02-18 | 2.5 | Evidencia OTA dedicada de `TX_FRAME` cerrada en hardware: PHY4 CH25 (`marker_hits=40`, `crc_ok=86/86`) y BLE CH37 (`marker_hits=14`, `crc_ok=1427/1427`) con `ota_tx_frame.py` + `ota_rx_probe.py`. |
 | 2026-02-18 | 2.4 | `CMD_TX_FRAME` implementado y validado en hardware (`TX_FRAME ACK`) con smoke dedicado BLE/PHY4 e integración al `release_gate_multi_phy.py` (`MULTI-PHY RELEASE GATE PASS`). |
 | 2026-02-18 | 2.3 | `CMD_TX_CONTINUOUS` + `CMD_TX_STOP` implementados y validados en hardware (`TX_CONTINUOUS ACK`, `TX_STOP ACK`, smoke dedicado y `MULTI-PHY RELEASE GATE PASS` con paso continuous). Próximo: `TX_FRAME`. |
 | 2026-02-18 | 2.2 | `CMD_TX_BURST` implementado y validado en hardware (`TX_BURST ACK`, smoke dedicado y `MULTI-PHY RELEASE GATE PASS` con paso burst). Próximo: `TX_CONTINUOUS` + `TX_FRAME`. |

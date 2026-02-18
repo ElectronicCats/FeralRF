@@ -45,6 +45,8 @@
     (BLE_APPENDED_CRC_LEN + BLE_APPENDED_RSSI_LEN + BLE_APPENDED_STATUS_LEN + \
      BLE_APPENDED_TIMESTAMP_LEN)
 #define BLE_STATUS0_CHANNEL_MASK 0x3Fu
+#define BLE_ADV_TX_MAX_PAYLOAD_LEN 31u
+#define BLE_ADV_TX_DEVICE_ADDR_LEN 6u
 #define IEEE_15_4_CHANNEL_MIN 11u
 #define IEEE_15_4_CHANNEL_MAX 26u
 #define IEEE_15_4_DEFAULT_CHANNEL IEEE_15_4_CHANNEL_MIN
@@ -112,8 +114,14 @@ static uint32_t s_ble_hop_cycles_per_step = 0u;
 static const uint8_t s_ble_adv_hop_channels[3] = {37u, 38u, 39u};
 #if defined(__GNUC__)
 static uint8_t s_ieee154_tx_buffer[IEEE_15_4_TX_MAX_PAYLOAD_LEN] __attribute__((aligned(4)));
+static uint8_t s_ble_adv_tx_payload[BLE_ADV_TX_MAX_PAYLOAD_LEN] __attribute__((aligned(4)));
+static uint8_t s_ble_adv_tx_device_addr[BLE_ADV_TX_DEVICE_ADDR_LEN]
+    __attribute__((aligned(4))) = {0x01u, 0xEEu, 0xDDu, 0xCCu, 0xBBu, 0xAAu};
 #else
 static uint8_t s_ieee154_tx_buffer[IEEE_15_4_TX_MAX_PAYLOAD_LEN];
+static uint8_t s_ble_adv_tx_payload[BLE_ADV_TX_MAX_PAYLOAD_LEN];
+static uint8_t s_ble_adv_tx_device_addr[BLE_ADV_TX_DEVICE_ADDR_LEN] = {0x01u, 0xEEu, 0xDDu,
+                                                                       0xCCu, 0xBBu, 0xAAu};
 #endif
 
 #if defined(__GNUC__)
@@ -203,6 +211,8 @@ static void RadioIF_applyIeee154ChannelConfig(uint16_t channel) {
     Ieee154_0_cmdFs.fractFreq = 0u;
 }
 
+static bool RadioIF_isBleAdvChannel(uint16_t channel);
+
 static bool RadioIF_transmitIeee154Raw(const uint8_t *payload, uint8_t payload_len) {
     RF_Object tx_rf_object;
     RF_Params rf_params;
@@ -241,6 +251,68 @@ static bool RadioIF_transmitIeee154Raw(const uint8_t *payload, uint8_t payload_l
     }
 
     result = RF_runCmd(tx_rf_handle, (RF_Op *)&Ieee154_0_cmdIeeeTx, RF_PriorityNormal, NULL,
+                       term_events);
+    RF_close(tx_rf_handle);
+
+    return (result & RF_EventLastCmdDone) != 0u;
+}
+
+static bool RadioIF_transmitBleAdvRaw(const uint8_t *payload, uint8_t payload_len) {
+    RF_Object tx_rf_object;
+    RF_Params rf_params;
+    RF_Handle tx_rf_handle = NULL;
+    RF_EventMask result = 0u;
+    uint8_t ble_channel = RadioIF_convertToBleChannel((uint8_t)s_channel);
+    const RF_EventMask term_events =
+        RF_EventLastCmdDone | RF_EventCmdCancelled | RF_EventCmdAborted | RF_EventCmdStopped;
+
+    if (payload == NULL || payload_len == 0u || payload_len > BLE_ADV_TX_MAX_PAYLOAD_LEN) {
+        return false;
+    }
+
+    if (!RadioIF_isBleAdvChannel(ble_channel)) {
+        return false;
+    }
+
+    memcpy(s_ble_adv_tx_payload, payload, payload_len);
+    RadioIF_applyBleChannelConfig(ble_channel);
+
+    Ble5_0_cmdBle5AdvNc.channel = ble_channel;
+    Ble5_0_cmdBle5AdvNc.whitening.init =
+        (uint8_t)(0x40u | (ble_channel & BLE_STATUS0_CHANNEL_MASK));
+    Ble5_0_cmdBle5AdvNc.whitening.bOverride = 1u;
+    Ble5_0_cmdBle5AdvNc.startTrigger.triggerType = TRIG_NOW;
+    Ble5_0_cmdBle5AdvNc.startTrigger.pastTrig = 1u;
+    Ble5_0_cmdBle5AdvNc.condition.rule = COND_NEVER;
+    Ble5_0_cmdBle5AdvNc.pNextOp = 0;
+    Ble5_0_cmdBle5AdvNc.txPower = 0x0000u;
+    Ble5_0_cmdBle5AdvNc.tx20Power = 0x00000000u;
+
+    if (Ble5_0_cmdBle5AdvNc.pParams == NULL) {
+        return false;
+    }
+
+    Ble5_0_cmdBle5AdvNc.pParams->advLen = payload_len;
+    Ble5_0_cmdBle5AdvNc.pParams->scanRspLen = 0u;
+    Ble5_0_cmdBle5AdvNc.pParams->pAdvData = s_ble_adv_tx_payload;
+    Ble5_0_cmdBle5AdvNc.pParams->pScanRspData = NULL;
+    Ble5_0_cmdBle5AdvNc.pParams->pDeviceAddress = (uint16_t *)s_ble_adv_tx_device_addr;
+    Ble5_0_cmdBle5AdvNc.pParams->pWhiteList = NULL;
+
+    RF_Params_init(&rf_params);
+    tx_rf_handle = RF_open(&tx_rf_object, &Ble5_0_mode, (RF_RadioSetup *)&Ble5_0_cmdBle5RadioSetup,
+                           &rf_params);
+    if (tx_rf_handle == NULL) {
+        return false;
+    }
+
+    result = RF_runCmd(tx_rf_handle, (RF_Op *)&Ble5_0_cmdFs, RF_PriorityNormal, NULL, term_events);
+    if ((result & RF_EventLastCmdDone) == 0u) {
+        RF_close(tx_rf_handle);
+        return false;
+    }
+
+    result = RF_runCmd(tx_rf_handle, (RF_Op *)&Ble5_0_cmdBle5AdvNc, RF_PriorityNormal, NULL,
                        term_events);
     RF_close(tx_rf_handle);
 
@@ -930,7 +1002,10 @@ bool RadioIF_transmitRaw(const uint8_t *data, uint8_t data_len, int8_t power_dbm
         return RadioIF_transmitIeee154Raw(data, data_len);
     }
 
-    /* Phase 1 TX support: IEEE 802.15.4 one-shot path. */
+    if (PhyManager_isBlePhy(s_selected_phy)) {
+        return RadioIF_transmitBleAdvRaw(data, data_len);
+    }
+
     return false;
 }
 

@@ -22,6 +22,7 @@
 12. Backend RF real `IEEE_802_15_4` (RX) integrado en `radio_if` con settings SmartRF dedicados y fallback sintetico para PHY no soportados.
 13. Validacion HW PHY 4: `OK` con captura real (`packets>0`, `delta_ok>0`) y barrido `11..26` en hardware.
 14. `TX_RAW` fase 1 en PHY4: `OK` en smoke de control (`TX_RAW ACK`) con ejecucion diferida no bloqueante.
+15. `TX_RAW` fase 1 en BLE (PHY0 ADV): `OK` en smoke de control (`TX_RAW ACK`, `TX BLE SMOKE PASS`).
 
 ## Estado por fase
 
@@ -53,6 +54,7 @@
 9. Gate BLE unificado (`release_gate_ble.py`, 60s, `ci_manual`) corrida 1/2: `OK` (smoke + canary en verde, `packets_total=5304`, `stats_total ok=5390 crc_err=919 drop=37 ovf=0`).
 10. Gate BLE unificado (`release_gate_ble.py`, 60s, `ci_manual`) corrida 2/2: `OK` (smoke + canary en verde, `packets_total=5623`, `stats_total ok=5733 crc_err=778 drop=37 ovf=0`).
 11. TX smoke fase 1 (`smoke_tx_phase1.py`, PHY4 CH25): `OK` (`TX_RAW ACK`, `TX SMOKE PASS`).
+12. TX smoke BLE fase 1 (`smoke_tx_ble_phase1.py`, PHY0 CH37): `OK` (`TX_RAW ACK`, `TX BLE SMOKE PASS`).
 
 ## Riesgo abierto actual
 
@@ -87,6 +89,8 @@
    `PYTHONPATH=python python3 python/examples/sweep_phy4_ieee154.py -p /dev/ttyACM0 -b 921600 --ch-min 11 --ch-max 26 --duration 8 --retries 2`
 6. TX smoke fase 1:
    `PYTHONPATH=python python3 python/examples/smoke_tx_phase1.py -p /dev/ttyACM0 -b 921600 --phy 4 --channel 25 --power 0 --packet-hex 01020304 --tx-timeout 10`
+7. TX smoke BLE fase 1:
+   `PYTHONPATH=python python3 python/examples/smoke_tx_ble_phase1.py -p /dev/ttyACM0 -b 921600 --channel 37 --power 0 --payload-hex 020106 --tx-timeout 10`
 
 ## Archivos clave tocados en este bloque
 
@@ -111,6 +115,6 @@
 ## Siguiente paso inmediato recomendado
 
 1. Validar TX over-the-air en PHY4 (receptor externo confirmando tramas emitidas en CH25).
-2. Extender `TX_RAW` a BLE (PHY0) y agregar smoke equivalente.
-3. Definir canario multi-PHY (BLE RX + PHY4 RX/TX smoke) manteniendo gate BLE como obligatorio.
+2. Validar TX over-the-air en BLE (receptor externo confirmando advertising en CH37/38/39).
+3. Definir canario multi-PHY (BLE RX + PHY4 RX/TX smoke + BLE TX smoke) manteniendo gate BLE como obligatorio.
 4. Ejecutar el workflow manual HW (`ble_release_gate_hw.yml`) al menos una vez en GitHub Actions para validar runner/artefactos.

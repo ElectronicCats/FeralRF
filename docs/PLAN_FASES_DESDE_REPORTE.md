@@ -16,7 +16,7 @@
 4. Fase 4: `COMPLETA (alcance MVP)` (RF BLE real, data queue, manejo de overflow, restart RX).
 5. Fase 5: `COMPLETA` (base tabular `phy_manager` + `LL_DEFAULT/LL_BLE` integrada, parser LL BLE ampliado con subtipos advertising/extended y casos reservados, metricas LL por tipo en `GET_STATS`; backend RF real `IEEE_802_15_4` RX validado en HW con captura real y barrido por canales).
 6. Fase 6: `COMPLETA (MVP BLE)` (sniffing BLE funcional validado con captura continua de 30 min en hardware).
-7. Fase 7: `EN PROGRESO` (metricas base `rx_ok/rx_crc_err/rx_drop/rx_overflow` expuestas por comando host + `TX_RAW` fase 1 con `ACK` estable en PHY4).
+7. Fase 7: `EN PROGRESO` (metricas base `rx_ok/rx_crc_err/rx_drop/rx_overflow` expuestas por comando host + `TX_RAW` fase 1 con `ACK` estable en PHY4 y BLE).
 
 ---
 
@@ -208,6 +208,7 @@ Dejar base lista para Zigbee/Sub-1GHz, jamming y spectrum.
 6. Tarea 6 (arranque vertical TX):
    1. `OK`: `CMD_TX_RAW` integrado en firmware con ruta no bloqueante (ACK inmediato) y smoke host `python/examples/smoke_tx_phase1.py`.
    2. pendiente: validación RF over-the-air para PHY4 (receptor externo confirma trama emitida).
-   3. pendiente: extender `TX_RAW` a PHY BLE (PHY 0) con smoke equivalente.
+   3. `OK`: extensión `TX_RAW` a PHY BLE (PHY 0) con smoke equivalente (`python/examples/smoke_tx_ble_phase1.py`, `TX BLE SMOKE PASS`).
+   4. pendiente: validación RF over-the-air para BLE (receptor externo confirma advertising emitido en canal 37/38/39).
 
 Este orden prioriza mantener baseline BLE estable mientras se abre Zigbee/Sub-1GHz/TX por incrementos.

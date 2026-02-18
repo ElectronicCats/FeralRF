@@ -463,6 +463,21 @@ class Radio:
         if cmd_id != Response.ACK:
             raise ProtocolError(f"Unexpected response to TX_RAW: 0x{cmd_id:02X}")
 
+    def transmit_frame(self, packet: bytes, timeout: float = 5.0) -> None:
+        """Transmit payload using firmware framing for current PHY."""
+        if len(packet) == 0:
+            raise ValueError("packet must not be empty")
+
+        self._send_command(Command.TX_FRAME, CommandBuilder.tx_frame(packet))
+        cmd_id, seq, payload = self._read_response(
+            timeout=timeout, expected={Response.ACK, Response.ERROR}
+        )
+
+        if cmd_id == Response.ERROR:
+            raise CommandError("Transmit frame failed", payload[0] if payload else 0)
+        if cmd_id != Response.ACK:
+            raise ProtocolError(f"Unexpected response to TX_FRAME: 0x{cmd_id:02X}")
+
     def transmit_burst(
         self,
         packet: bytes,

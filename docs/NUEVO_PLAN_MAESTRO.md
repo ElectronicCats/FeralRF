@@ -1,6 +1,6 @@
 # FeralRF - Nuevo Plan Maestro (Estado Real)
 
-**Versión:** 2.2 | **Fecha:** 2026-02-18
+**Versión:** 2.4 | **Fecha:** 2026-02-18
 
 Firmware universal para CatSniffer (CC1352P + RP2040) con capacidades de sniffing, TX/RX, jamming y spectrum analysis para BLE, Zigbee y Sub-1GHz.
 
@@ -48,8 +48,8 @@ Firmware universal para CatSniffer (CC1352P + RP2040) con capacidades de sniffin
 |------------|---------------------|-------------|
 | TX_RAW | "Completado" | ✅ Implementado + validado OTA |
 | TX_BURST | "Completado" | ✅ Implementado + smoke + gate multi-PHY |
-| TX_CONTINUOUS | "Completado" | ❌ No implementado (siguiente vertical) |
-| TX_FRAME | No definido | ❌ No existe |
+| TX_CONTINUOUS + TX_STOP | "Completado" | ✅ Implementado + smoke + gate multi-PHY |
+| TX_FRAME | No definido | ✅ Implementado (fase 1) + smoke + gate multi-PHY |
 | Jamming CW | "Completado" | ❌ No implementado |
 | Jamming Reactivo | "Completado" | ❌ No implementado |
 | Spectrum Analyzer | "Completado MVP" | ❌ No implementado |
@@ -143,17 +143,15 @@ Frame format (pre-COBS):
 
 // ============= TX Operations (IMPLEMENTADOS) =============
 #define CMD_TX_RAW              0x20  // ✅
+#define CMD_TX_CONTINUOUS       0x21  // ✅
 #define CMD_TX_BURST            0x22  // ✅
+#define CMD_TX_FRAME            0x23  // ✅
+#define CMD_TX_STOP             0x24  // ✅
 ```
 
 ### Comandos Pendientes de Implementación
 
 ```c
-// ============= TX Operations (PENDIENTES) =============
-#define CMD_TX_CONTINUOUS       0x21  // ❌ TX continuo (prioridad alta)
-#define CMD_TX_FRAME            0x23  // ❌ TX con framing PHY (prioridad alta)
-#define CMD_TX_STOP             0x24  // ❌ Detener TX continuo/burst
-
 // ============= Jamming (PENDIENTES) =============
 #define CMD_JAM_CONTINUOUS      0x30  // ❌ Jamming CW
 #define CMD_JAM_REACTIVE        0x31  // ❌ Jamming reactivo
@@ -400,15 +398,14 @@ Replay de paquete capturado.
 - [x] RX validado en hardware
 - [x] Barrido de canales 11-26
 
-### FASE 3: TX Vertical 🔄 EN PROGRESO (Nueva prioridad)
+### FASE 3: TX Vertical ✅ COMPLETADA (fase 1)
 - [x] CMD_TX_RAW implementado
 - [x] Smoke test TX BLE (`TX BLE SMOKE PASS`)
 - [x] Smoke test TX 802.15.4 (`TX SMOKE PASS`)
 - [x] Validación over-the-air TX BLE + 802.15.4 (`ota_rx_probe.py`)
 - [x] CMD_TX_BURST implementado (`TX_BURST ACK`) + smoke + integración al gate multi-PHY
-- [ ] CMD_TX_CONTINUOUS
-- [ ] CMD_TX_FRAME
-- [ ] CMD_TX_STOP
+- [x] CMD_TX_CONTINUOUS + CMD_TX_STOP implementados (`TX_CONTINUOUS ACK` + `TX_STOP ACK`) + smoke + integración al gate multi-PHY
+- [x] CMD_TX_FRAME implementado (`TX_FRAME ACK`) + smoke BLE/PHY4 + integración al gate multi-PHY
 
 ### FASE 4: BLE Attacks ⏳ PENDIENTE
 - [ ] CMD_BLE_DEAUTH
@@ -493,17 +490,12 @@ Replay de paquete capturado.
 2. Mantener `release_gate_multi_phy.py` como no-regresión obligatoria.
 3. Verificar corrida estable consecutiva sin bloqueo (smoke BLE -> TX PHY4 -> smoke BLE + gate multi-PHY).
 
-### Prioridad 2: TX_CONTINUOUS + TX_STOP
-1. Implementar `CMD_TX_CONTINUOUS` + `CMD_TX_STOP` seguro.
-2. Añadir smoke dedicado para TX continuo.
-3. Integrar TX continuo al gate multi-PHY.
+### Prioridad 2: Cierre TX_FRAME (contrato + OTA)
+1. Definir contrato final de `TX_FRAME` por PHY (BLE/802.15.4) en documentación.
+2. Validar `TX_FRAME` over-the-air con probe dedicado (PHY4 + BLE) y criterios de pase.
+3. Dejar canario/gate con evidencia reproducible de TX_FRAME más allá de ACK path.
 
-### Prioridad 3: TX_FRAME (framing por PHY)
-1. Definir contrato final de framing por PHY (BLE/802.15.4).
-2. Implementar `CMD_TX_FRAME` con validación de payload por PHY.
-3. Añadir smoke BLE + 802.15.4 para `TX_FRAME` y validar OTA.
-
-### Prioridad 4: BLE Deauth (Semana siguiente)
+### Prioridad 3: BLE Deauth (Semana siguiente)
 1. Implementar `CMD_BLE_DEAUTH`
 2. Tracking de conexiones en firmware
 3. Ejemplo Python de uso
@@ -525,6 +517,8 @@ Replay de paquete capturado.
 
 | Fecha | Versión | Cambios |
 |-------|---------|---------|
+| 2026-02-18 | 2.4 | `CMD_TX_FRAME` implementado y validado en hardware (`TX_FRAME ACK`) con smoke dedicado BLE/PHY4 e integración al `release_gate_multi_phy.py` (`MULTI-PHY RELEASE GATE PASS`). |
+| 2026-02-18 | 2.3 | `CMD_TX_CONTINUOUS` + `CMD_TX_STOP` implementados y validados en hardware (`TX_CONTINUOUS ACK`, `TX_STOP ACK`, smoke dedicado y `MULTI-PHY RELEASE GATE PASS` con paso continuous). Próximo: `TX_FRAME`. |
 | 2026-02-18 | 2.2 | `CMD_TX_BURST` implementado y validado en hardware (`TX_BURST ACK`, smoke dedicado y `MULTI-PHY RELEASE GATE PASS` con paso burst). Próximo: `TX_CONTINUOUS` + `TX_FRAME`. |
 | 2026-02-18 | 2.1 | Sincronización completa con estado real: `TX_RAW` implementado/validado OTA, gate multi-PHY en verde, roadmap actualizado (`TX_BURST`/`TX_CONTINUOUS`/`TX_FRAME`). |
 | 2026-02-17 | 2.0 | Reescritura inicial del nuevo plan maestro. |

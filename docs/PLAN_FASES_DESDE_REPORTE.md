@@ -213,6 +213,8 @@ Dejar base lista para Zigbee/Sub-1GHz, jamming y spectrum.
    5. `OK`: canario multi-PHY formalizado en comando único (`python/examples/release_gate_multi_phy.py`) para BLE gate + PHY4 RX/TX smoke + BLE TX smoke.
    6. `OK`: canario multi-PHY validado en hardware (`MULTI-PHY RELEASE GATE PASS`).
    7. `OK`: `CMD_TX_BURST` integrado y validado en hardware (`TX_BURST ACK`, `TX BURST SMOKE PASS`, paso burst en `release_gate_multi_phy.py`).
-   8. siguiente: robustecer estabilidad post-switch PHY/TX y abrir `TX_CONTINUOUS`/`TX_FRAME` manteniendo el gate multi-PHY obligatorio.
+   8. `OK`: `CMD_TX_CONTINUOUS` + `CMD_TX_STOP` integrados y validados en hardware (`TX_CONTINUOUS ACK`, `TX_STOP ACK`, `TX CONTINUOUS SMOKE PASS`, paso continuous en `release_gate_multi_phy.py`).
+   9. `OK`: `CMD_TX_FRAME` integrado y validado en hardware (`TX_FRAME ACK`, `TX FRAME SMOKE PASS` en PHY4 y BLE, paso `PHY4 TX frame smoke` + `BLE TX frame smoke` en `release_gate_multi_phy.py`).
+   10. siguiente: robustecer estabilidad post-switch PHY/TX y cerrar evidencia OTA dedicada para `TX_FRAME` manteniendo el gate multi-PHY obligatorio.
 
 Este orden prioriza mantener baseline BLE estable mientras se abre Zigbee/Sub-1GHz/TX por incrementos.

@@ -187,6 +187,10 @@ bool ControlTask_onTxRaw(const uint8_t *payload, uint8_t payload_len, int8_t pow
     return true;
 }
 
+bool ControlTask_onTxFrame(const uint8_t *payload, uint8_t payload_len) {
+    return ControlTask_onTxRaw(payload, payload_len, s_tx_power_dbm);
+}
+
 bool ControlTask_onTxBurst(const uint8_t *payload, uint8_t payload_len, uint16_t count,
                            uint32_t interval_us) {
     if (payload == NULL || payload_len == 0u || payload_len > CONTROL_TASK_TX_RAW_MAX_LEN ||

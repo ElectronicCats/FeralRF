@@ -27,6 +27,7 @@
 #define CMD_TX_RAW 0x20u
 #define CMD_TX_CONTINUOUS 0x21u
 #define CMD_TX_BURST 0x22u
+#define CMD_TX_FRAME 0x23u
 #define CMD_TX_STOP 0x24u
 
 /* Responses (match python/feralrf/enums.py) */
@@ -218,6 +219,28 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
             tx_count = read_u16_le(&payload[1u + tx_len]);
             interval_us = read_u32_le(&payload[1u + tx_len + 2u]);
             if (!ControlTask_onTxBurst(&payload[1], tx_len, tx_count, interval_us)) {
+                send_error(seq, ERR_INVALID_STATE);
+                return;
+            }
+        }
+        send_ack(seq);
+        return;
+
+    case CMD_TX_FRAME:
+        if (payload_len < 2u) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            return;
+        }
+        {
+            uint8_t tx_len = payload[0];
+            uint16_t expected_payload_len = (uint16_t)tx_len + 1u;
+
+            if (tx_len == 0u || expected_payload_len != payload_len) {
+                send_error(seq, ERR_INVALID_PAYLOAD);
+                return;
+            }
+
+            if (!ControlTask_onTxFrame(&payload[1], tx_len)) {
                 send_error(seq, ERR_INVALID_STATE);
                 return;
             }

@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
-"""
-FeralRF - Multi-PHY release gate (BLE baseline + PHY4 RX/TX/burst/continuous + BLE TX)
-"""
+"""FeralRF - Multi-PHY release gate (BLE baseline + PHY4/BLE RX+TX matrix)."""
 
 import argparse
 import subprocess
@@ -127,6 +125,7 @@ def main() -> int:
     smoke_phase2_script = examples_dir / "smoke_phase2.py"
     phy4_rx_script = examples_dir / "smoke_phy4_ieee154.py"
     phy4_tx_script = examples_dir / "smoke_tx_phase1.py"
+    tx_frame_script = examples_dir / "smoke_tx_frame_phase1.py"
     phy4_tx_burst_script = examples_dir / "smoke_tx_burst_phase1.py"
     phy4_tx_cont_script = examples_dir / "smoke_tx_continuous_phase1.py"
     ble_tx_script = examples_dir / "smoke_tx_ble_phase1.py"
@@ -147,8 +146,10 @@ def main() -> int:
         f"soak={args.ble_soak_duration}s,profile={args.ble_profile}) "
         f"phy4_rx(ch={args.phy4_rx_channel},dur={args.phy4_rx_duration}s) "
         f"phy4_tx(ch={args.phy4_tx_channel},power={args.phy4_tx_power}) "
+        f"phy4_tx_frame(ch={args.phy4_tx_channel}) "
         f"phy4_tx_burst(count={args.phy4_tx_burst_count},interval_us={args.phy4_tx_burst_interval_us}) "
         f"phy4_tx_cont(interval_us={args.phy4_tx_cont_interval_us},run={args.phy4_tx_cont_run_seconds}s) "
+        f"ble_tx_frame(ch={args.ble_tx_channel},power={args.ble_tx_power}) "
         f"ble_tx(ch={args.ble_tx_channel},power={args.ble_tx_power})"
     )
     print()
@@ -236,6 +237,33 @@ def main() -> int:
     ok("PHY4 TX smoke PASS")
     print()
 
+    step("PHY4 TX frame smoke")
+    phy4_tx_frame_cmd = [
+        sys.executable,
+        str(tx_frame_script),
+        "--baudrate",
+        str(args.baudrate),
+        "--phy",
+        "4",
+        "--channel",
+        str(args.phy4_tx_channel),
+        "--power",
+        str(args.phy4_tx_power),
+        "--frame-hex",
+        args.phy4_tx_packet_hex,
+        "--tx-timeout",
+        str(args.phy4_tx_timeout),
+        *maybe_port_args(args.port),
+    ]
+    rc = run_with_retries(
+        "PHY4 TX frame smoke", phy4_tx_frame_cmd, args.phy4_tx_attempts, args.retry_delay
+    )
+    if rc != 0:
+        fail(f"PHY4 TX frame smoke failed (exit={rc})")
+        return 32
+    ok("PHY4 TX frame smoke PASS")
+    print()
+
     step("PHY4 TX burst smoke")
     phy4_tx_burst_cmd = [
         sys.executable,
@@ -304,23 +332,6 @@ def main() -> int:
     ok("PHY4 TX continuous smoke PASS")
     print()
 
-    step("BLE TX smoke")
-    ble_tx_cmd = [
-        sys.executable,
-        str(ble_tx_script),
-        "--baudrate",
-        str(args.baudrate),
-        "--channel",
-        str(args.ble_tx_channel),
-        "--power",
-        str(args.ble_tx_power),
-        "--payload-hex",
-        args.ble_tx_payload_hex,
-        "--tx-timeout",
-        str(args.ble_tx_timeout),
-        *maybe_port_args(args.port),
-    ]
-
     def ble_tx_retry_hook(attempt_idx: int, rc: int) -> None:
         print(
             f"[INFO] BLE TX recovery before retry {attempt_idx + 1}/{args.ble_tx_attempts} "
@@ -349,6 +360,54 @@ def main() -> int:
             print("[INFO] BLE TX recovery smoke PASS")
         else:
             print(f"[WARN] BLE TX recovery smoke failed (exit={recovery_rc})")
+
+    step("BLE TX frame smoke")
+    ble_tx_frame_cmd = [
+        sys.executable,
+        str(tx_frame_script),
+        "--baudrate",
+        str(args.baudrate),
+        "--phy",
+        str(args.ble_phy),
+        "--channel",
+        str(args.ble_tx_channel),
+        "--power",
+        str(args.ble_tx_power),
+        "--frame-hex",
+        args.ble_tx_payload_hex,
+        "--tx-timeout",
+        str(args.ble_tx_timeout),
+        *maybe_port_args(args.port),
+    ]
+    rc = run_with_retries(
+        "BLE TX frame smoke",
+        ble_tx_frame_cmd,
+        args.ble_tx_attempts,
+        args.retry_delay,
+        on_retry=ble_tx_retry_hook,
+    )
+    if rc != 0:
+        fail(f"BLE TX frame smoke failed (exit={rc})")
+        return 39
+    ok("BLE TX frame smoke PASS")
+    print()
+
+    step("BLE TX smoke")
+    ble_tx_cmd = [
+        sys.executable,
+        str(ble_tx_script),
+        "--baudrate",
+        str(args.baudrate),
+        "--channel",
+        str(args.ble_tx_channel),
+        "--power",
+        str(args.ble_tx_power),
+        "--payload-hex",
+        args.ble_tx_payload_hex,
+        "--tx-timeout",
+        str(args.ble_tx_timeout),
+        *maybe_port_args(args.port),
+    ]
 
     rc = run_with_retries(
         "BLE TX smoke",

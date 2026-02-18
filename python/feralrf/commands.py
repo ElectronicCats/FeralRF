@@ -55,6 +55,12 @@ class CommandBuilder:
         return bytes([length & 0xFF]) + packet + bytes([power_dbm & 0xFF])
 
     @staticmethod
+    def tx_frame(packet: bytes) -> bytes:
+        """Payload for TX_FRAME"""
+        length = len(packet)
+        return bytes([length & 0xFF]) + packet
+
+    @staticmethod
     def tx_burst(packet: bytes, count: int, interval_us: int) -> bytes:
         """Payload for TX_BURST"""
         length = len(packet)

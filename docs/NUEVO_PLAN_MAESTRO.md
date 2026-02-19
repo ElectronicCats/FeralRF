@@ -41,7 +41,7 @@ Firmware universal para CatSniffer (CC1352P + RP2040) con capacidades de sniffin
 | TX over-the-air PHY4 | ✅ | `ota_rx_probe.py` (`marker_hits=80` TX_RAW, `marker_hits=40` TX_FRAME, marcador `a1b2c3d4`) |
 | TX over-the-air BLE | ✅ | `ota_rx_probe.py` (`marker_hits=24` TX_RAW, `marker_hits=14` TX_FRAME, marcador `beef01`) |
 | Multi-PHY Release Gate | ✅ | `MULTI-PHY RELEASE GATE PASS` |
-| JAM_CONTINUOUS + JAM_STOP (fase 1) | ✅ | Smoke en PHY4 y BLE, con `power=20 dBm` y timeout recovery |
+| JAM_CONTINUOUS + JAM_STOP (fase 1) | ✅ | Smoke en PHY4 y BLE, con `power=20 dBm`, timeout recovery y guardas de laboratorio (duración máxima + cooldown + canal explícito válido) |
 
 ### Brecha vs plan anterior (estado actual)
 
@@ -424,9 +424,40 @@ Replay de paquete capturado.
 ### FASE 6: Jamming 🔄 EN PROGRESO
 - [x] CMD_JAM_CONTINUOUS (fase 1, duracion acotada)
 - [x] CMD_JAM_STOP (fase 1)
+- [x] Modo seguro de laboratorio en firmware (duración máxima, cooldown, canal explícito por PHY)
 - [ ] CMD_JAM_REACTIVE
 - [ ] CMD_JAM_PATTERN
 - [ ] Policy engine básico
+
+#### Cierre de fase JAM (estado actual)
+- Fase 1 de JAM cerrada en firmware 1.0.0: `CMD_JAM_CONTINUOUS` + `CMD_JAM_STOP` con smoke en BLE y 802.15.4.
+- Estabilidad validada con `release_gate_multi_phy.py` y smokes dedicados de JAM.
+- Pendiente de JAM para fase 2: `CMD_JAM_REACTIVE`, `CMD_JAM_PATTERN` y policy engine.
+
+#### Criterio de validación A/B (5 dBm vs 20 dBm) - evidencia reproducible
+- Objetivo: demostrar que el path de JAM es estable y que ambos niveles de potencia responden por ACK bajo mismo escenario.
+- Configuración mínima:
+  - PHY4: canal 25
+  - BLE: canal 37
+  - Duración por intento: `1500 ms`
+- Ejecución A/B (PHY4):
+  - `PYTHONPATH=python .venv/bin/python python/examples/smoke_jam_phase1.py -p /dev/ttyACM0 -b 921600 --phy 4 --channel 25 --power 5 --duration-ms 1500`
+  - `PYTHONPATH=python .venv/bin/python python/examples/smoke_jam_phase1.py -p /dev/ttyACM0 -b 921600 --phy 4 --channel 25 --power 20 --duration-ms 1500`
+- Ejecución A/B (BLE):
+  - `PYTHONPATH=python .venv/bin/python python/examples/smoke_jam_phase1.py -p /dev/ttyACM0 -b 921600 --phy 0 --channel 37 --power 5 --duration-ms 1500`
+  - `PYTHONPATH=python .venv/bin/python python/examples/smoke_jam_phase1.py -p /dev/ttyACM0 -b 921600 --phy 0 --channel 37 --power 20 --duration-ms 1500`
+- Criterio de pase:
+  - En los 4 casos: `JAM_CONTINUOUS ACK` y `JAM_STOP ACK`.
+  - Sin bloqueo del firmware (blink activo y smoke BLE posterior en PASS).
+  - Recomendado: corrida consecutiva `smoke_phase2 -> smoke_tx_phase1(phy4) -> smoke_phase2`.
+
+#### Modo seguro para pruebas de laboratorio (activo)
+- Duración máxima de JAM: `CONTROL_TASK_JAM_MAX_DURATION_MS = 30000` (30 s).
+- Cooldown obligatorio entre JAMs: `CONTROL_TASK_JAM_COOLDOWN_MS = 2000` (2 s).
+- Canal explícito requerido por PHY:
+  - BLE: solo `37..39`
+  - IEEE 802.15.4: solo `11..26`
+- Si se viola alguna regla, `CMD_JAM_CONTINUOUS` responde con `ERR_INVALID_STATE`.
 
 ### FASE 7: Spectrum Analyzer ⏳ PENDIENTE
 - [ ] CMD_SPECTRUM_SCAN

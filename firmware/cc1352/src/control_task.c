@@ -8,6 +8,7 @@
 #include <stdint.h>
 #include <string.h>
 
+#include <ti/devices/cc13x2x7_cc26x2x7/driverlib/aon_rtc.h>
 #include <ti/devices/cc13x2x7_cc26x2x7/driverlib/sys_ctrl.h>
 #include <ti/devices/cc13x2x7_cc26x2x7/driverlib/systick.h>
 
@@ -28,8 +29,13 @@
 #define CONTROL_TASK_TX_RAW_MAX_LEN 125u
 #define CONTROL_TASK_SYSTICK_MAX 0x00FFFFFFu
 #define CONTROL_TASK_JAM_MAX_DURATION_MS 30000u
+#define CONTROL_TASK_JAM_COOLDOWN_MS 2000u
 #define CONTROL_TASK_JAM_BLE_PAYLOAD_LEN 31u
 #define CONTROL_TASK_JAM_IEEE154_PAYLOAD_LEN 125u
+#define CONTROL_TASK_BLE_ADV_CHANNEL_MIN 37u
+#define CONTROL_TASK_BLE_ADV_CHANNEL_MAX 39u
+#define CONTROL_TASK_IEEE154_CHANNEL_MIN 11u
+#define CONTROL_TASK_IEEE154_CHANNEL_MAX 26u
 
 static uint8_t s_selected_phy = 0;
 static uint16_t s_channel = 0;
@@ -60,9 +66,21 @@ static uint32_t s_tx_cycles_carry = 0u;
 static uint64_t s_tx_time_us = 0u;
 static bool s_jam_active = false;
 static uint64_t s_jam_stop_due_us = 0u;
+static uint64_t s_jam_cooldown_due_us = 0u;
 static uint8_t s_jam_payload[CONTROL_TASK_TX_RAW_MAX_LEN];
 
 static const uint8_t s_serial[8] = {'F', 'E', 'R', 'A', 'L', 'R', 'F', '1'};
+static uint64_t ControlTask_getTimeUs(void);
+
+static uint64_t ControlTask_getWallTimeUs(void) {
+    uint64_t rtc = AONRTCCurrent64BitValueGet();
+    uint64_t sec = rtc >> 32;
+    uint64_t subsec = rtc & 0xFFFFFFFFu;
+    uint64_t us = sec * 1000000u;
+
+    us += (subsec * 1000000u) >> 32;
+    return us;
+}
 
 static bool ControlTask_isAnyTxPending(void) {
     return s_tx_raw_pending || s_tx_burst_pending || s_tx_continuous_pending;
@@ -76,6 +94,23 @@ static bool ControlTask_canStartTx(const uint8_t *payload, uint8_t payload_len) 
 static void ControlTask_clearJamWindow(void) {
     s_jam_active = false;
     s_jam_stop_due_us = 0u;
+}
+
+static bool ControlTask_isJamChannelAllowed(uint8_t channel) {
+    if (PhyManager_isBlePhy(s_selected_phy)) {
+        return channel >= CONTROL_TASK_BLE_ADV_CHANNEL_MIN &&
+               channel <= CONTROL_TASK_BLE_ADV_CHANNEL_MAX;
+    }
+    if (s_selected_phy == PHY_MANAGER_PHY_IEEE_802_15_4) {
+        return channel >= CONTROL_TASK_IEEE154_CHANNEL_MIN &&
+               channel <= CONTROL_TASK_IEEE154_CHANNEL_MAX;
+    }
+    return false;
+}
+
+static void ControlTask_armJamCooldown(void) {
+    s_jam_cooldown_due_us =
+        ControlTask_getWallTimeUs() + ((uint64_t)CONTROL_TASK_JAM_COOLDOWN_MS * 1000u);
 }
 
 static void ControlTask_clearTxBurstState(void) {
@@ -166,6 +201,7 @@ void ControlTask_init(void) {
     s_tx_power_dbm = 0;
     s_frequency_hz = 0;
     s_rx_enabled = false;
+    s_jam_cooldown_due_us = 0u;
     ControlTask_resetTxJamState(false);
     ControlTask_resetTxPowerState();
     memset(s_jam_payload, 0xFF, sizeof(s_jam_payload));
@@ -174,6 +210,7 @@ void ControlTask_init(void) {
 void ControlTask_onRadioInit(void) {
     ControlTask_initTxTimebase();
     s_rx_enabled = false;
+    s_jam_cooldown_due_us = 0u;
     ControlTask_resetTxJamState(true);
     ControlTask_resetTxPowerState();
     TaskEvent_clear(TASK_EVENT_CONTROL_RX_START);
@@ -263,9 +300,16 @@ void ControlTask_onTxStop(void) {
 
 bool ControlTask_onJamContinuous(uint8_t channel, int8_t power_dbm, uint16_t duration_ms) {
     uint8_t jam_payload_len = 0u;
+    uint64_t now_wall_us = ControlTask_getWallTimeUs();
 
     if (duration_ms == 0u || duration_ms > CONTROL_TASK_JAM_MAX_DURATION_MS || s_rx_enabled ||
         ControlTask_isAnyTxPending()) {
+        return false;
+    }
+    if (now_wall_us < s_jam_cooldown_due_us) {
+        return false;
+    }
+    if (!ControlTask_isJamChannelAllowed(channel)) {
         return false;
     }
 
@@ -289,6 +333,7 @@ bool ControlTask_onJamContinuous(uint8_t channel, int8_t power_dbm, uint16_t dur
 }
 
 void ControlTask_onJamStop(void) {
+    ControlTask_armJamCooldown();
     ControlTask_onTxStop();
 }
 
@@ -343,7 +388,7 @@ void ControlTask_processTxContinuous(void) {
 
     now_us = ControlTask_getTimeUs();
     if (s_jam_active && now_us >= s_jam_stop_due_us) {
-        ControlTask_onTxStop();
+        ControlTask_onJamStop();
         return;
     }
     if (now_us < s_tx_continuous_next_due_us) {

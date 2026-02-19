@@ -42,6 +42,11 @@
    1. `CMD_JAM_CONTINUOUS` + `CMD_JAM_STOP` en PHY4 y BLE.
    2. Potencia TX aplicada con tabla real 2.4 GHz (incluye `20 dBm`).
    3. Ajustes de robustez para `JAM_STOP` en firmware/host bajo carga TX.
+23. Modo seguro de laboratorio para JAM activo en firmware:
+   1. Duracion maxima (`30 s`).
+   2. Cooldown obligatorio entre JAMs (`2 s`) usando tiempo wall-clock (AON RTC).
+   3. Canal explicito valido por PHY (BLE `37..39`, IEEE 802.15.4 `11..26`).
+   4. Rechazo por estado invalido (`ERR_INVALID_STATE`) cuando aplica.
 
 ## Estado por fase
 
@@ -93,6 +98,14 @@
 18. OTA dedicada de `TX_FRAME` validada (2026-02-18):
    1. PHY4 CH25: `packets_total=86`, `crc_ok=86`, `marker_hits=40`, `RX_STOP ACK`.
    2. BLE CH37: `packets_total=1427`, `crc_ok=1427`, `marker_hits=14`, `RX_STOP ACK`.
+19. Validacion HW de modo seguro JAM (2026-02-19): `OK`.
+   1. `invalid_channel` rechazado (`error_code=5`).
+   2. `cooldown_immediate` rechazado (`error_code=5`).
+   3. `cooldown_after_wait` aceptado (inicio JAM exitoso tras espera).
+20. Validacion A/B JAM 5 dBm vs 20 dBm (2026-02-19): `OK`.
+   1. PHY4 CH25: ambos niveles con `JAM_CONTINUOUS ACK` + `JAM_STOP ACK`.
+   2. BLE CH37: ambos niveles con `JAM_CONTINUOUS ACK` + `JAM_STOP ACK`.
+21. Verificacion post-JAM de estabilidad: `smoke_phase2` en verde (sin lockup).
 
 ## Riesgo abierto actual
 
@@ -143,6 +156,11 @@
    `PYTHONPATH=python python3 python/examples/ota_rx_probe.py -p /dev/ttyACM1 -b 921600 --phy 4 --channel 25 --duration 12 --marker-hex a1b2c3d4 --min-hits 1`
 14. JAM smoke fase 1:
    `PYTHONPATH=python python3 python/examples/smoke_jam_phase1.py -p /dev/ttyACM0 -b 921600 --phy 4 --channel 25 --power 20 --duration-ms 3000`
+15. JAM A/B (PHY4/BLE, 5 dBm vs 20 dBm):
+   1. `PYTHONPATH=python .venv/bin/python python/examples/smoke_jam_phase1.py -p /dev/ttyACM0 -b 921600 --phy 4 --channel 25 --power 5 --duration-ms 1500`
+   2. `PYTHONPATH=python .venv/bin/python python/examples/smoke_jam_phase1.py -p /dev/ttyACM0 -b 921600 --phy 4 --channel 25 --power 20 --duration-ms 1500`
+   3. `PYTHONPATH=python .venv/bin/python python/examples/smoke_jam_phase1.py -p /dev/ttyACM0 -b 921600 --phy 0 --channel 37 --power 5 --duration-ms 1500`
+   4. `PYTHONPATH=python .venv/bin/python python/examples/smoke_jam_phase1.py -p /dev/ttyACM0 -b 921600 --phy 0 --channel 37 --power 20 --duration-ms 1500`
 
 ## Archivos clave tocados en este bloque
 

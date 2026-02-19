@@ -9,6 +9,5 @@
 
 void DataTask_init(void);
 void DataTask_poll(void);
-bool DataTask_isRxActive(void);
 
 #endif /* DATA_TASK_H */

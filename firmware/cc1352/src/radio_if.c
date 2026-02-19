@@ -60,6 +60,12 @@
     (IEEE_15_4_APPENDED_RSSI_LEN + IEEE_15_4_APPENDED_CORRCRC_LEN + \
      IEEE_15_4_APPENDED_TIMESTAMP_LEN)
 #define IEEE_15_4_CORRCRC_CRC_ERR_BIT 0x80u
+#define RADIO_IF_TX_TERM_EVENTS                                                          \
+    (RF_EventCmdDone | RF_EventLastCmdDone | RF_EventFGCmdDone | RF_EventLastFGCmdDone | \
+     RF_EventTxDone | RF_EventCmdCancelled | RF_EventCmdAborted | RF_EventCmdStopped)
+#define RADIO_IF_TX_SUCCESS_EVENTS                                                       \
+    (RF_EventCmdDone | RF_EventLastCmdDone | RF_EventFGCmdDone | RF_EventLastFGCmdDone | \
+     RF_EventTxDone)
 
 typedef enum {
     RADIO_IF_BACKEND_SYNTH = 0,
@@ -125,11 +131,99 @@ static uint8_t s_ble_adv_tx_device_addr[BLE_ADV_TX_DEVICE_ADDR_LEN] = {0x01u, 0x
                                                                        0xCCu, 0xBBu, 0xAAu};
 #endif
 
+/* 2.4 GHz power table (LP_CC1352P7-1 style, includes High PA up to 20 dBm). */
+static RF_TxPowerTable_Entry s_tx_power_table_24g[] = {
+    {-20, RF_TxPowerTable_DEFAULT_PA_ENTRY(6, 3, 0, 2)},
+    {-18, RF_TxPowerTable_DEFAULT_PA_ENTRY(8, 3, 0, 3)},
+    {-15, RF_TxPowerTable_DEFAULT_PA_ENTRY(10, 3, 0, 3)},
+    {-12, RF_TxPowerTable_DEFAULT_PA_ENTRY(12, 3, 0, 5)},
+    {-10, RF_TxPowerTable_DEFAULT_PA_ENTRY(15, 3, 0, 5)},
+    {-9, RF_TxPowerTable_DEFAULT_PA_ENTRY(16, 3, 0, 5)},
+    {-6, RF_TxPowerTable_DEFAULT_PA_ENTRY(20, 3, 0, 8)},
+    {-5, RF_TxPowerTable_DEFAULT_PA_ENTRY(22, 3, 0, 9)},
+    {-3, RF_TxPowerTable_DEFAULT_PA_ENTRY(19, 2, 0, 12)},
+    {0, RF_TxPowerTable_DEFAULT_PA_ENTRY(19, 1, 0, 20)},
+    {1, RF_TxPowerTable_DEFAULT_PA_ENTRY(22, 1, 0, 20)},
+    {2, RF_TxPowerTable_DEFAULT_PA_ENTRY(25, 1, 0, 25)},
+    {3, RF_TxPowerTable_DEFAULT_PA_ENTRY(29, 1, 0, 28)},
+    {4, RF_TxPowerTable_DEFAULT_PA_ENTRY(35, 1, 0, 39)},
+    {5, RF_TxPowerTable_DEFAULT_PA_ENTRY(23, 0, 0, 57)},
+    {14, RF_TxPowerTable_DEFAULT_PA_ENTRY(63, 0, 1, 0)},
+    {15, RF_TxPowerTable_HIGH_PA_ENTRY(18, 0, 0, 36, 0)},
+    {16, RF_TxPowerTable_HIGH_PA_ENTRY(24, 0, 0, 43, 0)},
+    {17, RF_TxPowerTable_HIGH_PA_ENTRY(28, 0, 0, 51, 2)},
+    {18, RF_TxPowerTable_HIGH_PA_ENTRY(34, 0, 0, 64, 4)},
+    {19, RF_TxPowerTable_HIGH_PA_ENTRY(15, 3, 0, 36, 4)},
+    {20, RF_TxPowerTable_HIGH_PA_ENTRY(18, 3, 0, 71, 27)},
+    RF_TxPowerTable_TERMINATION_ENTRY,
+};
+
 #if defined(__GNUC__)
 static uint8_t s_rf_rx_data_buffer[RF_QUEUE_DATA_BUFFER_SIZE] __attribute__((aligned(4)));
 #else
 static uint8_t s_rf_rx_data_buffer[RF_QUEUE_DATA_BUFFER_SIZE];
 #endif
+
+static RF_TxPowerTable_Value RadioIF_resolveTxPowerValue(int8_t requested_dbm) {
+    RF_TxPowerTable_Value value = RF_TxPowerTable_findValue(s_tx_power_table_24g, requested_dbm);
+    size_t i = 0u;
+    size_t best_index = 0u;
+    int16_t best_diff = 0x7FFF;
+
+    if (value.rawValue != RF_TxPowerTable_INVALID_VALUE) {
+        return value;
+    }
+
+    while (s_tx_power_table_24g[i].value.rawValue != RF_TxPowerTable_INVALID_VALUE) {
+        int16_t diff = (int16_t)s_tx_power_table_24g[i].power - (int16_t)requested_dbm;
+        if (diff < 0) {
+            diff = (int16_t)(-diff);
+        }
+        if (diff < best_diff) {
+            best_diff = diff;
+            best_index = i;
+        }
+        i++;
+    }
+
+    if (best_diff == 0x7FFF) {
+        return value;
+    }
+
+    return s_tx_power_table_24g[best_index].value;
+}
+
+static void RadioIF_applyRfTxPower(RF_Handle rf_handle, RF_TxPowerTable_Value value) {
+    if (rf_handle == NULL || value.rawValue == RF_TxPowerTable_INVALID_VALUE) {
+        return;
+    }
+    (void)RF_setTxPower(rf_handle, value);
+}
+
+static bool RadioIF_executeTxCommand(RF_Mode *mode, RF_RadioSetup *setup_cmd, RF_Op *fs_cmd,
+                                     RF_Op *tx_cmd, RF_TxPowerTable_Value tx_power) {
+    RF_Params rf_params;
+    RF_Handle tx_rf_handle = NULL;
+    RF_EventMask result = 0u;
+
+    RF_Params_init(&rf_params);
+    tx_rf_handle = RF_open(&s_rf_tx_object, mode, setup_cmd, &rf_params);
+    if (tx_rf_handle == NULL) {
+        return false;
+    }
+    RadioIF_applyRfTxPower(tx_rf_handle, tx_power);
+
+    result = RF_runCmd(tx_rf_handle, fs_cmd, RF_PriorityNormal, NULL, RADIO_IF_TX_TERM_EVENTS);
+    if ((result & RADIO_IF_TX_SUCCESS_EVENTS) == 0u) {
+        RF_close(tx_rf_handle);
+        return false;
+    }
+
+    result = RF_runCmd(tx_rf_handle, tx_cmd, RF_PriorityNormal, NULL, RADIO_IF_TX_TERM_EVENTS);
+    RF_close(tx_rf_handle);
+
+    return (result & RADIO_IF_TX_SUCCESS_EVENTS) != 0u;
+}
 
 static uint8_t RadioIF_convertToBleChannel(uint8_t channel) {
     /* Matches sniffer_fw_cc1252P_7 conversion semantics. */
@@ -215,13 +309,7 @@ static void RadioIF_applyIeee154ChannelConfig(uint16_t channel) {
 static bool RadioIF_isBleAdvChannel(uint16_t channel);
 
 static bool RadioIF_transmitIeee154Raw(const uint8_t *payload, uint8_t payload_len) {
-    RF_Params rf_params;
-    RF_Handle tx_rf_handle = NULL;
-    RF_EventMask result = 0u;
-    const RF_EventMask term_events = RF_EventLastCmdDone | RF_EventLastFGCmdDone | RF_EventTxDone |
-                                     RF_EventCmdCancelled | RF_EventCmdAborted | RF_EventCmdStopped;
-    const RF_EventMask success_events =
-        RF_EventLastCmdDone | RF_EventLastFGCmdDone | RF_EventTxDone;
+    RF_TxPowerTable_Value tx_power = RadioIF_resolveTxPowerValue(s_tx_power_dbm);
 
     if (payload == NULL || payload_len == 0u || payload_len > IEEE_15_4_TX_MAX_PAYLOAD_LEN) {
         return false;
@@ -238,36 +326,14 @@ static bool RadioIF_transmitIeee154Raw(const uint8_t *payload, uint8_t payload_l
     Ieee154_0_cmdIeeeTx.condition.rule = COND_NEVER;
     Ieee154_0_cmdIeeeTx.pNextOp = 0;
 
-    RF_Params_init(&rf_params);
-    tx_rf_handle = RF_open(&s_rf_tx_object, &Ieee154_0_mode,
-                           (RF_RadioSetup *)&Ieee154_0_cmdRadioSetup, &rf_params);
-    if (tx_rf_handle == NULL) {
-        return false;
-    }
-
-    result =
-        RF_runCmd(tx_rf_handle, (RF_Op *)&Ieee154_0_cmdFs, RF_PriorityNormal, NULL, term_events);
-    if ((result & success_events) == 0u) {
-        RF_close(tx_rf_handle);
-        return false;
-    }
-
-    result = RF_runCmd(tx_rf_handle, (RF_Op *)&Ieee154_0_cmdIeeeTx, RF_PriorityNormal, NULL,
-                       term_events);
-    RF_close(tx_rf_handle);
-
-    return (result & success_events) != 0u;
+    return RadioIF_executeTxCommand(&Ieee154_0_mode, (RF_RadioSetup *)&Ieee154_0_cmdRadioSetup,
+                                    (RF_Op *)&Ieee154_0_cmdFs, (RF_Op *)&Ieee154_0_cmdIeeeTx,
+                                    tx_power);
 }
 
 static bool RadioIF_transmitBleAdvRaw(const uint8_t *payload, uint8_t payload_len) {
-    RF_Params rf_params;
-    RF_Handle tx_rf_handle = NULL;
-    RF_EventMask result = 0u;
+    RF_TxPowerTable_Value tx_power = RadioIF_resolveTxPowerValue(s_tx_power_dbm);
     uint8_t ble_channel = RadioIF_convertToBleChannel((uint8_t)s_channel);
-    const RF_EventMask term_events = RF_EventLastCmdDone | RF_EventLastFGCmdDone | RF_EventTxDone |
-                                     RF_EventCmdCancelled | RF_EventCmdAborted | RF_EventCmdStopped;
-    const RF_EventMask success_events =
-        RF_EventLastCmdDone | RF_EventLastFGCmdDone | RF_EventTxDone;
 
     if (payload == NULL || payload_len == 0u || payload_len > BLE_ADV_TX_MAX_PAYLOAD_LEN) {
         return false;
@@ -288,8 +354,13 @@ static bool RadioIF_transmitBleAdvRaw(const uint8_t *payload, uint8_t payload_le
     Ble5_0_cmdBle5AdvNc.startTrigger.pastTrig = 1u;
     Ble5_0_cmdBle5AdvNc.condition.rule = COND_NEVER;
     Ble5_0_cmdBle5AdvNc.pNextOp = 0;
-    Ble5_0_cmdBle5AdvNc.txPower = 0x0000u;
-    Ble5_0_cmdBle5AdvNc.tx20Power = 0x00000000u;
+    if (tx_power.paType == RF_TxPowerTable_HighPA) {
+        Ble5_0_cmdBle5AdvNc.txPower = 0x0000u;
+        Ble5_0_cmdBle5AdvNc.tx20Power = tx_power.rawValue;
+    } else {
+        Ble5_0_cmdBle5AdvNc.txPower = (uint16_t)tx_power.rawValue;
+        Ble5_0_cmdBle5AdvNc.tx20Power = 0x00000000u;
+    }
 
     if (Ble5_0_cmdBle5AdvNc.pParams == NULL) {
         return false;
@@ -302,24 +373,9 @@ static bool RadioIF_transmitBleAdvRaw(const uint8_t *payload, uint8_t payload_le
     Ble5_0_cmdBle5AdvNc.pParams->pDeviceAddress = (uint16_t *)s_ble_adv_tx_device_addr;
     Ble5_0_cmdBle5AdvNc.pParams->pWhiteList = NULL;
 
-    RF_Params_init(&rf_params);
-    tx_rf_handle = RF_open(&s_rf_tx_object, &Ble5_0_mode,
-                           (RF_RadioSetup *)&Ble5_0_cmdBle5RadioSetup, &rf_params);
-    if (tx_rf_handle == NULL) {
-        return false;
-    }
-
-    result = RF_runCmd(tx_rf_handle, (RF_Op *)&Ble5_0_cmdFs, RF_PriorityNormal, NULL, term_events);
-    if ((result & success_events) == 0u) {
-        RF_close(tx_rf_handle);
-        return false;
-    }
-
-    result = RF_runCmd(tx_rf_handle, (RF_Op *)&Ble5_0_cmdBle5AdvNc, RF_PriorityNormal, NULL,
-                       term_events);
-    RF_close(tx_rf_handle);
-
-    return (result & success_events) != 0u;
+    return RadioIF_executeTxCommand(&Ble5_0_mode, (RF_RadioSetup *)&Ble5_0_cmdBle5RadioSetup,
+                                    (RF_Op *)&Ble5_0_cmdFs, (RF_Op *)&Ble5_0_cmdBle5AdvNc,
+                                    tx_power);
 }
 
 static bool RadioIF_isBleAdvChannel(uint16_t channel) {

@@ -26,10 +26,6 @@ void HostIF_writeBuffer(const uint8_t *buffer, size_t len) {
     }
 }
 
-void HostIF_writeByte(uint8_t value) {
-    UARTCharPut(UART0_BASE, value);
-}
-
 int32_t HostIF_readByteNonBlocking(void) {
     return UARTCharGetNonBlocking(UART0_BASE);
 }

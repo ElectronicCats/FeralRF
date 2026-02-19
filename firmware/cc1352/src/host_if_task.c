@@ -16,6 +16,8 @@
 #include "protocol.h"
 #include "task_event.h"
 
+#define HOST_IF_TASK_RX_BUDGET_PER_POLL 128u
+
 static uint8_t s_encoded_frame[COBS_MAX_ENCODED];
 static size_t s_encoded_len = 0;
 static bool s_overflow = false;
@@ -40,39 +42,48 @@ void HostIFTask_init(void) {
 }
 
 void HostIFTask_poll(void) {
+    uint16_t processed = 0u;
+
     HostIFTask_flushTx();
 
-    int32_t ch = HostIF_readByteNonBlocking();
-    if (ch < 0) {
-        return;
-    }
+    while (processed < HOST_IF_TASK_RX_BUDGET_PER_POLL) {
+        int32_t ch = 0;
+        uint8_t byte = 0u;
 
-    uint8_t byte = (uint8_t)ch;
-    if (byte == 0x00u) {
-        if (s_overflow) {
-            s_overflow = false;
+        ch = HostIF_readByteNonBlocking();
+        if (ch < 0) {
+            break;
+        }
+        processed++;
+
+        byte = (uint8_t)ch;
+        if (byte == 0x00u) {
+            if (s_overflow) {
+                s_overflow = false;
+                s_encoded_len = 0;
+                TaskEvent_set(TASK_EVENT_HOST_IF_RX_OVERFLOW);
+                CommandProcessor_sendFrameTooLongError();
+                continue;
+            }
+
+            if (s_encoded_len == 0) {
+                continue;
+            }
+
+            TaskEvent_set(TASK_EVENT_HOST_IF_RX_FRAME);
+            CommandProcessor_processEncodedFrame(s_encoded_frame, s_encoded_len);
             s_encoded_len = 0;
-            TaskEvent_set(TASK_EVENT_HOST_IF_RX_OVERFLOW);
-            CommandProcessor_sendFrameTooLongError();
-            return;
+            continue;
         }
 
-        if (s_encoded_len == 0) {
-            return;
-        }
-
-        TaskEvent_set(TASK_EVENT_HOST_IF_RX_FRAME);
-        CommandProcessor_processEncodedFrame(s_encoded_frame, s_encoded_len);
-        s_encoded_len = 0;
-        HostIFTask_flushTx();
-        return;
-    }
-
-    if (!s_overflow) {
-        if (s_encoded_len < sizeof(s_encoded_frame)) {
-            s_encoded_frame[s_encoded_len++] = byte;
-        } else {
-            s_overflow = true;
+        if (!s_overflow) {
+            if (s_encoded_len < sizeof(s_encoded_frame)) {
+                s_encoded_frame[s_encoded_len++] = byte;
+            } else {
+                s_overflow = true;
+            }
         }
     }
+
+    HostIFTask_flushTx();
 }

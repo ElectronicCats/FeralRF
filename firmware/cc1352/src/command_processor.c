@@ -53,6 +53,28 @@ static uint32_t read_u32_le(const uint8_t *p) {
     return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
 }
 
+static bool parse_tx_len(const uint8_t *payload, uint16_t payload_len, uint16_t suffix_len,
+                         uint8_t *tx_len_out) {
+    uint8_t tx_len = 0u;
+    uint16_t expected_payload_len = 0u;
+
+    if (payload == NULL || tx_len_out == NULL) {
+        return false;
+    }
+    if (payload_len < (uint16_t)(1u + suffix_len)) {
+        return false;
+    }
+
+    tx_len = payload[0];
+    expected_payload_len = (uint16_t)tx_len + 1u + suffix_len;
+    if (tx_len == 0u || expected_payload_len != payload_len) {
+        return false;
+    }
+
+    *tx_len_out = tx_len;
+    return true;
+}
+
 static void write_u32_le(uint8_t *p, uint32_t v) {
     p[0] = (uint8_t)(v & 0xFFu);
     p[1] = (uint8_t)((v >> 8) & 0xFFu);
@@ -180,97 +202,71 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
         send_ack(seq);
         return;
 
-    case CMD_TX_RAW:
-        if (payload_len < 2u) {
+    case CMD_TX_RAW: {
+        uint8_t tx_len = 0u;
+        if (!parse_tx_len(payload, payload_len, 1u, &tx_len)) {
             send_error(seq, ERR_INVALID_PAYLOAD);
             return;
         }
-        {
-            uint8_t tx_len = payload[0];
-            uint16_t expected_payload_len = (uint16_t)tx_len + 2u;
 
-            if (tx_len == 0u || expected_payload_len != payload_len) {
-                send_error(seq, ERR_INVALID_PAYLOAD);
-                return;
-            }
-
-            if (!ControlTask_onTxRaw(&payload[1], tx_len, (int8_t)payload[1u + tx_len])) {
-                send_error(seq, ERR_INVALID_STATE);
-                return;
-            }
+        if (!ControlTask_onTxRaw(&payload[1], tx_len, (int8_t)payload[1u + tx_len])) {
+            send_error(seq, ERR_INVALID_STATE);
+            return;
         }
+    }
         send_ack(seq);
         return;
 
-    case CMD_TX_BURST:
-        if (payload_len < 8u) {
+    case CMD_TX_BURST: {
+        uint8_t tx_len = 0u;
+        uint16_t tx_count = 0u;
+        uint32_t interval_us = 0u;
+
+        if (!parse_tx_len(payload, payload_len, 6u, &tx_len)) {
             send_error(seq, ERR_INVALID_PAYLOAD);
             return;
         }
-        {
-            uint8_t tx_len = payload[0];
-            uint16_t expected_payload_len = (uint16_t)tx_len + 7u;
-            uint16_t tx_count = 0u;
-            uint32_t interval_us = 0u;
 
-            if (tx_len == 0u || expected_payload_len != payload_len) {
-                send_error(seq, ERR_INVALID_PAYLOAD);
-                return;
-            }
-
-            tx_count = read_u16_le(&payload[1u + tx_len]);
-            interval_us = read_u32_le(&payload[1u + tx_len + 2u]);
-            if (!ControlTask_onTxBurst(&payload[1], tx_len, tx_count, interval_us)) {
-                send_error(seq, ERR_INVALID_STATE);
-                return;
-            }
+        tx_count = read_u16_le(&payload[1u + tx_len]);
+        interval_us = read_u32_le(&payload[1u + tx_len + 2u]);
+        if (!ControlTask_onTxBurst(&payload[1], tx_len, tx_count, interval_us)) {
+            send_error(seq, ERR_INVALID_STATE);
+            return;
         }
+    }
         send_ack(seq);
         return;
 
-    case CMD_TX_FRAME:
-        if (payload_len < 2u) {
+    case CMD_TX_FRAME: {
+        uint8_t tx_len = 0u;
+        if (!parse_tx_len(payload, payload_len, 0u, &tx_len)) {
             send_error(seq, ERR_INVALID_PAYLOAD);
             return;
         }
-        {
-            uint8_t tx_len = payload[0];
-            uint16_t expected_payload_len = (uint16_t)tx_len + 1u;
 
-            if (tx_len == 0u || expected_payload_len != payload_len) {
-                send_error(seq, ERR_INVALID_PAYLOAD);
-                return;
-            }
-
-            if (!ControlTask_onTxFrame(&payload[1], tx_len)) {
-                send_error(seq, ERR_INVALID_STATE);
-                return;
-            }
+        if (!ControlTask_onTxFrame(&payload[1], tx_len)) {
+            send_error(seq, ERR_INVALID_STATE);
+            return;
         }
+    }
         send_ack(seq);
         return;
 
-    case CMD_TX_CONTINUOUS:
-        if (payload_len < 6u) {
+    case CMD_TX_CONTINUOUS: {
+        uint8_t tx_len = 0u;
+        uint32_t interval_us = 0u;
+
+        if (!parse_tx_len(payload, payload_len, 4u, &tx_len)) {
             send_error(seq, ERR_INVALID_PAYLOAD);
             return;
         }
-        {
-            uint8_t tx_len = payload[0];
-            uint16_t expected_payload_len = (uint16_t)tx_len + 5u;
-            uint32_t interval_us = 0u;
 
-            if (tx_len == 0u || expected_payload_len != payload_len) {
-                send_error(seq, ERR_INVALID_PAYLOAD);
-                return;
-            }
-
-            interval_us = read_u32_le(&payload[1u + tx_len]);
-            if (!ControlTask_onTxContinuous(&payload[1], tx_len, interval_us)) {
-                send_error(seq, ERR_INVALID_STATE);
-                return;
-            }
+        interval_us = read_u32_le(&payload[1u + tx_len]);
+        if (!ControlTask_onTxContinuous(&payload[1], tx_len, interval_us)) {
+            send_error(seq, ERR_INVALID_STATE);
+            return;
         }
+    }
         send_ack(seq);
         return;
 

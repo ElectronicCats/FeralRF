@@ -110,7 +110,3 @@ void DataTask_poll(void) {
         }
     }
 }
-
-bool DataTask_isRxActive(void) {
-    return s_rx_active;
-}

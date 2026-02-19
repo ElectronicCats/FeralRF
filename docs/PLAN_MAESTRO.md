@@ -18,6 +18,7 @@ Firmware universal para CatSniffer (CC1352P + RP2040) con capacidades de sniffin
 - Backend RF real `IEEE_802_15_4` (RX) integrado y validado en hardware con captura real (`packets>0`, `delta_ok>0`) y barrido por canales (`11..26`).
 - `TX_RAW` fase 1 operativo en PHY4 (802.15.4): `ACK` estable y ruta no bloqueante en firmware.
 - `TX_RAW` fase 1 operativo en BLE (PHY0, ADV): `ACK` estable en smoke dedicado.
+- `JAM_CONTINUOUS` + `JAM_STOP` fase 1 operativos en PHY4 y BLE (incluye robustez de `JAM_STOP`).
 - Gate multi-PHY disponible y validado en hardware (`python/examples/release_gate_multi_phy.py`) para ejecución unificada BLE + PHY4 RX/TX + BLE TX.
 - Estabilidad validada: soak BLE de 30 minutos completado en hardware.
 - Canary de regresion validado en hardware (`CANARY PASS`, 60s, monotonia de stats y `RX_STOP ACK`).
@@ -286,7 +287,7 @@ feralrf/
 
 ### FASE 2: TX + Jamming Básico (Semanas 4-5)
 - [x] TX raw packets (fase 1 ACK path + validación RF over-the-air en PHY4 y BLE completadas)
-- [ ] Jamming continuo (CW)
+- [x] Jamming continuo (CW) fase 1 (`CMD_JAM_CONTINUOUS` + `CMD_JAM_STOP` en PHY4/BLE)
 - [ ] Power control (-20 a +20 dBm)
 - [ ] Regulatory warnings
 

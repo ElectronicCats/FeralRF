@@ -64,6 +64,35 @@ static uint8_t s_jam_payload[CONTROL_TASK_TX_RAW_MAX_LEN];
 
 static const uint8_t s_serial[8] = {'F', 'E', 'R', 'A', 'L', 'R', 'F', '1'};
 
+static bool ControlTask_isAnyTxPending(void) {
+    return s_tx_raw_pending || s_tx_burst_pending || s_tx_continuous_pending;
+}
+
+static bool ControlTask_canStartTx(const uint8_t *payload, uint8_t payload_len) {
+    return payload != NULL && payload_len > 0u && payload_len <= CONTROL_TASK_TX_RAW_MAX_LEN &&
+           !s_rx_enabled && !ControlTask_isAnyTxPending();
+}
+
+static void ControlTask_clearJamWindow(void) {
+    s_jam_active = false;
+    s_jam_stop_due_us = 0u;
+}
+
+static void ControlTask_clearTxBurstState(void) {
+    s_tx_burst_pending = false;
+    s_tx_burst_len = 0u;
+    s_tx_burst_remaining = 0u;
+    s_tx_burst_interval_us = 0u;
+    s_tx_burst_next_due_us = 0u;
+}
+
+static void ControlTask_clearTxContinuousState(void) {
+    s_tx_continuous_pending = false;
+    s_tx_continuous_len = 0u;
+    s_tx_continuous_interval_us = 0u;
+    s_tx_continuous_next_due_us = 0u;
+}
+
 static void ControlTask_initTxTimebase(void) {
     uint32_t clock_hz = SysCtrlClockGet();
 
@@ -101,6 +130,31 @@ static uint64_t ControlTask_getTimeUs(void) {
     return s_tx_time_us;
 }
 
+static void ControlTask_resetTxPowerState(void) {
+    s_tx_raw_power_dbm = 0;
+    s_tx_burst_power_dbm = 0;
+    s_tx_continuous_power_dbm = 0;
+}
+
+static void ControlTask_resetTxJamState(bool clear_task_events) {
+    s_tx_raw_pending = false;
+    s_tx_raw_len = 0u;
+
+    ControlTask_clearTxBurstState();
+    ControlTask_clearTxContinuousState();
+    ControlTask_clearJamWindow();
+
+    s_tx_raw_power_dbm = 0;
+    s_tx_burst_power_dbm = 0;
+    s_tx_continuous_power_dbm = 0;
+
+    if (clear_task_events) {
+        TaskEvent_clear(TASK_EVENT_CONTROL_TX_RAW);
+        TaskEvent_clear(TASK_EVENT_CONTROL_TX_BURST);
+        TaskEvent_clear(TASK_EVENT_CONTROL_TX_CONTINUOUS);
+    }
+}
+
 void ControlTask_init(void) {
     PhyManager_init();
     LLManager_init();
@@ -112,47 +166,17 @@ void ControlTask_init(void) {
     s_tx_power_dbm = 0;
     s_frequency_hz = 0;
     s_rx_enabled = false;
-    s_tx_raw_pending = false;
-    s_tx_raw_len = 0u;
-    s_tx_raw_power_dbm = 0;
-    s_tx_burst_pending = false;
-    s_tx_burst_len = 0u;
-    s_tx_burst_remaining = 0u;
-    s_tx_burst_interval_us = 0u;
-    s_tx_burst_next_due_us = 0u;
-    s_tx_burst_power_dbm = 0;
-    s_tx_continuous_pending = false;
-    s_tx_continuous_len = 0u;
-    s_tx_continuous_interval_us = 0u;
-    s_tx_continuous_next_due_us = 0u;
-    s_tx_continuous_power_dbm = 0;
-    s_jam_active = false;
-    s_jam_stop_due_us = 0u;
+    ControlTask_resetTxJamState(false);
+    ControlTask_resetTxPowerState();
     memset(s_jam_payload, 0xFF, sizeof(s_jam_payload));
 }
 
 void ControlTask_onRadioInit(void) {
     ControlTask_initTxTimebase();
     s_rx_enabled = false;
-    s_tx_raw_pending = false;
-    s_tx_raw_len = 0u;
-    s_tx_burst_pending = false;
-    s_tx_burst_len = 0u;
-    s_tx_burst_remaining = 0u;
-    s_tx_burst_interval_us = 0u;
-    s_tx_burst_next_due_us = 0u;
-    s_tx_burst_power_dbm = 0;
-    s_tx_continuous_pending = false;
-    s_tx_continuous_len = 0u;
-    s_tx_continuous_interval_us = 0u;
-    s_tx_continuous_next_due_us = 0u;
-    s_tx_continuous_power_dbm = 0;
-    s_jam_active = false;
-    s_jam_stop_due_us = 0u;
+    ControlTask_resetTxJamState(true);
+    ControlTask_resetTxPowerState();
     TaskEvent_clear(TASK_EVENT_CONTROL_RX_START);
-    TaskEvent_clear(TASK_EVENT_CONTROL_TX_RAW);
-    TaskEvent_clear(TASK_EVENT_CONTROL_TX_BURST);
-    TaskEvent_clear(TASK_EVENT_CONTROL_TX_CONTINUOUS);
     TaskEvent_set(TASK_EVENT_CONTROL_RX_STOP);
     TaskEvent_clear(TASK_EVENT_DATA_RX_ACTIVE);
     RadioIF_stopRx();
@@ -185,8 +209,7 @@ void ControlTask_onSetPower(int8_t power_dbm) {
 }
 
 bool ControlTask_onTxRaw(const uint8_t *payload, uint8_t payload_len, int8_t power_dbm) {
-    if (payload == NULL || payload_len == 0u || payload_len > CONTROL_TASK_TX_RAW_MAX_LEN ||
-        s_rx_enabled || s_tx_raw_pending || s_tx_burst_pending || s_tx_continuous_pending) {
+    if (!ControlTask_canStartTx(payload, payload_len)) {
         return false;
     }
 
@@ -204,9 +227,7 @@ bool ControlTask_onTxFrame(const uint8_t *payload, uint8_t payload_len) {
 
 bool ControlTask_onTxBurst(const uint8_t *payload, uint8_t payload_len, uint16_t count,
                            uint32_t interval_us) {
-    if (payload == NULL || payload_len == 0u || payload_len > CONTROL_TASK_TX_RAW_MAX_LEN ||
-        count == 0u || s_rx_enabled || s_tx_raw_pending || s_tx_burst_pending ||
-        s_tx_continuous_pending) {
+    if (count == 0u || !ControlTask_canStartTx(payload, payload_len)) {
         return false;
     }
 
@@ -222,8 +243,7 @@ bool ControlTask_onTxBurst(const uint8_t *payload, uint8_t payload_len, uint16_t
 }
 
 bool ControlTask_onTxContinuous(const uint8_t *payload, uint8_t payload_len, uint32_t interval_us) {
-    if (payload == NULL || payload_len == 0u || payload_len > CONTROL_TASK_TX_RAW_MAX_LEN ||
-        s_rx_enabled || s_tx_raw_pending || s_tx_burst_pending || s_tx_continuous_pending) {
+    if (!ControlTask_canStartTx(payload, payload_len)) {
         return false;
     }
 
@@ -238,27 +258,14 @@ bool ControlTask_onTxContinuous(const uint8_t *payload, uint8_t payload_len, uin
 }
 
 void ControlTask_onTxStop(void) {
-    s_tx_burst_pending = false;
-    s_tx_burst_len = 0u;
-    s_tx_burst_remaining = 0u;
-    s_tx_burst_interval_us = 0u;
-    s_tx_burst_next_due_us = 0u;
-    TaskEvent_clear(TASK_EVENT_CONTROL_TX_BURST);
-
-    s_tx_continuous_pending = false;
-    s_tx_continuous_len = 0u;
-    s_tx_continuous_interval_us = 0u;
-    s_tx_continuous_next_due_us = 0u;
-    TaskEvent_clear(TASK_EVENT_CONTROL_TX_CONTINUOUS);
-    s_jam_active = false;
-    s_jam_stop_due_us = 0u;
+    ControlTask_resetTxJamState(true);
 }
 
 bool ControlTask_onJamContinuous(uint8_t channel, int8_t power_dbm, uint16_t duration_ms) {
     uint8_t jam_payload_len = 0u;
 
     if (duration_ms == 0u || duration_ms > CONTROL_TASK_JAM_MAX_DURATION_MS || s_rx_enabled ||
-        s_tx_raw_pending || s_tx_burst_pending || s_tx_continuous_pending) {
+        ControlTask_isAnyTxPending()) {
         return false;
     }
 
@@ -312,9 +319,7 @@ void ControlTask_processTxBurst(void) {
 
     RadioIF_setPower(s_tx_burst_power_dbm);
     if (!RadioIF_transmitRaw(s_tx_burst_payload, s_tx_burst_len, s_tx_burst_power_dbm)) {
-        s_tx_burst_pending = false;
-        s_tx_burst_len = 0u;
-        s_tx_burst_remaining = 0u;
+        ControlTask_clearTxBurstState();
         return;
     }
 
@@ -322,8 +327,7 @@ void ControlTask_processTxBurst(void) {
         s_tx_burst_remaining--;
     }
     if (s_tx_burst_remaining == 0u) {
-        s_tx_burst_pending = false;
-        s_tx_burst_len = 0u;
+        ControlTask_clearTxBurstState();
         return;
     }
 
@@ -349,10 +353,8 @@ void ControlTask_processTxContinuous(void) {
     RadioIF_setPower(s_tx_continuous_power_dbm);
     if (!RadioIF_transmitRaw(s_tx_continuous_payload, s_tx_continuous_len,
                              s_tx_continuous_power_dbm)) {
-        s_tx_continuous_pending = false;
-        s_tx_continuous_len = 0u;
-        s_jam_active = false;
-        s_jam_stop_due_us = 0u;
+        ControlTask_clearTxContinuousState();
+        ControlTask_clearJamWindow();
         return;
     }
 
@@ -368,7 +370,7 @@ bool ControlTask_isTxContinuousPending(void) {
 }
 
 bool ControlTask_isTxBusy(void) {
-    return s_tx_raw_pending || s_tx_burst_pending || s_tx_continuous_pending;
+    return ControlTask_isAnyTxPending();
 }
 
 void ControlTask_onRxStart(void) {

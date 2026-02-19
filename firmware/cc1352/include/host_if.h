@@ -12,7 +12,6 @@
 
 void HostIF_init(void);
 void HostIF_writeBuffer(const uint8_t *buffer, size_t len);
-void HostIF_writeByte(uint8_t value);
 int32_t HostIF_readByteNonBlocking(void);
 
 #endif /* HOST_IF_H */

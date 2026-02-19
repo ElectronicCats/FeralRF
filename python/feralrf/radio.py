@@ -565,15 +565,32 @@ class Radio:
 
     def stop_jam(self, timeout: float = 5.0) -> None:
         """Stop active jamming stream."""
-        self._send_command(Command.JAM_STOP, CommandBuilder.jam_stop())
-        cmd_id, seq, payload = self._read_response(
-            timeout=timeout, expected={Response.ACK, Response.ERROR}
-        )
+        last_exc: Optional[Exception] = None
 
-        if cmd_id == Response.ERROR:
-            raise CommandError("JAM_STOP failed", payload[0] if payload else 0)
-        if cmd_id != Response.ACK:
-            raise ProtocolError(f"Unexpected response to JAM_STOP: 0x{cmd_id:02X}")
+        for _ in range(2):
+            try:
+                self._send_command(Command.JAM_STOP, CommandBuilder.jam_stop())
+                cmd_id, seq, payload = self._read_response(
+                    timeout=timeout, expected={Response.ACK, Response.ERROR}
+                )
+
+                if cmd_id == Response.ERROR:
+                    raise CommandError("JAM_STOP failed", payload[0] if payload else 0)
+                if cmd_id != Response.ACK:
+                    raise ProtocolError(f"Unexpected response to JAM_STOP: 0x{cmd_id:02X}")
+                return
+            except (TimeoutError, CommandError, ProtocolError) as exc:
+                last_exc = exc
+                time.sleep(0.05)
+
+        # Fallback path: firmware route may still honor TX_STOP even if JAM_STOP path is busy.
+        try:
+            self.stop_transmit(timeout=timeout)
+            return
+        except (TimeoutError, CommandError, ProtocolError):
+            if last_exc is not None:
+                raise last_exc
+            raise
 
     def __enter__(self):
         self.connect()

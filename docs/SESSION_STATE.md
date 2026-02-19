@@ -1,6 +1,6 @@
 # FeralRF - Estado de Sesion
 
-## Ultima actualizacion: 2026-02-18
+## Ultima actualizacion: 2026-02-19
 
 ## Fuente de plan activa
 
@@ -38,6 +38,10 @@
 21. Evidencia OTA dedicada de `TX_FRAME`: `OK` en hardware con `ota_tx_frame.py` + `ota_rx_probe.py`:
    1. PHY4 CH25 marcador `a1b2c3d4`: `marker_hits=40`, `crc_ok=86/86`.
    2. BLE CH37 marcador `beef01`: `marker_hits=14`, `crc_ok=1427/1427`.
+22. Jamming fase 1 implementado y validado:
+   1. `CMD_JAM_CONTINUOUS` + `CMD_JAM_STOP` en PHY4 y BLE.
+   2. Potencia TX aplicada con tabla real 2.4 GHz (incluye `20 dBm`).
+   3. Ajustes de robustez para `JAM_STOP` en firmware/host bajo carga TX.
 
 ## Estado por fase
 
@@ -137,6 +141,8 @@
    `PYTHONPATH=python python3 python/examples/ota_tx_frame.py -p /dev/ttyACM0 -b 921600 --phy 4 --channel 25 --power 0 --payload-hex a1b2c3d4 --count 40 --interval-us 25000`
 13. OTA RX probe helper (receptor):
    `PYTHONPATH=python python3 python/examples/ota_rx_probe.py -p /dev/ttyACM1 -b 921600 --phy 4 --channel 25 --duration 12 --marker-hex a1b2c3d4 --min-hits 1`
+14. JAM smoke fase 1:
+   `PYTHONPATH=python python3 python/examples/smoke_jam_phase1.py -p /dev/ttyACM0 -b 921600 --phy 4 --channel 25 --power 20 --duration-ms 3000`
 
 ## Archivos clave tocados en este bloque
 
@@ -153,6 +159,7 @@
 3. Planes:
    1. `docs/PLAN_FASES_DESDE_REPORTE.md`
    2. `docs/PLAN_MAESTRO.md`
+   3. `docs/NUEVO_PLAN_MAESTRO.md`
 4. Canary:
    1. `python/examples/canary_regression.py`
 5. Protocolo:

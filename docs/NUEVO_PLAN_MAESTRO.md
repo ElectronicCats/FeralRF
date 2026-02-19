@@ -1,6 +1,6 @@
 # FeralRF - Nuevo Plan Maestro (Estado Real)
 
-**Versión:** 2.5 | **Fecha:** 2026-02-18
+**Versión:** 2.6 | **Fecha:** 2026-02-19
 
 Firmware universal para CatSniffer (CC1352P + RP2040) con capacidades de sniffing, TX/RX, jamming y spectrum analysis para BLE, Zigbee y Sub-1GHz.
 
@@ -23,7 +23,7 @@ Firmware universal para CatSniffer (CC1352P + RP2040) con capacidades de sniffin
 
 ---
 
-## Estado Real del Proyecto (2026-02-18)
+## Estado Real del Proyecto (2026-02-19)
 
 ### Implementado y Funcional
 
@@ -41,6 +41,7 @@ Firmware universal para CatSniffer (CC1352P + RP2040) con capacidades de sniffin
 | TX over-the-air PHY4 | ✅ | `ota_rx_probe.py` (`marker_hits=80` TX_RAW, `marker_hits=40` TX_FRAME, marcador `a1b2c3d4`) |
 | TX over-the-air BLE | ✅ | `ota_rx_probe.py` (`marker_hits=24` TX_RAW, `marker_hits=14` TX_FRAME, marcador `beef01`) |
 | Multi-PHY Release Gate | ✅ | `MULTI-PHY RELEASE GATE PASS` |
+| JAM_CONTINUOUS + JAM_STOP (fase 1) | ✅ | Smoke en PHY4 y BLE, con `power=20 dBm` y timeout recovery |
 
 ### Brecha vs plan anterior (estado actual)
 
@@ -50,7 +51,7 @@ Firmware universal para CatSniffer (CC1352P + RP2040) con capacidades de sniffin
 | TX_BURST | "Completado" | ✅ Implementado + smoke + gate multi-PHY |
 | TX_CONTINUOUS + TX_STOP | "Completado" | ✅ Implementado + smoke + gate multi-PHY |
 | TX_FRAME | No definido | ✅ Implementado (fase 1) + smoke + gate multi-PHY |
-| Jamming CW | "Completado" | ❌ No implementado |
+| Jamming CW | "Completado" | ✅ Implementado (fase 1: `CMD_JAM_CONTINUOUS` + `CMD_JAM_STOP`) |
 | Jamming Reactivo | "Completado" | ❌ No implementado |
 | Spectrum Analyzer | "Completado MVP" | ❌ No implementado |
 | Sub-1GHz | "Completado MVP" | ❌ No implementado |
@@ -149,14 +150,14 @@ Frame format (pre-COBS):
 #define CMD_TX_STOP             0x24  // ✅
 ```
 
-### Comandos Pendientes de Implementación
+### Comandos Pendientes/Parciales de Implementación
 
 ```c
-// ============= Jamming (PENDIENTES) =============
-#define CMD_JAM_CONTINUOUS      0x30  // ❌ Jamming CW
+// ============= Jamming (PARCIAL) =============
+#define CMD_JAM_CONTINUOUS      0x30  // ✅ Jamming continuo (fase 1)
 #define CMD_JAM_REACTIVE        0x31  // ❌ Jamming reactivo
 #define CMD_JAM_PATTERN         0x32  // ❌ Jamming con patrón
-#define CMD_JAM_STOP            0x33  // ❌ Detener jamming
+#define CMD_JAM_STOP            0x33  // ✅ Detener jamming (fase 1)
 
 // ============= Spectrum Analysis (PENDIENTES) =============
 #define CMD_SPECTRUM_SCAN       0x40  // ❌ Scan de spectrum
@@ -420,8 +421,9 @@ Replay de paquete capturado.
 - [ ] CMD_IEEE154_PAN_HIJACK
 - [ ] Ejemplos Python de ataques
 
-### FASE 6: Jamming ⏳ PENDIENTE
-- [ ] CMD_JAM_CONTINUOUS (CW)
+### FASE 6: Jamming 🔄 EN PROGRESO
+- [x] CMD_JAM_CONTINUOUS (fase 1, duracion acotada)
+- [x] CMD_JAM_STOP (fase 1)
 - [ ] CMD_JAM_REACTIVE
 - [ ] CMD_JAM_PATTERN
 - [ ] Policy engine básico

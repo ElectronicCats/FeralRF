@@ -47,4 +47,10 @@ bool RadioIF_popRxPacket(RadioIF_RxPacket *out);
 void RadioIF_getMetrics(RadioIF_Metrics *out);
 void RadioIF_resetMetrics(void);
 
+/* Jamming functions - optimized continuous transmission */
+bool RadioIF_startJamSession(uint8_t phy, uint8_t channel, int8_t power_dbm);
+void RadioIF_stopJamSession(void);
+bool RadioIF_isJamSessionActive(void);
+void RadioIF_pollJamSession(void);
+
 #endif /* RADIO_IF_H */

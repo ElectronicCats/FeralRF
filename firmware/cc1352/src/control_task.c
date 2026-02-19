@@ -171,6 +171,11 @@ static void ControlTask_resetTxJamState(bool clear_task_events) {
     ControlTask_clearTxContinuousState();
     ControlTask_clearJamWindow();
 
+    /* Stop any active jam session */
+    if (RadioIF_isJamSessionActive()) {
+        RadioIF_stopJamSession();
+    }
+
     s_tx_raw_power_dbm = 0;
     s_tx_burst_power_dbm = 0;
     s_tx_continuous_power_dbm = 0;
@@ -291,7 +296,6 @@ void ControlTask_onTxStop(void) {
 }
 
 bool ControlTask_onJamContinuous(uint8_t channel, int8_t power_dbm, uint16_t duration_ms) {
-    uint8_t jam_payload_len = 0u;
     uint64_t now_wall_us = ControlTask_getWallTimeUs();
 
     if (duration_ms == 0u || duration_ms > JAM_MAX_DURATION_MS || s_rx_enabled ||
@@ -305,28 +309,20 @@ bool ControlTask_onJamContinuous(uint8_t channel, int8_t power_dbm, uint16_t dur
         return false;
     }
 
-    if (PhyManager_isBlePhy(s_selected_phy)) {
-        jam_payload_len = CONTROL_TASK_JAM_BLE_PAYLOAD_LEN;
-    } else if (s_selected_phy == PHY_MANAGER_PHY_IEEE_802_15_4) {
-        jam_payload_len = CONTROL_TASK_JAM_IEEE154_PAYLOAD_LEN;
-    } else {
-        return false;
-    }
-
-    ControlTask_onSetChannel(channel);
-    ControlTask_onSetPower(power_dbm);
-    if (!ControlTask_onTxContinuous(s_jam_payload, jam_payload_len, 0u)) {
+    /* Use optimized jam session with continuous wave */
+    if (!RadioIF_startJamSession(s_selected_phy, channel, power_dbm)) {
         return false;
     }
 
     s_jam_active = true;
-    s_jam_stop_due_us = ControlTask_getTimeUs() + ((uint64_t)duration_ms * 1000u);
+    s_jam_stop_due_us = ControlTask_getWallTimeUs() + ((uint64_t)duration_ms * 1000u);
     return true;
 }
 
 void ControlTask_onJamStop(void) {
+    RadioIF_stopJamSession();
     ControlTask_armJamCooldown();
-    ControlTask_onTxStop();
+    ControlTask_clearJamWindow();
 }
 
 void ControlTask_processTxRaw(void) {
@@ -379,10 +375,6 @@ void ControlTask_processTxContinuous(void) {
     }
 
     now_us = ControlTask_getTimeUs();
-    if (s_jam_active && now_us >= s_jam_stop_due_us) {
-        ControlTask_onJamStop();
-        return;
-    }
     if (now_us < s_tx_continuous_next_due_us) {
         return;
     }
@@ -391,11 +383,23 @@ void ControlTask_processTxContinuous(void) {
     if (!RadioIF_transmitRaw(s_tx_continuous_payload, s_tx_continuous_len,
                              s_tx_continuous_power_dbm)) {
         ControlTask_clearTxContinuousState();
-        ControlTask_clearJamWindow();
         return;
     }
 
     s_tx_continuous_next_due_us = now_us + (uint64_t)s_tx_continuous_interval_us;
+}
+
+void ControlTask_processJamTimeout(void) {
+    uint64_t now_wall_us = 0u;
+
+    if (!s_jam_active) {
+        return;
+    }
+
+    now_wall_us = ControlTask_getWallTimeUs();
+    if (now_wall_us >= s_jam_stop_due_us) {
+        ControlTask_onJamStop();
+    }
 }
 
 bool ControlTask_isTxBurstPending(void) {
@@ -407,7 +411,11 @@ bool ControlTask_isTxContinuousPending(void) {
 }
 
 bool ControlTask_isTxBusy(void) {
-    return ControlTask_isAnyTxPending();
+    return ControlTask_isAnyTxPending() || s_jam_active;
+}
+
+bool ControlTask_isJamActive(void) {
+    return s_jam_active;
 }
 
 void ControlTask_onRxStart(void) {

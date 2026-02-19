@@ -91,6 +91,12 @@ void DataTask_poll(void) {
         }
     }
 
+    /* Poll jam session timeout (runs independently from TX continuous) */
+    ControlTask_processJamTimeout();
+
+    /* Keep jam session transmitting */
+    RadioIF_pollJamSession();
+
     if (TaskEvent_isSet(TASK_EVENT_CONTROL_RX_START)) {
         s_rx_active = RadioIF_startRx();
         if (s_rx_active) {

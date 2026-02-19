@@ -17,6 +17,7 @@
 
 #include <ti/devices/DeviceFamily.h>
 /* clang-format off */
+#include DeviceFamily_constructPath(driverlib/rf_common_cmd.h)
 #include DeviceFamily_constructPath(driverlib/rf_data_entry.h)
 #include DeviceFamily_constructPath(driverlib/sys_ctrl.h)
 #include DeviceFamily_constructPath(driverlib/systick.h)
@@ -119,6 +120,14 @@ static uint32_t s_ble_hop_systick_last = 0u;
 static uint32_t s_ble_hop_cycles_accum = 0u;
 static uint32_t s_ble_hop_cycles_per_step = 0u;
 static const uint8_t s_ble_adv_hop_channels[3] = {37u, 38u, 39u};
+
+/* Jam session state - maintains open RF handle for continuous transmission */
+static bool s_jam_session_active = false;
+static RF_Object s_jam_rf_object;
+static RF_Handle s_jam_rf_handle = NULL;
+static uint8_t s_jam_phy = 0u;
+static uint8_t s_jam_channel = 0u;
+static int8_t s_jam_power_dbm = 0;
 #if defined(__GNUC__)
 static uint8_t s_ieee154_tx_buffer[IEEE_15_4_TX_MAX_PAYLOAD_LEN] __attribute__((aligned(4)));
 static uint8_t s_ble_adv_tx_payload[BLE_ADV_TX_MAX_PAYLOAD_LEN] __attribute__((aligned(4)));
@@ -1165,4 +1174,168 @@ bool RadioIF_popRxPacket(RadioIF_RxPacket *out) {
     s_rx_tail = (uint8_t)((s_rx_tail + 1u) % RADIO_IF_RX_QUEUE_DEPTH);
     s_rx_count--;
     return true;
+}
+
+/*
+ * Jamming Session Functions
+ *
+ * For BLE: Uses repeated ADV_NC transmissions with minimal gap
+ * For IEEE 802.15.4: Uses repeated IEEE TX transmissions
+ * Maintains open RF handle to eliminate per-packet open/close overhead.
+ */
+
+/* Jam payload - all 0xFF for maximum interference */
+static const uint8_t s_jam_ble_payload[31] = {
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
+};
+
+static const uint8_t s_jam_ieee154_payload[125] = {
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF
+};
+
+static bool RadioIF_executeJamTx(RF_Handle rf_handle, uint8_t phy, uint8_t channel,
+                                  int8_t power_dbm) {
+    RF_TxPowerTable_Value tx_power = RadioIF_resolveTxPowerValue(power_dbm);
+    RF_EventMask result;
+
+    if (PhyManager_isBlePhy(phy)) {
+        uint8_t ble_channel = RadioIF_convertToBleChannel(channel);
+        RadioIF_applyBleChannelConfig(ble_channel);
+
+        Ble5_0_cmdBle5AdvNc.channel = ble_channel;
+        Ble5_0_cmdBle5AdvNc.whitening.init = (uint8_t)(0x40u | (ble_channel & 0x3Fu));
+        Ble5_0_cmdBle5AdvNc.whitening.bOverride = 1u;
+        Ble5_0_cmdBle5AdvNc.startTrigger.triggerType = TRIG_NOW;
+        Ble5_0_cmdBle5AdvNc.startTrigger.pastTrig = 1u;
+        Ble5_0_cmdBle5AdvNc.condition.rule = COND_NEVER;
+        Ble5_0_cmdBle5AdvNc.pNextOp = 0;
+
+        if (tx_power.paType == RF_TxPowerTable_HighPA) {
+            Ble5_0_cmdBle5AdvNc.txPower = 0x0000u;
+            Ble5_0_cmdBle5AdvNc.tx20Power = tx_power.rawValue;
+        } else {
+            Ble5_0_cmdBle5AdvNc.txPower = (uint16_t)tx_power.rawValue;
+            Ble5_0_cmdBle5AdvNc.tx20Power = 0x00000000u;
+        }
+
+        if (Ble5_0_cmdBle5AdvNc.pParams == NULL) {
+            return false;
+        }
+
+        Ble5_0_cmdBle5AdvNc.pParams->advLen = 31u;
+        Ble5_0_cmdBle5AdvNc.pParams->pAdvData = (uint8_t *)s_jam_ble_payload;
+
+        result = RF_runCmd(rf_handle, (RF_Op *)&Ble5_0_cmdBle5AdvNc,
+                          RF_PriorityNormal, NULL, RADIO_IF_TX_TERM_EVENTS);
+        return (result & RADIO_IF_TX_SUCCESS_EVENTS) != 0u;
+    }
+
+    if (phy == PHY_MANAGER_PHY_IEEE_802_15_4) {
+        RadioIF_applyIeee154ChannelConfig((uint16_t)channel);
+
+        Ieee154_0_cmdIeeeTx.pPayload = (uint8_t *)s_jam_ieee154_payload;
+        Ieee154_0_cmdIeeeTx.payloadLen = 125u;
+        Ieee154_0_cmdIeeeTx.startTrigger.triggerType = TRIG_NOW;
+        Ieee154_0_cmdIeeeTx.startTrigger.pastTrig = 1u;
+        Ieee154_0_cmdIeeeTx.condition.rule = COND_NEVER;
+        Ieee154_0_cmdIeeeTx.pNextOp = 0;
+
+        result = RF_runCmd(rf_handle, (RF_Op *)&Ieee154_0_cmdIeeeTx,
+                          RF_PriorityNormal, NULL, RADIO_IF_TX_TERM_EVENTS);
+        return (result & RADIO_IF_TX_SUCCESS_EVENTS) != 0u;
+    }
+
+    return false;
+}
+
+bool RadioIF_startJamSession(uint8_t phy, uint8_t channel, int8_t power_dbm) {
+    RF_Params rf_params;
+    RF_Mode *mode;
+    RF_RadioSetup *setup_cmd;
+    bool tx_ok;
+
+    /* Cannot start jam if RX is running or another jam is active */
+    if (s_rx_running || s_jam_session_active) {
+        return false;
+    }
+
+    /* Determine mode based on PHY */
+    if (PhyManager_isBlePhy(phy)) {
+        mode = &Ble5_0_mode;
+        setup_cmd = (RF_RadioSetup *)&Ble5_0_cmdBle5RadioSetup;
+    } else if (phy == PHY_MANAGER_PHY_IEEE_802_15_4) {
+        mode = &Ieee154_0_mode;
+        setup_cmd = (RF_RadioSetup *)&Ieee154_0_cmdRadioSetup;
+    } else {
+        return false;
+    }
+
+    /* Open RF handle for jamming session */
+    RF_Params_init(&rf_params);
+    s_jam_rf_handle = RF_open(&s_jam_rf_object, mode, setup_cmd, &rf_params);
+    if (s_jam_rf_handle == NULL) {
+        return false;
+    }
+
+    /* Execute first TX to start the jam session */
+    tx_ok = RadioIF_executeJamTx(s_jam_rf_handle, phy, channel, power_dbm);
+    if (!tx_ok) {
+        RF_close(s_jam_rf_handle);
+        s_jam_rf_handle = NULL;
+        return false;
+    }
+
+    s_jam_session_active = true;
+    s_jam_phy = phy;
+    s_jam_channel = channel;
+    s_jam_power_dbm = power_dbm;
+    return true;
+}
+
+void RadioIF_pollJamSession(void) {
+    if (!s_jam_session_active || s_jam_rf_handle == NULL) {
+        return;
+    }
+
+    /* Execute another TX to keep jamming */
+    (void)RadioIF_executeJamTx(s_jam_rf_handle, s_jam_phy, s_jam_channel, s_jam_power_dbm);
+}
+
+void RadioIF_stopJamSession(void) {
+    if (!s_jam_session_active) {
+        return;
+    }
+
+    /* Close RF handle */
+    if (s_jam_rf_handle != NULL) {
+        RF_close(s_jam_rf_handle);
+        s_jam_rf_handle = NULL;
+    }
+
+    s_jam_session_active = false;
+    s_jam_phy = 0u;
+    s_jam_channel = 0u;
+    s_jam_power_dbm = 0;
+}
+
+bool RadioIF_isJamSessionActive(void) {
+    return s_jam_session_active;
 }

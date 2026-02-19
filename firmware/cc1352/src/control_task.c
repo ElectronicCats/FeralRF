@@ -12,6 +12,7 @@
 #include <ti/devices/cc13x2x7_cc26x2x7/driverlib/sys_ctrl.h>
 #include <ti/devices/cc13x2x7_cc26x2x7/driverlib/systick.h>
 
+#include "config.h"
 #include "ll_manager.h"
 #include "phy_manager.h"
 #include "radio_if.h"
@@ -28,14 +29,8 @@
     (FW_CAPABILITY_RX_STATS | FW_CAPABILITY_LL_PDU_META | FW_CAPABILITY_LL_STATS_EXT)
 #define CONTROL_TASK_TX_RAW_MAX_LEN 125u
 #define CONTROL_TASK_SYSTICK_MAX 0x00FFFFFFu
-#define CONTROL_TASK_JAM_MAX_DURATION_MS 30000u
-#define CONTROL_TASK_JAM_COOLDOWN_MS 2000u
 #define CONTROL_TASK_JAM_BLE_PAYLOAD_LEN 31u
 #define CONTROL_TASK_JAM_IEEE154_PAYLOAD_LEN 125u
-#define CONTROL_TASK_BLE_ADV_CHANNEL_MIN 37u
-#define CONTROL_TASK_BLE_ADV_CHANNEL_MAX 39u
-#define CONTROL_TASK_IEEE154_CHANNEL_MIN 11u
-#define CONTROL_TASK_IEEE154_CHANNEL_MAX 26u
 
 static uint8_t s_selected_phy = 0;
 static uint16_t s_channel = 0;
@@ -98,19 +93,16 @@ static void ControlTask_clearJamWindow(void) {
 
 static bool ControlTask_isJamChannelAllowed(uint8_t channel) {
     if (PhyManager_isBlePhy(s_selected_phy)) {
-        return channel >= CONTROL_TASK_BLE_ADV_CHANNEL_MIN &&
-               channel <= CONTROL_TASK_BLE_ADV_CHANNEL_MAX;
+        return channel >= JAM_BLE_CHANNEL_MIN && channel <= JAM_BLE_CHANNEL_MAX;
     }
     if (s_selected_phy == PHY_MANAGER_PHY_IEEE_802_15_4) {
-        return channel >= CONTROL_TASK_IEEE154_CHANNEL_MIN &&
-               channel <= CONTROL_TASK_IEEE154_CHANNEL_MAX;
+        return channel >= JAM_IEEE154_CHANNEL_MIN && channel <= JAM_IEEE154_CHANNEL_MAX;
     }
     return false;
 }
 
 static void ControlTask_armJamCooldown(void) {
-    s_jam_cooldown_due_us =
-        ControlTask_getWallTimeUs() + ((uint64_t)CONTROL_TASK_JAM_COOLDOWN_MS * 1000u);
+    s_jam_cooldown_due_us = ControlTask_getWallTimeUs() + ((uint64_t)JAM_COOLDOWN_MS * 1000u);
 }
 
 static void ControlTask_clearTxBurstState(void) {
@@ -302,7 +294,7 @@ bool ControlTask_onJamContinuous(uint8_t channel, int8_t power_dbm, uint16_t dur
     uint8_t jam_payload_len = 0u;
     uint64_t now_wall_us = ControlTask_getWallTimeUs();
 
-    if (duration_ms == 0u || duration_ms > CONTROL_TASK_JAM_MAX_DURATION_MS || s_rx_enabled ||
+    if (duration_ms == 0u || duration_ms > JAM_MAX_DURATION_MS || s_rx_enabled ||
         ControlTask_isAnyTxPending()) {
         return false;
     }

@@ -23,6 +23,14 @@
 #define RADIO_IF_BLE_ADV_HOP_ENABLE 1u         /* 1: enable basic BLE adv hopping 37/38/39 */
 #define RADIO_IF_BLE_ADV_HOP_INTERVAL_MS 50u   /* Hop dwell time per adv channel */
 
+/* JAM Safe-Mode Configuration */
+#define JAM_MAX_DURATION_MS 30000u /* Maximum JAM session length */
+#define JAM_COOLDOWN_MS 2000u      /* Mandatory idle time between JAM sessions */
+#define JAM_BLE_CHANNEL_MIN 37u    /* BLE adv channels only */
+#define JAM_BLE_CHANNEL_MAX 39u
+#define JAM_IEEE154_CHANNEL_MIN 11u /* IEEE 802.15.4 channels */
+#define JAM_IEEE154_CHANNEL_MAX 26u
+
 /* Buffer Sizes */
 #define UART_RX_BUFFER_SIZE 16384 /* 16KB */
 #define UART_TX_BUFFER_SIZE 4096  /* 4KB */

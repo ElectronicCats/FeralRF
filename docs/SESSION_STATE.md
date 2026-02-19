@@ -47,6 +47,7 @@
    2. Cooldown obligatorio entre JAMs (`2 s`) usando tiempo wall-clock (AON RTC).
    3. Canal explicito valido por PHY (BLE `37..39`, IEEE 802.15.4 `11..26`).
    4. Rechazo por estado invalido (`ERR_INVALID_STATE`) cuando aplica.
+   5. Parametros movidos a `firmware/cc1352/include/config.h` (`JAM_MAX_DURATION_MS`, `JAM_COOLDOWN_MS`, rangos de canal BLE/IEEE 802.15.4).
 
 ## Estado por fase
 

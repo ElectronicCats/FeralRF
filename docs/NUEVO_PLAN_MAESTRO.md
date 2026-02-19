@@ -452,11 +452,11 @@ Replay de paquete capturado.
   - Recomendado: corrida consecutiva `smoke_phase2 -> smoke_tx_phase1(phy4) -> smoke_phase2`.
 
 #### Modo seguro para pruebas de laboratorio (activo)
-- Duración máxima de JAM: `CONTROL_TASK_JAM_MAX_DURATION_MS = 30000` (30 s).
-- Cooldown obligatorio entre JAMs: `CONTROL_TASK_JAM_COOLDOWN_MS = 2000` (2 s).
+- Duración máxima de JAM: `JAM_MAX_DURATION_MS = 30000` (30 s, configurable en `firmware/cc1352/include/config.h`).
+- Cooldown obligatorio entre JAMs: `JAM_COOLDOWN_MS = 2000` (2 s, configurable en `firmware/cc1352/include/config.h`).
 - Canal explícito requerido por PHY:
-  - BLE: solo `37..39`
-  - IEEE 802.15.4: solo `11..26`
+  - BLE: `JAM_BLE_CHANNEL_MIN..JAM_BLE_CHANNEL_MAX` (default `37..39`)
+  - IEEE 802.15.4: `JAM_IEEE154_CHANNEL_MIN..JAM_IEEE154_CHANNEL_MAX` (default `11..26`)
 - Si se viola alguna regla, `CMD_JAM_CONTINUOUS` responde con `ERR_INVALID_STATE`.
 
 ### FASE 7: Spectrum Analyzer ⏳ PENDIENTE

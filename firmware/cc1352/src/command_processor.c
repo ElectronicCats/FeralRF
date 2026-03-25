@@ -44,6 +44,7 @@
 #define ERR_INVALID_FRAME 0x03u
 #define ERR_FRAME_TOO_LONG 0x04u
 #define ERR_INVALID_STATE 0x05u
+#define ERR_RF_INIT_FAILED 0x06u
 
 static uint16_t read_u16_le(const uint8_t *p) {
     return (uint16_t)p[0] | ((uint16_t)p[1] << 8);

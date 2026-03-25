@@ -140,6 +140,9 @@ static uint8_t s_ble_adv_tx_device_addr[BLE_ADV_TX_DEVICE_ADDR_LEN] = {0x01u, 0x
                                                                        0xCCu, 0xBBu, 0xAAu};
 #endif
 
+/* Output structure for BLE ADV commands — RF core writes TX stats here. */
+static rfc_bleAdvOutput_t s_ble_adv_output;
+
 /* 2.4 GHz power table (LP_CC1352P7-1 style, includes High PA up to 20 dBm). */
 static RF_TxPowerTable_Entry s_tx_power_table_24g[] = {
     {-20, RF_TxPowerTable_DEFAULT_PA_ENTRY(6, 3, 0, 2)},
@@ -341,8 +344,12 @@ static bool RadioIF_transmitIeee154Raw(const uint8_t *payload, uint8_t payload_l
 }
 
 static bool RadioIF_transmitBleAdvRaw(const uint8_t *payload, uint8_t payload_len) {
+    RF_Params rf_params;
+    RF_Handle tx_handle = NULL;
     RF_TxPowerTable_Value tx_power = RadioIF_resolveTxPowerValue(s_tx_power_dbm);
+    RF_EventMask result;
     uint8_t ble_channel = RadioIF_convertToBleChannel((uint8_t)s_channel);
+    uint16_t frequency_mhz;
 
     if (payload == NULL || payload_len == 0u || payload_len > BLE_ADV_TX_MAX_PAYLOAD_LEN) {
         return false;
@@ -353,16 +360,21 @@ static bool RadioIF_transmitBleAdvRaw(const uint8_t *payload, uint8_t payload_le
     }
 
     memcpy(s_ble_adv_tx_payload, payload, payload_len);
-    RadioIF_applyBleChannelConfig(ble_channel);
 
-    Ble5_0_cmdBle5AdvNc.channel = ble_channel;
-    Ble5_0_cmdBle5AdvNc.whitening.init =
-        (uint8_t)(0x40u | (ble_channel & BLE_STATUS0_CHANNEL_MASK));
-    Ble5_0_cmdBle5AdvNc.whitening.bOverride = 1u;
-    Ble5_0_cmdBle5AdvNc.startTrigger.triggerType = TRIG_NOW;
-    Ble5_0_cmdBle5AdvNc.startTrigger.pastTrig = 1u;
-    Ble5_0_cmdBle5AdvNc.condition.rule = COND_NEVER;
-    Ble5_0_cmdBle5AdvNc.pNextOp = 0;
+    /* Get frequency for this channel */
+    frequency_mhz = RadioIF_bleChannelToFrequency(ble_channel);
+
+    /* Open RF handle */
+    RF_Params_init(&rf_params);
+    tx_handle = RF_open(&s_rf_tx_object, &Ble5_0_mode,
+                        (RF_RadioSetup *)&Ble5_0_cmdBle5RadioSetup, &rf_params);
+    if (tx_handle == NULL) {
+        return false;
+    }
+
+    RadioIF_applyRfTxPower(tx_handle, tx_power);
+
+    /* Set TX power on command struct as well as handle */
     if (tx_power.paType == RF_TxPowerTable_HighPA) {
         Ble5_0_cmdBle5AdvNc.txPower = 0x0000u;
         Ble5_0_cmdBle5AdvNc.tx20Power = tx_power.rawValue;
@@ -371,7 +383,17 @@ static bool RadioIF_transmitBleAdvRaw(const uint8_t *payload, uint8_t payload_le
         Ble5_0_cmdBle5AdvNc.tx20Power = 0x00000000u;
     }
 
+    /* Configure ADV_NC command — BLE5 ADV handles frequency synth internally */
+    Ble5_0_cmdBle5AdvNc.channel = ble_channel;
+    Ble5_0_cmdBle5AdvNc.whitening.init = 0u;
+    Ble5_0_cmdBle5AdvNc.whitening.bOverride = 0u;
+    Ble5_0_cmdBle5AdvNc.startTrigger.triggerType = TRIG_NOW;
+    Ble5_0_cmdBle5AdvNc.startTrigger.pastTrig = 1u;
+    Ble5_0_cmdBle5AdvNc.condition.rule = COND_NEVER;
+    Ble5_0_cmdBle5AdvNc.pNextOp = 0;
+
     if (Ble5_0_cmdBle5AdvNc.pParams == NULL) {
+        RF_close(tx_handle);
         return false;
     }
 
@@ -382,9 +404,30 @@ static bool RadioIF_transmitBleAdvRaw(const uint8_t *payload, uint8_t payload_le
     Ble5_0_cmdBle5AdvNc.pParams->pDeviceAddress = (uint16_t *)s_ble_adv_tx_device_addr;
     Ble5_0_cmdBle5AdvNc.pParams->pWhiteList = NULL;
 
-    return RadioIF_executeTxCommand(&Ble5_0_mode, (RF_RadioSetup *)&Ble5_0_cmdBle5RadioSetup,
-                                    (RF_Op *)&Ble5_0_cmdFs, (RF_Op *)&Ble5_0_cmdBle5AdvNc,
-                                    tx_power);
+    /* Provide output structure for RF core to write TX stats */
+    memset(&s_ble_adv_output, 0, sizeof(s_ble_adv_output));
+    Ble5_0_cmdBle5AdvNc.pOutput = &s_ble_adv_output;
+
+    /* Execute TX */
+    result = RF_runCmd(tx_handle, (RF_Op *)&Ble5_0_cmdBle5AdvNc,
+                       RF_PriorityNormal, NULL, RADIO_IF_TX_TERM_EVENTS);
+
+    /* Check command status for debug */
+    uint16_t cmd_status = Ble5_0_cmdBle5AdvNc.status;
+
+    RF_close(tx_handle);
+
+    /* Debug: return false if command didn't complete properly */
+    if ((result & RADIO_IF_TX_SUCCESS_EVENTS) == 0u) {
+        return false;
+    }
+
+    /* BLE_DONE_OK = 0x3400 */
+    if (cmd_status != 0x3400u) {
+        return false;
+    }
+
+    return true;
 }
 
 static bool RadioIF_isBleAdvChannel(uint16_t channel) {
@@ -1100,11 +1143,11 @@ bool RadioIF_startRx(void) {
         }
     }
 
-    /* Fallback: synthetic stream keeps command path operational. */
+    /* RF backend failed to start — report failure instead of silent synthetic fallback. */
+    s_rx_running = false;
     s_backend = RADIO_IF_BACKEND_SYNTH;
     s_rf_mode = RADIO_IF_RF_MODE_NONE;
-    RadioIF_initSyntheticCadence();
-    return true;
+    return false;
 }
 
 void RadioIF_stopRx(void) {
@@ -1125,6 +1168,10 @@ void RadioIF_stopRx(void) {
 
 bool RadioIF_isRxRunning(void) {
     return s_rx_running;
+}
+
+bool RadioIF_isRfBackendActive(void) {
+    return s_backend == RADIO_IF_BACKEND_RF;
 }
 
 void RadioIF_poll(void) {
@@ -1242,6 +1289,8 @@ static bool RadioIF_executeJamTx(RF_Handle rf_handle, uint8_t phy, uint8_t chann
 
         Ble5_0_cmdBle5AdvNc.pParams->advLen = 31u;
         Ble5_0_cmdBle5AdvNc.pParams->pAdvData = (uint8_t *)s_jam_ble_payload;
+        memset(&s_ble_adv_output, 0, sizeof(s_ble_adv_output));
+        Ble5_0_cmdBle5AdvNc.pOutput = &s_ble_adv_output;
 
         result = RF_runCmd(rf_handle, (RF_Op *)&Ble5_0_cmdBle5AdvNc,
                           RF_PriorityNormal, NULL, RADIO_IF_TX_TERM_EVENTS);
@@ -1315,8 +1364,12 @@ void RadioIF_pollJamSession(void) {
         return;
     }
 
-    /* Execute another TX to keep jamming */
-    (void)RadioIF_executeJamTx(s_jam_rf_handle, s_jam_phy, s_jam_channel, s_jam_power_dbm);
+    /* Execute multiple TX per poll to increase jamming rate */
+    for (uint8_t i = 0u; i < 10u; i++) {
+        if (!RadioIF_executeJamTx(s_jam_rf_handle, s_jam_phy, s_jam_channel, s_jam_power_dbm)) {
+            break;
+        }
+    }
 }
 
 void RadioIF_stopJamSession(void) {

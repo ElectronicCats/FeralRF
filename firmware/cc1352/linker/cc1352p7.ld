@@ -1,12 +1,12 @@
-/* CC1352P Linker Script */
-/* 352KB Flash, 80KB SRAM */
+/* CC1352P7 Linker Script */
+/* 704KB Flash, 144KB SRAM */
 
 MEMORY
 {
-    FLASH (RX)  : ORIGIN = 0x00000000, LENGTH = 0x00057FA8  /* 352KB Flash minus CCFG lock page */
-    CCFG  (RX)  : ORIGIN = 0x00057FA8, LENGTH = 0x00000058  /* CCFG fixed address */
-    SRAM  (RWX) : ORIGIN = 0x20000000, LENGTH = 0x00013000  /* 76KB data/bss */
-    STACK (RWX) : ORIGIN = 0x20013000, LENGTH = 0x00001000  /* 4KB stack */
+    FLASH (RX)  : ORIGIN = 0x00000000, LENGTH = 0x000AFFA8  /* Flash minus CCFG lock page */
+    CCFG  (RX)  : ORIGIN = 0x000AFFA8, LENGTH = 0x00000058  /* CCFG fixed address */
+    SRAM  (RWX) : ORIGIN = 0x20000000, LENGTH = 0x00023000  /* 140KB data/bss */
+    STACK (RWX) : ORIGIN = 0x20023000, LENGTH = 0x00001000  /* 4KB stack */
 }
 
 ENTRY(ResetISR)

@@ -7,7 +7,8 @@
 
 #include <stdint.h>
 
-#include <ti/devices/cc13x2x7_cc26x2x7/inc/hw_ccfg_simple_struct.h>
+#include <ti/devices/DeviceFamily.h>
+#include DeviceFamily_constructPath(inc/hw_ccfg_simple_struct.h)
 
 /* Clock settings */
 #define SET_CCFG_EXT_LF_CLK 0x01800000u

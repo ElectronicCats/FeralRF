@@ -1,5 +1,6 @@
 /*
- * Minimal BLE5 SmartRF settings adapted from CatSniffer example.
+ * BLE5 SmartRF settings for CC1352P/CC1352P7 — based on SDK 7.10.01.24 reference.
+ * Override arrays match LP_CC1352P7-1 / CC1352P_2 SysConfig output.
  */
 
 #include "smartrf_ble5_0.h"
@@ -16,28 +17,66 @@ RF_Mode Ble5_0_mode = {
     .rfePatchFxn = 0,
 };
 
+/* Common overrides — HPA pilot tone, IPEAK, DTX, synth calibration */
 uint32_t Ble5_0_pOverridesCommon[] = {
-    HW_REG_OVERRIDE(0x6024, 0x4C20),
-    (uint32_t)0x01500263,
+    /* Reconfigure to 35 us pilot tone length for high output power PA */
+    HW_REG_OVERRIDE(0x6024, 0x5B20),
+    /* Compensate for 35 us pilot tone length */
+    (uint32_t)0x01640263,
+    /* Set IPEAK = 3 and DCDC dither off for TX */
+    (uint32_t)0x00F388D3,
+    /* Default to no CTE */
     HW_REG_OVERRIDE(0x5328, 0x0000),
-    (uint32_t)0x00FF8A53,
+    /* Increase mid code calibration time to 5 us */
+    (uint32_t)0x00058683,
+    HW32_ARRAY_OVERRIDE(0x4004, 1),
+    (uint32_t)0x38183C30,
+    /* Move synth start code */
+    HW_REG_OVERRIDE(0x4064, 0x3C),
+    /* Set DTX gain -5% for 1 Mbps */
+    (uint32_t)0x00E787E3,
+    /* Set DTX threshold 1 Mbps */
+    (uint32_t)0x00950803,
+    /* Set DTX gain -2.5% for 2 Mbps */
+    (uint32_t)0x00F487F3,
+    /* Set DTX threshold 2 Mbps */
+    (uint32_t)0x012A0823,
+    /* Set enhanced TX shape */
+    (uint32_t)0x000D8C73,
+    /* Set synth fine code calibration interval */
+    HW32_ARRAY_OVERRIDE(0x4020, 1),
+    (uint32_t)0x41005F00,
+    /* Adapt to synth fine code calibration interval */
+    (uint32_t)0xC0040141,
+    (uint32_t)0x0007DD44,
     (uint32_t)0xFFFFFFFF,
 };
 
 uint32_t Ble5_0_pOverrides1Mbps[] = {
-    HW_REG_OVERRIDE(0x5320, 0x05A0), (uint32_t)0x017B02A3, HW_REG_OVERRIDE(0x6098, 0x25F8),
-    HW_REG_OVERRIDE(0x60A0, 0x0026), (uint32_t)0xFFFFFFFF,
+    /* Reconfigure pilot tone length for HPA */
+    HW_REG_OVERRIDE(0x5320, 0x0690),
+    /* Compensate for modified pilot tone length */
+    (uint32_t)0x018F02A3,
+    (uint32_t)0xFFFFFFFF,
 };
 
 uint32_t Ble5_0_pOverrides2Mbps[] = {
-    HW_REG_OVERRIDE(0x5320, 0x05A0),
-    (uint32_t)0x011902A3,
+    HW_REG_OVERRIDE(0x5320, 0x0690),
+    (uint32_t)0x012D02A3,
+    /* Increase low gain AGC delay for 2 Mbps */
+    HW_REG_OVERRIDE(0x60A4, 0x7D00),
     (uint32_t)0xFFFFFFFF,
 };
 
 uint32_t Ble5_0_pOverridesCoded[] = {
-    HW_REG_OVERRIDE(0x5320, 0x05A0),
-    (uint32_t)0x07D102A3,
+    HW_REG_OVERRIDE(0x5320, 0x0690),
+    (uint32_t)0x07E502A3,
+    /* AGC magnitude target — 0x001B for CC1352P7, 0x0021 for CC1352P */
+#if defined(DeviceFamily_CC13X2X7)
+    HW_REG_OVERRIDE(0x609C, 0x001B),
+#else
+    HW_REG_OVERRIDE(0x609C, 0x0021),
+#endif
     (uint32_t)0xFFFFFFFF,
 };
 

@@ -8,8 +8,9 @@
 /* UART Configuration */
 #define UART_TX_PIN 13        /* DIO13 */
 #define UART_RX_PIN 12        /* DIO12 */
-#define UART_RTS_PIN 14       /* DIO14 */
-#define UART_CTS_PIN 15       /* DIO15 */
+#define UART_RTS_PIN 15       /* DIO15 - CC1352 RTS output → RP2040 CTS (GPIO3) */
+#define UART_CTS_PIN 14       /* DIO14 - CC1352 CTS input  ← RP2040 RTS (GPIO2) */
+#define UART_HW_FLOW_CONTROL 0 /* Set to 1 when RP2040 bridge also has hw-flow-control */
 #define UART_BAUD_RATE 921600 /* 921600 baud */
 
 /* LED Configuration (for debugging) */

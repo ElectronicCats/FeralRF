@@ -36,9 +36,30 @@ def parse_hex(value: str) -> bytes:
     return bytes.fromhex(normalized)
 
 
-def packet_matches_marker(pkt: Packet, marker: bytes, require_crc_ok: bool) -> bool:
+def packet_matches_marker(
+    pkt: Packet,
+    marker: bytes,
+    require_crc_ok: bool,
+    match_mode: str = "contains",
+) -> bool:
     if require_crc_ok and not pkt.crc_ok:
         return False
+
+    if match_mode == "exact":
+        return pkt.data == marker
+
+    if match_mode == "ble_adv_payload_exact":
+        if len(pkt.data) < 2:
+            return False
+        pdu_len = pkt.data[1] & 0x3F
+        pdu_total_len = 2 + pdu_len
+        if len(pkt.data) < pdu_total_len:
+            return False
+        if pdu_len < 6:
+            return False
+        adv_payload = pkt.data[8:pdu_total_len]  # 2-byte header + 6-byte AdvA
+        return adv_payload == marker
+
     return marker in pkt.data
 
 
@@ -59,6 +80,12 @@ def main() -> int:
         "--marker-hex",
         help="Marker to find inside packet payload (hex). If omitted, only packet count is checked.",
         default=None,
+    )
+    parser.add_argument(
+        "--match-mode",
+        help="Match policy: contains, exact (full pkt.data), or ble_adv_payload_exact (exact AdvData).",
+        choices=("contains", "exact", "ble_adv_payload_exact"),
+        default="contains",
     )
     parser.add_argument(
         "--min-hits",
@@ -103,7 +130,7 @@ def main() -> int:
         f"port={args.port or 'auto'} baudrate={args.baudrate} phy={args.phy} "
         f"channel={args.channel} duration={args.duration}s min_hits={args.min_hits} "
         f"marker={'none' if marker is None else marker.hex()} "
-        f"allow_crc_fail={args.allow_crc_fail}"
+        f"match_mode={args.match_mode} allow_crc_fail={args.allow_crc_fail}"
     )
     print()
 
@@ -135,7 +162,12 @@ def main() -> int:
         printed = 0
         if marker is not None:
             for pkt in packets:
-                if packet_matches_marker(pkt, marker, require_crc_ok=not args.allow_crc_fail):
+                if packet_matches_marker(
+                    pkt,
+                    marker,
+                    require_crc_ok=not args.allow_crc_fail,
+                    match_mode=args.match_mode,
+                ):
                     match_count += 1
                     if printed < args.print_limit:
                         print(

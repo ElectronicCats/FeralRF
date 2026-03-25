@@ -5,7 +5,8 @@
 
 #include <stdint.h>
 
-#include <ti/devices/cc13x2x7_cc26x2x7/driverlib/setup.h>
+#include <ti/devices/DeviceFamily.h>
+#include DeviceFamily_constructPath(driverlib/setup.h)
 
 #define WEAK_ALIAS(x) __attribute__((weak, alias(#x)))
 

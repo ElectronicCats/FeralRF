@@ -8,6 +8,24 @@ if(NOT EXISTS ${TI_SDK_PATH})
     message(FATAL_ERROR "TI SDK not found at ${TI_SDK_PATH}. Please download and extract the SDK.")
 endif()
 
+# Device variant: CC1352P (352KB flash) or CC1352P7 (704KB flash)
+set(DEVICE_VARIANT "CC1352P" CACHE STRING "Target device: CC1352P or CC1352P7")
+set_property(CACHE DEVICE_VARIANT PROPERTY STRINGS "CC1352P" "CC1352P7")
+
+if(DEVICE_VARIANT STREQUAL "CC1352P7")
+    set(DEVICE_SUBFAMILY "cc13x2x7_cc26x2x7")
+    set(DEVICE_FAMILY_DEFINE "DeviceFamily_CC13X2X7")
+    set(LINKER_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/linker/cc1352p7.ld")
+elseif(DEVICE_VARIANT STREQUAL "CC1352P")
+    set(DEVICE_SUBFAMILY "cc13x2_cc26x2")
+    set(DEVICE_FAMILY_DEFINE "DeviceFamily_CC13X2")
+    set(LINKER_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/linker/cc1352p.ld")
+else()
+    message(FATAL_ERROR "Unknown DEVICE_VARIANT: ${DEVICE_VARIANT}. Use CC1352P or CC1352P7.")
+endif()
+
+message(STATUS "Building for ${DEVICE_VARIANT} (${DEVICE_SUBFAMILY})")
+
 # Toolchain configuration (must be before project())
 set(CMAKE_SYSTEM_NAME Generic)
 set(CMAKE_SYSTEM_PROCESSOR ARM)
@@ -27,24 +45,24 @@ set(CMAKE_SIZE arm-none-eabi-size)
 # Compiler flags
 set(CMAKE_C_FLAGS "-mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16 -Wall -Wextra -std=c11 -ffunction-sections -fdata-sections -g -O0" CACHE INTERNAL "")
 set(CMAKE_ASM_FLAGS "-mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16 -g -x assembler-with-cpp" CACHE INTERNAL "")
-set(CMAKE_EXE_LINKER_FLAGS "-T ${CMAKE_CURRENT_SOURCE_DIR}/linker/cc1352p.ld -nostartfiles -Wl,--gc-sections -Wl,-Map=${CMAKE_PROJECT_NAME}.map" CACHE INTERNAL "")
+set(CMAKE_EXE_LINKER_FLAGS "-T ${LINKER_SCRIPT} -nostartfiles -Wl,--gc-sections -Wl,-Map=${CMAKE_PROJECT_NAME}.map" CACHE INTERNAL "")
 
-# Include paths from SDK
+# Include paths from SDK (device-variant aware)
 set(SDK_INCLUDE_DIRS
     ${TI_SDK_PATH}/source
     ${TI_SDK_PATH}/kernel/nortos
     ${TI_SDK_PATH}/kernel/nortos/dpl
     ${TI_SDK_PATH}/kernel/nortos/posix
-    ${TI_SDK_PATH}/source/ti/devices/cc13x2x7_cc26x2x7
-    ${TI_SDK_PATH}/source/ti/devices/cc13x2x7_cc26x2x7/inc
-    ${TI_SDK_PATH}/source/ti/devices/cc13x2x7_cc26x2x7/driverlib
+    ${TI_SDK_PATH}/source/ti/devices/${DEVICE_SUBFAMILY}
+    ${TI_SDK_PATH}/source/ti/devices/${DEVICE_SUBFAMILY}/inc
+    ${TI_SDK_PATH}/source/ti/devices/${DEVICE_SUBFAMILY}/driverlib
     ${TI_SDK_PATH}/source/ti/drivers
     ${TI_SDK_PATH}/source/ti/drivers/rf
 )
 
 # DriverLib library (pre-compiled for GCC)
 set(DRIVERLIB_LIB
-    ${TI_SDK_PATH}/source/ti/devices/cc13x2x7_cc26x2x7/driverlib/bin/gcc/driverlib.lib
+    ${TI_SDK_PATH}/source/ti/devices/${DEVICE_SUBFAMILY}/driverlib/bin/gcc/driverlib.lib
 )
 
 set(RF_MULTI_MODE_LIB
@@ -105,7 +123,7 @@ include_directories(
 add_executable(${CMAKE_PROJECT_NAME}.elf ${SOURCES})
 
 target_compile_definitions(${CMAKE_PROJECT_NAME}.elf PRIVATE
-    DeviceFamily_CC13X2X7
+    ${DEVICE_FAMILY_DEFINE}
 )
 
 target_link_libraries(${CMAKE_PROJECT_NAME}.elf PRIVATE
@@ -124,5 +142,5 @@ add_custom_command(TARGET ${CMAKE_PROJECT_NAME}.elf POST_BUILD
     COMMAND ${CMAKE_OBJCOPY} -O ihex ${CMAKE_PROJECT_NAME}.elf ${CMAKE_PROJECT_NAME}.hex
     COMMAND ${CMAKE_OBJCOPY} -O binary ${CMAKE_PROJECT_NAME}.elf ${CMAKE_PROJECT_NAME}.bin
     COMMAND ${CMAKE_SIZE} ${CMAKE_PROJECT_NAME}.elf
-    COMMENT "Generating hex and binary files"
+    COMMENT "Generating hex and binary files for ${DEVICE_VARIANT}"
 )

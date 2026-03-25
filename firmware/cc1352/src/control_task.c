@@ -8,9 +8,12 @@
 #include <stdint.h>
 #include <string.h>
 
-#include <ti/devices/cc13x2x7_cc26x2x7/driverlib/aon_rtc.h>
-#include <ti/devices/cc13x2x7_cc26x2x7/driverlib/sys_ctrl.h>
-#include <ti/devices/cc13x2x7_cc26x2x7/driverlib/systick.h>
+#include <ti/devices/DeviceFamily.h>
+/* clang-format off */
+#include DeviceFamily_constructPath(driverlib/aon_rtc.h)
+#include DeviceFamily_constructPath(driverlib/sys_ctrl.h)
+#include DeviceFamily_constructPath(driverlib/systick.h)
+/* clang-format on */
 
 #include "config.h"
 #include "ll_manager.h"

@@ -5,8 +5,11 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include <ti/devices/cc13x2x7_cc26x2x7/driverlib/gpio.h>
-#include <ti/devices/cc13x2x7_cc26x2x7/driverlib/ioc.h>
+#include <ti/devices/DeviceFamily.h>
+/* clang-format off */
+#include DeviceFamily_constructPath(driverlib/gpio.h)
+#include DeviceFamily_constructPath(driverlib/ioc.h)
+/* clang-format on */
 #include <ti/drivers/Power.h>
 #include <ti/drivers/power/PowerCC26X2.h>
 #include <ti/drivers/rf/RF.h>

@@ -42,6 +42,7 @@ bool RadioIF_transmitRaw(const uint8_t *data, uint8_t data_len, int8_t power_dbm
 bool RadioIF_startRx(void);
 void RadioIF_stopRx(void);
 bool RadioIF_isRxRunning(void);
+bool RadioIF_isRfBackendActive(void);
 void RadioIF_poll(void);
 bool RadioIF_popRxPacket(RadioIF_RxPacket *out);
 void RadioIF_getMetrics(RadioIF_Metrics *out);

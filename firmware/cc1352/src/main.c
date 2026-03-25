@@ -7,11 +7,14 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include <ti/devices/cc13x2x7_cc26x2x7/driverlib/gpio.h>
-#include <ti/devices/cc13x2x7_cc26x2x7/driverlib/ioc.h>
-#include <ti/devices/cc13x2x7_cc26x2x7/driverlib/prcm.h>
-#include <ti/devices/cc13x2x7_cc26x2x7/driverlib/sys_ctrl.h>
-#include <ti/devices/cc13x2x7_cc26x2x7/driverlib/systick.h>
+#include <ti/devices/DeviceFamily.h>
+/* clang-format off */
+#include DeviceFamily_constructPath(driverlib/gpio.h)
+#include DeviceFamily_constructPath(driverlib/ioc.h)
+#include DeviceFamily_constructPath(driverlib/prcm.h)
+#include DeviceFamily_constructPath(driverlib/sys_ctrl.h)
+#include DeviceFamily_constructPath(driverlib/systick.h)
+/* clang-format on */
 #include <ti/drivers/Power.h>
 
 #include "command_processor.h"

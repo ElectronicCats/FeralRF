@@ -309,6 +309,38 @@ class Radio:
         if cmd_id != Response.ACK:
             raise ProtocolError(f"Unexpected response to SET_POWER: 0x{cmd_id:02X}")
 
+    def configure_prop(
+        self,
+        frequency_hz: int,
+        mod_type: int = 1,
+        symbol_rate: int = 50000,
+        deviation: int = 100,
+        rx_bw: int = 0x52,
+        sync_word: int = 0x930B51DE,
+    ) -> None:
+        """Configure proprietary radio parameters.
+
+        Args:
+            frequency_hz: Frequency in Hz (e.g. 433920000 for 433.92 MHz)
+            mod_type: Modulation type (0=FSK, 1=GFSK, 2=OOK/ASK, 4=MSK)
+            symbol_rate: Symbol rate in baud (e.g. 4800, 50000)
+            deviation: Deviation register value (for FSK/GFSK)
+            rx_bw: RX bandwidth register value
+            sync_word: 32-bit sync word
+        """
+        self._send_command(
+            Command.SET_PROP_CONFIG,
+            CommandBuilder.set_prop_config(
+                frequency_hz, mod_type, symbol_rate, deviation, rx_bw, sync_word
+            ),
+        )
+        cmd_id, seq, payload = self._read_response(expected={Response.ACK, Response.ERROR})
+
+        if cmd_id == Response.ERROR:
+            raise CommandError("Set prop config failed", payload[0] if payload else 0)
+        if cmd_id != Response.ACK:
+            raise ProtocolError(f"Unexpected response to SET_PROP_CONFIG: 0x{cmd_id:02X}")
+
     def set_adv_hop(self, enabled: bool) -> None:
         """Enable/disable BLE advertising channel hopping on RX"""
         self._send_command(Command.SET_ADV_HOP, CommandBuilder.set_adv_hop(enabled))

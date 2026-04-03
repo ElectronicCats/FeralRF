@@ -142,6 +142,11 @@ static RF_Handle s_jam_rf_handle = NULL;
 static uint8_t s_jam_phy = 0u;
 static uint8_t s_jam_channel = 0u;
 static int8_t s_jam_power_dbm = 0;
+static bool s_prop_ook_active = false;
+
+static RF_Mode *RadioIF_getPropMode(void) {
+    return s_prop_ook_active ? &Prop0_modeOok : &Prop0_mode;
+}
 #if defined(__GNUC__)
 static uint8_t s_ieee154_tx_buffer[IEEE_15_4_TX_MAX_PAYLOAD_LEN] __attribute__((aligned(4)));
 static uint8_t s_ble_adv_tx_payload[BLE_ADV_TX_MAX_PAYLOAD_LEN] __attribute__((aligned(4)));
@@ -1109,7 +1114,8 @@ static void RadioIF_processIeee154Packets(void) {
 
 static bool RadioIF_isSub1ghzPhySelected(void) {
     return (s_selected_phy == PHY_MANAGER_PHY_SUB_1GHZ_868) ||
-           (s_selected_phy == PHY_MANAGER_PHY_SUB_1GHZ_915);
+           (s_selected_phy == PHY_MANAGER_PHY_SUB_1GHZ_915) ||
+           (s_selected_phy == PHY_MANAGER_PHY_PROPRIETARY_GFSK);
 }
 
 static void RadioIF_applySub1ghzChannelConfig(uint16_t channel, uint32_t frequency_hz) {
@@ -1123,8 +1129,12 @@ static void RadioIF_applySub1ghzChannelConfig(uint16_t channel, uint32_t frequen
     } else if (s_selected_phy == PHY_MANAGER_PHY_SUB_1GHZ_915) {
         freq_mhz = (uint16_t)(902u + channel);
         frac = 0u;
+    } else if (s_selected_phy == PHY_MANAGER_PHY_PROPRIETARY_GFSK) {
+        /* GFSK: default 868 MHz, user should set frequency_hz for other bands */
+        freq_mhz = 868u;
+        frac = 0u;
     } else {
-        /* 868 MHz default */
+        /* 868 MHz fallback */
         freq_mhz = 868u;
         frac = 0u;
     }
@@ -1133,8 +1143,10 @@ static void RadioIF_applySub1ghzChannelConfig(uint16_t channel, uint32_t frequen
     Prop0_cmdFs.fractFreq = frac;
     Prop0_cmdPropRadioDivSetup.centerFreq = freq_mhz;
 
-    /* loDivider: 0x05 for 779-930 MHz, 0x0A for 431-527 MHz */
-    if (freq_mhz >= 779u && freq_mhz <= 930u) {
+    /* loDivider: 0x05 for 779-930 MHz, 0x0A for 431-527 MHz, 0x02 for 2.4 GHz */
+    if (freq_mhz >= 2400u) {
+        Prop0_cmdPropRadioDivSetup.loDivider = 0x00;
+    } else if (freq_mhz >= 779u && freq_mhz <= 930u) {
         Prop0_cmdPropRadioDivSetup.loDivider = 0x05;
     } else if (freq_mhz >= 431u && freq_mhz <= 527u) {
         Prop0_cmdPropRadioDivSetup.loDivider = 0x0A;
@@ -1167,7 +1179,7 @@ static bool RadioIF_startSub1ghzRfBackend(void) {
     Prop0_cmdPropRx.maxPktLen = 0xFF;
 
     RF_Params_init(&rf_params);
-    s_rf_handle = RF_open(&s_rf_object, &Prop0_mode,
+    s_rf_handle = RF_open(&s_rf_object, RadioIF_getPropMode(),
                           (RF_RadioSetup *)&Prop0_cmdPropRadioDivSetup, &rf_params);
 
     if (s_rf_handle == NULL) {
@@ -1256,7 +1268,7 @@ static bool RadioIF_transmitPropRaw(const uint8_t *payload, uint8_t payload_len)
     Prop0_cmdPropTx.condition.rule = COND_NEVER;
     Prop0_cmdPropTx.pNextOp = 0;
 
-    return RadioIF_executeTxCommand(&Prop0_mode,
+    return RadioIF_executeTxCommand(RadioIF_getPropMode(),
                                     (RF_RadioSetup *)&Prop0_cmdPropRadioDivSetup,
                                     (RF_Op *)&Prop0_cmdFs,
                                     (RF_Op *)&Prop0_cmdPropTx, tx_power);
@@ -1383,6 +1395,117 @@ void RadioIF_setChannel(uint8_t channel) {
          (RadioIF_isSub1ghzPhySelected() && (s_rf_mode == RADIO_IF_RF_MODE_SUB_1GHZ)))) {
         (void)RadioIF_restartRfRx();
     }
+}
+
+void RadioIF_setPropConfig(const RadioIF_PropConfig *config) {
+    uint32_t freq_mhz;
+    uint16_t frac;
+    uint8_t lo_div;
+    uint32_t rate_word;
+    uint8_t pre_scale;
+
+    if (config == NULL) {
+        return;
+    }
+
+    RadioIF_closeTxSession();
+
+    /* Frequency */
+    freq_mhz = config->frequency_hz / 1000000u;
+    frac = (uint16_t)(((config->frequency_hz % 1000000u) * 65536u) / 1000000u);
+
+    Prop0_cmdFs.frequency = (uint16_t)freq_mhz;
+    Prop0_cmdFs.fractFreq = frac;
+    Prop0_cmdPropRadioDivSetup.centerFreq = (uint16_t)freq_mhz;
+
+    /* loDivider based on frequency */
+    if (freq_mhz >= 2360u) {
+        lo_div = 0x00u;
+    } else if (freq_mhz >= 1076u) {
+        lo_div = 0x04u;
+    } else if (freq_mhz >= 861u) {
+        lo_div = 0x05u;
+    } else if (freq_mhz >= 431u) {
+        lo_div = 0x0Au;
+    } else if (freq_mhz >= 359u) {
+        lo_div = 0x0Cu;
+    } else if (freq_mhz >= 287u) {
+        lo_div = 0x0Fu;
+    } else {
+        lo_div = 0x1Eu;
+    }
+    Prop0_cmdPropRadioDivSetup.loDivider = lo_div;
+
+    /* Modulation type */
+    Prop0_cmdPropRadioDivSetup.modulation.modType = config->mod_type;
+
+    /* Deviation (in units of 250 Hz for the register, but SmartRF uses raw value) */
+    /* The deviation field is in kHz units at the register level.
+     * Actual formula: deviation_Hz = deviation_reg * (24MHz / 2^22)
+     * So: deviation_reg = deviation_Hz * 2^22 / 24MHz = deviation_Hz * 0.1747...
+     * Simplified: deviation_reg = (deviation_Hz * 4194304) / 24000000
+     * For 25000 Hz: 25000 * 4194304 / 24000000 = 4369 ≈ but SmartRF uses 0x64=100
+     * The SmartRF value is: deviation_kHz * 4 (approximately)
+     * Actually the field is deviation in units that depend on symbolRate.preScale.
+     * Simplification: pass raw register value from Python, let user or presets handle it.
+     */
+    Prop0_cmdPropRadioDivSetup.modulation.deviation = config->deviation;
+
+    /* Symbol rate: rateWord and preScale
+     * symbolRate = (rateWord * 24MHz) / (2^20 * preScale)
+     * => rateWord = (symbolRate * 2^20 * preScale) / 24MHz
+     * Use preScale=15 as default (works for wide range of rates).
+     */
+    pre_scale = 15u;
+    rate_word = (uint32_t)(((uint64_t)config->symbol_rate * 1048576u * (uint64_t)pre_scale)
+                           / 24000000u);
+    if (rate_word > 0xFFFFFu) {
+        /* Rate too high for preScale=15, try preScale=5 */
+        pre_scale = 5u;
+        rate_word = (uint32_t)(((uint64_t)config->symbol_rate * 1048576u * (uint64_t)pre_scale)
+                               / 24000000u);
+    }
+    Prop0_cmdPropRadioDivSetup.symbolRate.preScale = pre_scale;
+    Prop0_cmdPropRadioDivSetup.symbolRate.rateWord = rate_word;
+
+    /* RX bandwidth */
+    if (config->rx_bw != 0u) {
+        Prop0_cmdPropRadioDivSetup.rxBw = config->rx_bw;
+    }
+
+    /* Sync word (applied to both TX and RX commands) */
+    Prop0_cmdPropTx.syncWord = config->sync_word;
+    Prop0_cmdPropRx.syncWord = config->sync_word;
+
+    /* Select overrides by modulation type and frequency band */
+    if (config->mod_type == 2u) {
+        /* OOK: dedicated patches + overrides */
+        Prop0_cmdPropRadioDivSetup.pRegOverride = Prop0_pOverridesOok;
+        Prop0_cmdPropRadioDivSetup.pRegOverrideTxStd = Prop0_pOverridesOokTxStd;
+        Prop0_cmdPropRadioDivSetup.pRegOverrideTx20 = Prop0_pOverridesOokTx20;
+        s_prop_ook_active = true;
+    } else if (freq_mhz < 250u) {
+        /* 169 MHz band: heavy synth calibration */
+        Prop0_cmdPropRadioDivSetup.pRegOverride = Prop0_pOverrides169;
+        Prop0_cmdPropRadioDivSetup.pRegOverrideTxStd = Prop0_pOverrides433TxStd;
+        Prop0_cmdPropRadioDivSetup.pRegOverrideTx20 = Prop0_pOverrides433Tx20;
+        s_prop_ook_active = false;
+    } else if (freq_mhz < 861u) {
+        /* 287-860 MHz (315, 390, 433, 470 MHz): use 433 overrides */
+        Prop0_cmdPropRadioDivSetup.pRegOverride = Prop0_pOverrides433;
+        Prop0_cmdPropRadioDivSetup.pRegOverrideTxStd = Prop0_pOverrides433TxStd;
+        Prop0_cmdPropRadioDivSetup.pRegOverrideTx20 = Prop0_pOverrides433Tx20;
+        s_prop_ook_active = false;
+    } else {
+        /* 861+ MHz (868, 915, 2.4 GHz): standard overrides */
+        Prop0_cmdPropRadioDivSetup.pRegOverride = Prop0_pOverrides;
+        Prop0_cmdPropRadioDivSetup.pRegOverrideTxStd = Prop0_pOverridesTxStd;
+        Prop0_cmdPropRadioDivSetup.pRegOverrideTx20 = Prop0_pOverridesTx20;
+        s_prop_ook_active = false;
+    }
+
+    /* Update frequency_hz state for Sub-1GHz channel config */
+    s_frequency_hz = config->frequency_hz;
 }
 
 void RadioIF_setPower(int8_t power_dbm) {
@@ -1607,7 +1730,7 @@ static bool RadioIF_executeJamTx(RF_Handle rf_handle, uint8_t phy, uint8_t chann
         return (result & RADIO_IF_TX_SUCCESS_EVENTS) != 0u;
     }
 
-    if (phy == PHY_MANAGER_PHY_SUB_1GHZ_868 || phy == PHY_MANAGER_PHY_SUB_1GHZ_915) {
+    if (phy == PHY_MANAGER_PHY_SUB_1GHZ_868 || phy == PHY_MANAGER_PHY_SUB_1GHZ_915 || phy == PHY_MANAGER_PHY_PROPRIETARY_GFSK) {
         RadioIF_applySub1ghzChannelConfig((uint16_t)channel, 0u);
 
         Prop0_cmdPropTx.pPkt = (uint8_t *)s_jam_ieee154_payload; /* reuse 125-byte payload */
@@ -1646,9 +1769,9 @@ bool RadioIF_startJamSession(uint8_t phy, uint8_t channel, int8_t power_dbm) {
     } else if (phy == PHY_MANAGER_PHY_IEEE_802_15_4) {
         mode = &Ieee154_0_mode;
         setup_cmd = (RF_RadioSetup *)&Ieee154_0_cmdRadioSetup;
-    } else if (phy == PHY_MANAGER_PHY_SUB_1GHZ_868 || phy == PHY_MANAGER_PHY_SUB_1GHZ_915) {
+    } else if (phy == PHY_MANAGER_PHY_SUB_1GHZ_868 || phy == PHY_MANAGER_PHY_SUB_1GHZ_915 || phy == PHY_MANAGER_PHY_PROPRIETARY_GFSK) {
         RadioIF_applySub1ghzChannelConfig((uint16_t)channel, 0u);
-        mode = &Prop0_mode;
+        mode = RadioIF_getPropMode();
         setup_cmd = (RF_RadioSetup *)&Prop0_cmdPropRadioDivSetup;
     } else {
         return false;
@@ -1667,7 +1790,7 @@ bool RadioIF_startJamSession(uint8_t phy, uint8_t channel, int8_t power_dbm) {
         if (PhyManager_isBlePhy(phy)) {
             fs_cmd = (RF_Op *)&Ble5_0_cmdFs;
             RadioIF_applyBleChannelConfig(channel);
-        } else if (phy == PHY_MANAGER_PHY_SUB_1GHZ_868 || phy == PHY_MANAGER_PHY_SUB_1GHZ_915) {
+        } else if (phy == PHY_MANAGER_PHY_SUB_1GHZ_868 || phy == PHY_MANAGER_PHY_SUB_1GHZ_915 || phy == PHY_MANAGER_PHY_PROPRIETARY_GFSK) {
             fs_cmd = (RF_Op *)&Prop0_cmdFs;
             RadioIF_applySub1ghzChannelConfig((uint16_t)channel, 0u);
         } else {

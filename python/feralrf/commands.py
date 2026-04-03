@@ -97,6 +97,28 @@ class CommandBuilder:
         return b""
 
     @staticmethod
+    def set_prop_config(
+        frequency_hz: int,
+        mod_type: int = 1,
+        symbol_rate: int = 50000,
+        deviation: int = 100,
+        rx_bw: int = 0x52,
+        sync_word: int = 0x930B51DE,
+    ) -> bytes:
+        """Payload for SET_PROP_CONFIG (16 bytes):
+        freq_hz(4) | mod_type(1) | symbol_rate(4) | deviation(2) | rx_bw(1) | sync_word(4)
+        """
+        return struct.pack(
+            "<IBIHBI",
+            frequency_hz & 0xFFFFFFFF,
+            mod_type & 0xFF,
+            symbol_rate & 0xFFFFFFFF,
+            deviation & 0xFFFF,
+            rx_bw & 0xFF,
+            sync_word & 0xFFFFFFFF,
+        )
+
+    @staticmethod
     def spectrum_scan(
         start_freq_hz: int,
         end_freq_hz: int,

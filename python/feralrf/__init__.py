@@ -8,6 +8,7 @@ jamming, and spectrum analysis.
 
 from feralrf.enums import PHY, Command, Response
 from feralrf.exceptions import ConnectionError, FeralRFError, ProtocolError
+from feralrf.presets import PROP_PRESETS
 from feralrf.radio import DeviceStats, Radio
 
 __version__ = "0.1.0"
@@ -22,4 +23,5 @@ __all__ = [
     "FeralRFError",
     "ConnectionError",
     "ProtocolError",
+    "PROP_PRESETS",
 ]

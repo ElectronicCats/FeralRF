@@ -21,7 +21,7 @@ static const PhyManager_Profile s_phy_profiles[] = {
     {PHY_MANAGER_PHY_IEEE_802_15_4, PHY_MANAGER_LL_DEFAULT, false, true},
     {PHY_MANAGER_PHY_SUB_1GHZ_868, PHY_MANAGER_LL_DEFAULT, false, true},
     {PHY_MANAGER_PHY_SUB_1GHZ_915, PHY_MANAGER_LL_DEFAULT, false, true},
-    {PHY_MANAGER_PHY_PROPRIETARY_GFSK, PHY_MANAGER_LL_DEFAULT, false, false},
+    {PHY_MANAGER_PHY_PROPRIETARY_GFSK, PHY_MANAGER_LL_DEFAULT, false, true},
 };
 
 static uint8_t s_selected_phy = PHY_MANAGER_PHY_BLE_1M;

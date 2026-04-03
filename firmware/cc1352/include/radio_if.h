@@ -49,6 +49,18 @@ bool RadioIF_popRxPacket(RadioIF_RxPacket *out);
 void RadioIF_getMetrics(RadioIF_Metrics *out);
 void RadioIF_resetMetrics(void);
 
+/* Proprietary radio configuration */
+typedef struct {
+    uint32_t frequency_hz;
+    uint8_t mod_type;       /* 0=FSK, 1=GFSK, 2=OOK/ASK, 4=MSK */
+    uint32_t symbol_rate;   /* baud */
+    uint16_t deviation;     /* Hz (for FSK/GFSK) */
+    uint8_t rx_bw;          /* RX bandwidth register value */
+    uint32_t sync_word;
+} RadioIF_PropConfig;
+
+void RadioIF_setPropConfig(const RadioIF_PropConfig *config);
+
 /* Jamming functions - optimized continuous transmission */
 bool RadioIF_startJamSession(uint8_t phy, uint8_t channel, int8_t power_dbm);
 void RadioIF_stopJamSession(void);

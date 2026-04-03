@@ -30,6 +30,7 @@
 #define CMD_TX_FRAME 0x23u
 #define CMD_TX_STOP 0x24u
 #define CMD_SET_ADV_HOP 0x07u
+#define CMD_SET_PROP_CONFIG 0x08u
 #define CMD_JAM_CONTINUOUS 0x30u
 #define CMD_JAM_STOP 0x33u
 
@@ -190,6 +191,24 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
         RadioIF_setAdvHopEnabled(payload[0] != 0u);
         send_ack(seq);
         return;
+
+    case CMD_SET_PROP_CONFIG: {
+        /* Payload: freq_hz(4) | mod_type(1) | symbol_rate(4) | deviation(2) | rx_bw(1) | sync_word(4) = 16 bytes */
+        RadioIF_PropConfig prop_cfg;
+        if (payload_len != 16u) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            return;
+        }
+        prop_cfg.frequency_hz = read_u32_le(&payload[0]);
+        prop_cfg.mod_type = payload[4];
+        prop_cfg.symbol_rate = read_u32_le(&payload[5]);
+        prop_cfg.deviation = read_u16_le(&payload[9]);
+        prop_cfg.rx_bw = payload[11];
+        prop_cfg.sync_word = read_u32_le(&payload[12]);
+        RadioIF_setPropConfig(&prop_cfg);
+        send_ack(seq);
+        return;
+    }
 
     case CMD_RX_START:
         if (payload_len != 0) {

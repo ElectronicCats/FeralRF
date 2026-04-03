@@ -1,6 +1,6 @@
 # FeralRF - Plan Maestro
 
-**Version:** 3.0 | **Fecha:** 2026-04-02
+**Version:** 4.0 | **Fecha:** 2026-04-02
 
 Firmware universal para CatSniffer (CC1352P + RP2040). Objetivo: API Python facil de usar para pentesting RF con todos los protocolos del CC1352.
 
@@ -8,30 +8,35 @@ Firmware universal para CatSniffer (CC1352P + RP2040). Objetivo: API Python faci
 
 ## Estado Actual
 
-### Funcionando (validado OTA)
+### Funcionando (validado OTA con marcadores entre 2 boards)
+
 | Componente | Estado |
 |-----------|--------|
 | COBS + CRC16 (921600 baud) | OK |
-| BLE 1M RX (ch37-39, hopping, LL metadata) | OK |
-| IEEE 802.15.4 RX (ch11-26) | OK |
-| TX_RAW (BLE + IEEE) | OK |
-| TX_FRAME (BLE + IEEE) | OK |
-| TX_BURST | OK |
-| TX_CONTINUOUS + TX_STOP | OK |
-| Python API completa | OK |
+| 8/8 PHYs (BLE 1M/2M/Coded S8/S2, IEEE, Sub-1GHz 868/915, GFSK) | OK |
+| TX_RAW, TX_FRAME, TX_BURST, TX_CONTINUOUS + TX_STOP | OK |
+| RX con metricas (rx_ok, crc_err, drop, overflow) | OK |
+| configure_prop() — freq/mod/rate/deviation/sync configurable en runtime | OK |
+| OOK/ASK con patches dedicados (mce_genook + rfe_genook) | OK |
+| 13/13 presets validados OTA (GFSK/FSK/OOK en 433/868/915/2440 MHz) | OK |
+| Band-specific overrides (433 MHz, 868 MHz, 169 MHz) | OK |
+| Python API completa + PROP_PRESETS | OK |
 | RP2040 USB-CDC bridge | OK |
-| Metricas RX (rx_ok, crc_err, drop, overflow) | OK |
+| Firmware 55KB, todos los modos coexisten | OK |
 
-### NO funcionando
-| Componente | Nota |
-|-----------|------|
-| BLE 2M / Coded S8 / Coded S2 | Overrides existen, no wired en radio_if.c |
-| Sub-1GHz 868/915 MHz | Sin SmartRF config ni backend |
-| Proprietary GFSK | Sin backend |
-| Jamming | Modo propietario 2.4 GHz fallo, no interfiere senales |
-| Spectrum Analyzer | Solo skeleton Python |
-| Attack commands | No implementados |
-| Bootloader/OTA | Solo stub |
+### Bugs conocidos
+| Bug | Workaround |
+|-----|------------|
+| OOK→BLE transition causa timeout | Reflash o power cycle |
+| Jamming no interfiere senales realmente | Pendiente Fase 6 |
+
+### Bandas no funcionales (investigadas, no viables sin SmartRF Studio)
+| Banda | Razon |
+|-------|-------|
+| 169 MHz | Config SDK existe pero falla — antena no optimizada |
+| 315 MHz | Sin config ni ejemplos en SDK, solo spec en datasheet |
+| 390 MHz | Sin config ni ejemplos en SDK, solo spec en datasheet |
+| 470 MHz | En rango SDK pero sin ejemplo/config validado |
 
 ---
 
@@ -46,10 +51,11 @@ HOST (Python API) <-> RP2040 (USB Bridge) <-> CC1352P (Radio Engine)
 - **Python API**: `feralrf` package, sync interface, pyserial
 
 ### Radio IF internals
-- `radio_if.c`: RF abstraction, enum RadioIF_RfMode (NONE=0, BLE=1, IEEE=2)
-- `phy_manager.c`: Tabla de 8 PHYs, solo 2 con rf_backend_rx_supported=true
-- SmartRF configs: `smartrf_ble5_0.c` (BLE5) y `smartrf_ieee_15_4_0.c` (IEEE)
-- Patron: RF_open(mode, setup) -> RF_runCmd(fs) -> RF_postCmd(rx) para RX
+- `radio_if.c`: RF abstraction, enum RadioIF_RfMode (NONE=0, BLE=1, IEEE=2, SUB_1GHZ=3)
+- `phy_manager.c`: Tabla de 8 PHYs, todos con rf_backend_rx_supported=true
+- SmartRF configs: `smartrf_ble5_0.c` (BLE5), `smartrf_ieee_15_4_0.c` (IEEE), `smartrf_prop_0.c` (Sub-1GHz/OOK)
+- OOK: RF_Mode dedicado con patches mce_genook + rfe_genook
+- Band overrides: 433 MHz (AGC=0x20, RSSI=-8dB), 169 MHz (IIR/PLL), 868+ MHz (default)
 
 ---
 
@@ -64,7 +70,8 @@ Frame: [CMD_ID(1B)][SEQ(1B)][LEN(2B LE)][PAYLOAD(0-255B)][CRC16(2B LE)]
 
 ### Command IDs
 ```
-Config:    RADIO_INIT(0x01) SET_CHANNEL(0x02) SET_POWER(0x03) SET_PHY(0x04) GET_INFO(0x05) GET_STATS(0x06) SET_ADV_HOP(0x07)
+Config:    RADIO_INIT(0x01) SET_CHANNEL(0x02) SET_POWER(0x03) SET_PHY(0x04)
+           GET_INFO(0x05) GET_STATS(0x06) SET_ADV_HOP(0x07) SET_PROP_CONFIG(0x08)
 RX:        RX_START(0x10) RX_STOP(0x11)
 TX:        TX_RAW(0x20) TX_CONTINUOUS(0x21) TX_BURST(0x22) TX_FRAME(0x23) TX_STOP(0x24)
 Jam:       JAM_CONTINUOUS(0x30) JAM_REACTIVE(0x31) JAM_PATTERN(0x32) JAM_STOP(0x33)
@@ -72,116 +79,68 @@ Spectrum:  SPECTRUM_SCAN(0x40) SPECTRUM_MONITOR(0x41) SPECTRUM_STOP(0x42)
 Response:  ACK(0x80) ERROR(0x81) RX_PACKET(0x90) SPECTRUM_DATA(0x91) JAM_EVENT(0x95)
 ```
 
+### SET_PROP_CONFIG payload (16 bytes)
+```
+freq_hz(4B LE) | mod_type(1B) | symbol_rate(4B LE) | deviation(2B LE) | rx_bw(1B) | sync_word(4B LE)
+```
+
 ---
 
 ## Fases de Desarrollo
 
-### FASE 1: Habilitar todos los PHYs (RX + TX)
+### FASE 1: Habilitar todos los PHYs (RX + TX) — COMPLETADA ✅
 
-**Objetivo:** Todos los protocolos del CC1352 operativos con la misma API.
+8/8 PHYs validados OTA con marcadores entre 2 boards.
 
-#### 1a. BLE 2M / Coded S8 / Coded S2
-- Riesgo: Bajo (overrides ya existen en smartrf_ble5_0.c)
-- Agregar `RadioIF_applyBlePhyMode()` en radio_if.c
-- Configurar `defaultPhy.mainMode` y `coding` en cmdBle5RadioSetup
-- Habilitar rf_backend_rx_supported para PHY 1,2,3 en phy_manager.c
-
-#### 1b. Sub-1GHz 868 MHz
-- Riesgo: Medio (nuevo RF mode completo)
-- Crear smartrf_prop_0.c/h (CMD_PROP_RADIO_DIV_SETUP_PA, 50kBaud GFSK, loDivider=0x05)
-- Agregar RADIO_IF_RF_MODE_SUB_1GHZ=3 en radio_if.c
-- Implementar: startSub1ghzRfBackend(), processSub1ghzPackets(), transmitSub1ghzRaw()
-- Power table Sub-1GHz separada
-- Actualizar todos los dispatch points
-
-#### 1c. Sub-1GHz 915 MHz
-- Riesgo: Bajo (reutiliza backend de 1b, diferente frecuencia)
-
-#### 1d. Proprietary GFSK
-- Riesgo: Bajo-Medio (reutiliza CMD_PROP con loDivider dinamico)
-
-**Orden:** 1a -> 1b -> 1c -> 1d
-
-**Estado:** COMPLETADA (2026-04-02). 8/8 PHYs validados OTA con marcadores.
+- BLE 2M/Coded: `RadioIF_applyBlePhyMode()`, TX usa CMD_BLE5_ADV_NC para 2M/Coded
+- Sub-1GHz: `smartrf_prop_0.c/h`, CMD_PROP_RADIO_DIV_SETUP_PA, power table Sub-1GHz
+- GFSK: Reutiliza prop backend con loDivider dinamico
 
 ---
 
-### FASE 2: Radio Propietaria Configurable
+### FASE 2: Radio Propietaria Configurable — COMPLETADA ✅
 
-**Objetivo:** Exponer TODAS las capacidades RF del CC1352 al usuario: cualquier frecuencia, modulacion y data rate.
+13/13 presets validados OTA.
 
-El CC1352 soporta bandas 143-1315 MHz + 2.4 GHz, modulaciones 2(G)FSK/4(G)FSK/MSK/OOK/ASK. Hoy solo usamos GFSK 50kBaud. Esta fase hace configurable todo via `CMD_PROP_RADIO_DIV_SETUP_PA`.
+#### Implementado
+- CMD_SET_PROP_CONFIG (0x08): configura freq, mod, rate, deviation, rx_bw, sync_word en runtime
+- OOK/ASK con patches RF Core dedicados (rf_patch_mce_genook + rf_patch_rfe_genook)
+- Band-specific overrides auto-seleccionados por frecuencia
+- Python: `radio.configure_prop()` + `PROP_PRESETS` dictionary
+- Presets: GFSK/FSK/OOK en 433, 868, 915, 2440 MHz a distintos data rates
 
-#### 2a. Firmware: CMD_SET_PROP_CONFIG (nuevo comando)
-- Nuevo comando 0x08 que configura los campos del radio setup propietario:
-  - `frequency_hz` (uint32): Frecuencia exacta
-  - `modulation` (uint8): FSK=1, GFSK=1, 4FSK=2, 4GFSK=2, OOK=3, MSK=4
-  - `symbol_rate` (uint32): Baud rate
-  - `deviation` (uint16): Desviacion en Hz (para FSK/GFSK)
-  - `rx_bandwidth` (uint8): Ancho de banda RX
-  - `sync_word` (uint32): Palabra de sincronizacion
-- Modifica campos de `Prop0_cmdPropRadioDivSetup` en runtime
-- Calcula loDivider automaticamente segun frecuencia
-- Calcula rateWord/preScale desde symbol_rate
-
-#### 2b. Python API: radio.configure_prop()
+#### Presets validados
 ```python
-radio.configure_prop(
-    frequency_hz=433920000,  # 433.92 MHz
-    modulation='OOK',        # FSK, GFSK, 4GFSK, OOK, MSK
-    data_rate=4800,          # baud
-    deviation=5000,          # Hz
-    sync_word=0x930B51DE,    # optional
-)
-# Despues usar normalmente:
-radio.start_rx()
-radio.transmit(payload)
+from feralrf import Radio, PHY, PROP_PRESETS
+radio.set_phy(PHY.PROPRIETARY_GFSK)
+radio.configure_prop(**PROP_PRESETS['ook_433_4k8'])  # OOK 433 MHz
+radio.configure_prop(**PROP_PRESETS['gfsk_868_50k']) # GFSK 868 MHz
+radio.configure_prop(**PROP_PRESETS['gfsk_2440_250k']) # GFSK 2.4 GHz 250kBaud
 ```
 
-#### 2c. Presets por protocolo comun
-```python
-radio.configure_prop(**PRESETS['wireless_mbus'])   # 868 MHz, FSK
-radio.configure_prop(**PRESETS['sidewalk'])         # 900 MHz, FSK  
-radio.configure_prop(**PRESETS['433_ook'])          # 433.92 MHz, OOK (garages, sensores)
-radio.configure_prop(**PRESETS['315_ask'])          # 315 MHz, ASK (controles remotos)
-```
-
-#### Bandas soportadas por el CC1352
-| Rango MHz | loDivider | Uso tipico |
-|-----------|-----------|------------|
-| 2360-2500 | 0x00 | BLE, IEEE 802.15.4, Prop 2.4 GHz |
-| 1076-1315 | 0x04 | - |
-| 861-1054 | 0x05 | 868/915 ISM, Wi-SUN, W-MBus, Sidewalk |
-| 431-527 | 0x0A | 433 MHz ISM (sensores, garages) |
-| 359-439 | 0x0C | 390-433 MHz (controles remotos) |
-| 287-351 | 0x0F | 315 MHz (controles remotos NA) |
-| 143-176 | 0x1E | 169 MHz (smart metering EU) |
-
-#### Modulaciones
-| Tipo | modType | Uso tipico |
-|------|---------|------------|
-| 2-GFSK | 0x1 | BLE, la mayoria IoT |
-| 2-FSK | 0x1 | Wi-SUN, W-MBus |
-| 4-GFSK | 0x2 | Mayor throughput |
-| OOK | 0x3 | Garages, sensores baratos, 315/433 MHz |
-| ASK | 0x3 | Controles remotos |
-| MSK | 0x4 | Telemetria |
+#### Bandas funcionales
+| Banda | Frecuencias | Modulaciones |
+|-------|------------|-------------|
+| 433 MHz ISM | 433.92 MHz | GFSK, FSK, OOK |
+| 868 MHz ISM (EU) | 868.0, 868.3 MHz | GFSK, OOK |
+| 915 MHz ISM (US) | 902.2, 915.0 MHz | GFSK |
+| 2.4 GHz Prop | 2440 MHz | GFSK |
 
 ---
 
-### FASE 3: Spectrum Analyzer
+### FASE 3: Spectrum Analyzer — PENDIENTE
 
-**Objetivo:** Escaneo RSSI en todas las bandas para reconocimiento pre-ataque.
+**Objetivo:** Escaneo RSSI en todas las bandas funcionales para reconocimiento pre-ataque.
 
 - Firmware: SPECTRUM_SCAN(0x40), SPECTRUM_MONITOR(0x41), SPECTRUM_STOP(0x42)
 - 2.4 GHz: CMD_IEEE_ED_SCAN o RF_getRssi()
 - Sub-1GHz: CMD_PROP_RX con dwell corto + RF_getRssi()
 - Python: `Radio.spectrum_scan(start_hz, end_hz, step_khz, dwell_ms)`
-- Cubre TODAS las bandas de Fase 2 (143 MHz a 2.5 GHz)
+- Cubre: 433, 868, 915 MHz y 2.4 GHz
 
 ---
 
-### FASE 4: Attack Commands
+### FASE 4: Attack Commands — PENDIENTE
 
 **Objetivo:** Metodos Python de alto nivel para ataques RF.
 
@@ -197,7 +156,7 @@ python/feralrf/attacks/
 
 ---
 
-### FASE 5: Emulacion de Targets
+### FASE 5: Emulacion de Targets — PENDIENTE
 
 **Objetivo:** CatSniffer como dispositivo victima para validar ataques.
 
@@ -213,12 +172,12 @@ python/feralrf/emulation/
 
 ---
 
-### FASE 6: Jamming
+### FASE 6: Jamming — PENDIENTE
 
-**Objetivo:** Interferencia RF funcional en todas las bandas (143 MHz - 2.5 GHz).
+**Objetivo:** Interferencia RF funcional en todas las bandas.
 
-- Jamming en cualquier frecuencia/banda configurada en Fase 2
-- Debuggear CMD_TX_TEST (modo propietario 2.4 GHz que fallo)
+- Jamming en cualquier frecuencia/banda de Fase 2
+- Debuggear CMD_TX_TEST (modo propietario 2.4 GHz que fallo anteriormente)
 - Alternativa: CMD_PROP_TX con payload largo y bFsOff=0
 - Reactive jamming (<500us): ISR en sync word detection
 - Pattern jamming: timer-based on/off
@@ -229,8 +188,9 @@ python/feralrf/emulation/
 
 ### Boards disponibles
 - Board ...82:2E: Funcional (TX y RX)
-- Board ...C1:82: RF muerta (danada durante PA testing)
-- Board ...6B:F6: Funcional (reemplazo de C1:82)
+- Board ...C1:82: Funcional (anteriormente pensada muerta, solo necesitaba firmware nuevo)
+- Board ...82:3C: Funcional
+- Board ...6B:F6: Degradada (~5 dB menos TX power)
 
 ### Conexiones RP2040 <-> CC1352 (UART 921600, sin flow control)
 | Signal | RP2040 | CC1352 |
@@ -241,8 +201,9 @@ python/feralrf/emulation/
 ### Restricciones
 - Memoria: Solo allocacion estatica (no malloc) en CC1352
 - RX Buffer: 16KB circular
-- TX Power: -20 a +20 dBm (High PA necesita DIO29, no configurado)
+- TX Power: -20 a +14 dBm (High PA +15-20 dBm necesita DIO29, no configurado)
 - SDK: TI SimpleLink CC13xx/CC26xx 7.10.01.24 (fijo)
+- Antena CatSniffer: Optimizada para 868 MHz y 2.4 GHz. 433 MHz funciona con perdidas. <430 MHz no funcional.
 
 ---
 
@@ -250,11 +211,11 @@ python/feralrf/emulation/
 
 | ID | PHY | RF Backend | Estado |
 |----|-----|-----------|--------|
-| 0 | BLE 1M | BLE5 SmartRF | OK |
-| 1 | BLE 2M | BLE5 SmartRF (override existe) | Fase 1a |
-| 2 | BLE Coded S8 | BLE5 SmartRF (override existe) | Fase 1a |
-| 3 | BLE Coded S2 | BLE5 SmartRF (override existe) | Fase 1a |
-| 4 | IEEE 802.15.4 | IEEE SmartRF | OK |
-| 5 | Sub-1GHz 868 | CMD_PROP (nuevo) | Fase 1b |
-| 6 | Sub-1GHz 915 | CMD_PROP (nuevo) | Fase 1c |
-| 7 | Proprietary GFSK | CMD_PROP (nuevo) | Fase 1d |
+| 0 | BLE 1M | BLE5 SmartRF | ✅ OK |
+| 1 | BLE 2M | BLE5 SmartRF | ✅ OK |
+| 2 | BLE Coded S8 | BLE5 SmartRF | ✅ OK |
+| 3 | BLE Coded S2 | BLE5 SmartRF | ✅ OK |
+| 4 | IEEE 802.15.4 | IEEE SmartRF | ✅ OK |
+| 5 | Sub-1GHz 868 | CMD_PROP SmartRF | ✅ OK |
+| 6 | Sub-1GHz 915 | CMD_PROP SmartRF | ✅ OK |
+| 7 | Proprietary GFSK | CMD_PROP configurable | ✅ OK |

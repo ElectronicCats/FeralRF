@@ -116,6 +116,64 @@ class Radio:
         except serial.SerialException as e:
             raise ConnectionError(f"Failed to connect to {self.port}: {e}")
 
+    def _get_shell_port(self) -> str:
+        """Derive RP2040 shell port from bridge port (offset +2)."""
+        import re
+        m = re.search(r'(\d+)$', self.port)
+        if m:
+            base_num = int(m.group(1))
+            return self.port[:m.start(1)] + str(base_num + 2)
+        raise ConnectionError(f"Cannot derive shell port from {self.port}")
+
+    def reset_device(self, wait: float = 1.5) -> None:
+        """Power-cycle the CC1352 via RP2040 shell reset pin.
+
+        Sends 'exit' command to RP2040 shell which resets CC1352 and
+        returns to passthrough mode. After reset, re-initializes the
+        radio. Useful for recovering from OOK mode lock.
+
+        Args:
+            wait: Seconds to wait after reset for CC1352 to boot.
+        """
+        shell_port = self._get_shell_port()
+
+        # Close current serial to avoid conflicts
+        was_connected = self._serial and self._serial.is_open
+        if was_connected:
+            try:
+                self._serial.close()
+            except Exception:
+                pass
+
+        # Send reset via shell port: boot (enters bootloader, resets CC1352)
+        # then exit (returns to passthrough, resets CC1352 again with correct baud)
+        try:
+            shell = serial.Serial(shell_port, 115200, timeout=1.0, write_timeout=1.0)
+            shell.write(b'boot\r\n')
+            time.sleep(0.5)
+            shell.write(b'exit\r\n')
+            time.sleep(0.3)
+            shell.close()
+        except serial.SerialException as e:
+            raise ConnectionError(f"Failed to send reset via {shell_port}: {e}")
+
+        time.sleep(wait)
+
+        # Reconnect and re-init
+        if was_connected:
+            self._serial = serial.Serial(
+                port=self.port,
+                baudrate=self.baudrate,
+                timeout=1.0,
+                write_timeout=1.0,
+            )
+            time.sleep(0.5)
+            self._serial.reset_input_buffer()
+            self._serial.reset_output_buffer()
+            self._seq = 0
+            self._rx_buffer = bytearray()
+            self.init()
+
     def disconnect(self) -> None:
         """Disconnect from device"""
         if self._serial:

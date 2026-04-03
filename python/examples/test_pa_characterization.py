@@ -28,9 +28,9 @@ from dataclasses import dataclass, field
 from typing import List, Optional
 
 
-POWER_SWEEP_DBM = [-20, -15, -10, -5, 0, 5, 10, 15, 20]
+POWER_SWEEP_DBM = [0]  # Fixed 0 dBm — safe for both SKY66312-11 and TQP7M9104
 
-DEFAULT_CONFIGS = ["baseline", "SKY65162", "TQP7M9104"]
+DEFAULT_CONFIGS = ["baseline", "SKY66312", "TQP7M9104"]
 
 
 @dataclass
@@ -114,12 +114,12 @@ def run_sweep(
         # Configure TX power
         radio_tx.set_power(pwr)
 
-        # Start RX
+        # Start RX first, then TX (they are separate boards)
         radio_rx.start_rx()
         time.sleep(rx_settle_s)
 
-        # Drain any stale packets
-        for _ in radio_rx.read_packets(timeout=0.3):
+        # Drain stale packets
+        for _ in radio_rx.read_packets(timeout=0.2):
             pass
 
         # TX burst
@@ -127,22 +127,33 @@ def run_sweep(
             packet, count=packets_per_level, interval_us=interval_us
         )
 
-        # Wait for all packets to arrive:
-        # burst_duration + margin
+        # Wait for all packets to arrive
         burst_duration_s = (packets_per_level * interval_us) / 1_000_000.0
-        rx_window = burst_duration_s + 1.0
+        rx_window = burst_duration_s + 2.0
 
+        rx_total = 0
+        rx_matched = 0
         for pkt in radio_rx.read_packets(timeout=rx_window):
             if pkt.crc_ok:
-                level.rssi_values.append(pkt.rssi_dbm)
+                rx_total += 1
+                if packet in pkt.data:
+                    rx_matched += 1
+                    level.rssi_values.append(pkt.rssi_dbm)
 
         level.packets_received = len(level.rssi_values)
-        radio_rx.stop_rx()
+
+        # Stop RX before next iteration
+        try:
+            radio_rx.stop_rx()
+        except Exception:
+            pass
+        time.sleep(0.1)
 
         per_pct = level.per * 100.0 if not math.isnan(level.per) else 0.0
         print(
             f"  {pwr:+4d} dBm -> "
             f"rx={level.packets_received:4d}/{level.packets_expected} "
+            f"(crc_ok={rx_total}, matched={rx_matched}) "
             f"RSSI={level.rssi_mean:+6.1f} dBm "
             f"(std={level.rssi_std:4.1f}) "
             f"PER={per_pct:5.1f}%"
@@ -347,7 +358,8 @@ def main() -> int:
         info_rx = radio_rx.init()
         radio_rx.set_phy(PHY(args.phy), args.channel)
         radio_rx.set_channel(args.channel)
-        ok(f"RX ready: fw={info_rx.firmware_version}")
+        radio_rx.set_adv_hop(False)
+        ok(f"RX ready: fw={info_rx.firmware_version} (adv hop disabled)")
 
         all_results: List[ConfigResult] = []
 
@@ -359,7 +371,7 @@ def main() -> int:
             else:
                 print(f"  Connect PA '{config_name}' between TX and antenna")
             print(f"{'='*60}")
-            input("  Press ENTER when ready...")
+            # input("  Press ENTER when ready...")  # disabled for automated run
 
             result = run_sweep(
                 radio_tx=radio_tx,

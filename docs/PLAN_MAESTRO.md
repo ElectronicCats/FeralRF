@@ -1,6 +1,6 @@
 # FeralRF - Plan Maestro
 
-**Version:** 4.0 | **Fecha:** 2026-04-02
+**Version:** 5.0 | **Fecha:** 2026-04-03
 
 Firmware universal para CatSniffer (CC1352P + RP2040). Objetivo: API Python facil de usar para pentesting RF con todos los protocolos del CC1352.
 
@@ -17,18 +17,20 @@ Firmware universal para CatSniffer (CC1352P + RP2040). Objetivo: API Python faci
 | TX_RAW, TX_FRAME, TX_BURST, TX_CONTINUOUS + TX_STOP | OK |
 | RX con metricas (rx_ok, crc_err, drop, overflow) | OK |
 | configure_prop() — freq/mod/rate/deviation/sync configurable en runtime | OK |
-| OOK/ASK con patches dedicados (mce_genook + rfe_genook) | OK |
-| 13/13 presets validados OTA (GFSK/FSK/OOK en 433/868/915/2440 MHz) | OK |
+| OOK RX+TX con patches genook (433/868 MHz, 10/10 markers) | OK |
+| 15 presets validados OTA (GFSK/FSK/OOK en 433/868/915/2440 MHz) | OK |
 | Band-specific overrides (433 MHz, 868 MHz, 169 MHz) | OK |
+| reset_device() — power cycle CC1352 via RP2040 shell | OK |
+| Estabilidad: soak 5min 213 ciclos, 0 errors, 0 timeouts | OK |
 | Python API completa + PROP_PRESETS | OK |
 | RP2040 USB-CDC bridge | OK |
 | Firmware 55KB, todos los modos coexisten | OK |
 
-### Bugs conocidos
-| Bug | Workaround |
-|-----|------------|
-| OOK→BLE transition causa timeout | Reflash o power cycle |
-| Jamming no interfiere senales realmente | Pendiente Fase 6 |
+### Limitaciones conocidas
+| Limitacion | Solucion |
+|------------|----------|
+| OOK bloquea radio (TI SDK bug) | `reset_device()` — power cycle automatico ~2s |
+| Jamming no interfiere senales | Pendiente Fase 6 |
 
 ### Bandas no funcionales (investigadas, no viables sin SmartRF Studio)
 | Banda | Razon |
@@ -100,22 +102,30 @@ freq_hz(4B LE) | mod_type(1B) | symbol_rate(4B LE) | deviation(2B LE) | rx_bw(1B
 
 ### FASE 2: Radio Propietaria Configurable — COMPLETADA ✅
 
-13/13 presets validados OTA.
+15 presets validados OTA (13 GFSK/FSK + 2 OOK).
 
 #### Implementado
 - CMD_SET_PROP_CONFIG (0x08): configura freq, mod, rate, deviation, rx_bw, sync_word en runtime
-- OOK/ASK con patches RF Core dedicados (rf_patch_mce_genook + rf_patch_rfe_genook)
+- OOK RX+TX con patches genook (10/10 markers en 433 y 868 MHz)
 - Band-specific overrides auto-seleccionados por frecuencia
 - Python: `radio.configure_prop()` + `PROP_PRESETS` dictionary
-- Presets: GFSK/FSK/OOK en 433, 868, 915, 2440 MHz a distintos data rates
+- `radio.reset_device()` — power cycle CC1352 via RP2040 para recovery post-OOK
 
-#### Presets validados
+#### Uso
 ```python
 from feralrf import Radio, PHY, PROP_PRESETS
+
+# GFSK/FSK — cambio libre entre modos
 radio.set_phy(PHY.PROPRIETARY_GFSK)
-radio.configure_prop(**PROP_PRESETS['ook_433_4k8'])  # OOK 433 MHz
-radio.configure_prop(**PROP_PRESETS['gfsk_868_50k']) # GFSK 868 MHz
-radio.configure_prop(**PROP_PRESETS['gfsk_2440_250k']) # GFSK 2.4 GHz 250kBaud
+radio.configure_prop(**PROP_PRESETS['gfsk_868_50k'])
+radio.start_rx()
+
+# OOK — bloquea radio, reset_device() para cambiar
+radio.configure_prop(**PROP_PRESETS['ook_433_4k8'])
+radio.start_rx()  # captura OOK
+radio.stop_rx()
+radio.reset_device()  # power cycle, listo para otro modo
+radio.set_phy(PHY.BLE_1M)  # funciona
 ```
 
 #### Bandas funcionales
@@ -125,6 +135,23 @@ radio.configure_prop(**PROP_PRESETS['gfsk_2440_250k']) # GFSK 2.4 GHz 250kBaud
 | 868 MHz ISM (EU) | 868.0, 868.3 MHz | GFSK, OOK |
 | 915 MHz ISM (US) | 902.2, 915.0 MHz | GFSK |
 | 2.4 GHz Prop | 2440 MHz | GFSK |
+
+---
+
+### FASE 2.5: Estabilidad de Comunicacion — COMPLETADA ✅
+
+#### Validado
+- PHY switching: todas las combinaciones PASS (BLE↔IEEE↔Sub-1GHz↔GFSK)
+- 15 presets: todos PASS sin timeouts
+- OOK→cualquier modo: PASS via reset_device()
+- State transitions: 9/9 PASS (RX→TX, TX→RX, rapid cycling)
+- Soak 5min: 213 ciclos random PHY, 0 errors, 0 timeouts, 89.7% delivery
+
+#### Fixes aplicados
+- RF session cleanup en init()/setPhy() — stopRfBackend + closeTxSession
+- OOK session lock — skip RF_close cuando genook patches activos
+- reset_device() — boot→exit via RP2040 shell para power cycle CC1352
+- RF_flushCmd antes de RF_close en closeTxSession
 
 ---
 

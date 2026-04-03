@@ -31,6 +31,7 @@
 #define CMD_TX_STOP 0x24u
 #define CMD_SET_ADV_HOP 0x07u
 #define CMD_SET_PROP_CONFIG 0x08u
+#define CMD_SET_BLE_ADDR 0x09u
 #define CMD_JAM_CONTINUOUS 0x30u
 #define CMD_JAM_STOP 0x33u
 
@@ -209,6 +210,15 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
         send_ack(seq);
         return;
     }
+
+    case CMD_SET_BLE_ADDR:
+        if (payload_len != 6u) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            return;
+        }
+        RadioIF_setBleAdvAddress(payload);
+        send_ack(seq);
+        return;
 
     case CMD_RX_START:
         if (payload_len != 0) {

@@ -60,6 +60,7 @@ typedef struct {
 } RadioIF_PropConfig;
 
 void RadioIF_setPropConfig(const RadioIF_PropConfig *config);
+void RadioIF_setBleAdvAddress(const uint8_t *addr);
 
 /* Jamming functions - optimized continuous transmission */
 bool RadioIF_startJamSession(uint8_t phy, uint8_t channel, int8_t power_dbm);

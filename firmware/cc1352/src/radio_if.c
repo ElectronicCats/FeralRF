@@ -1564,6 +1564,12 @@ void RadioIF_setPropConfig(const RadioIF_PropConfig *config) {
     s_frequency_hz = config->frequency_hz;
 }
 
+void RadioIF_setBleAdvAddress(const uint8_t *addr) {
+    if (addr != NULL) {
+        memcpy(s_ble_adv_tx_device_addr, addr, BLE_ADV_TX_DEVICE_ADDR_LEN);
+    }
+}
+
 void RadioIF_setPower(int8_t power_dbm) {
     s_tx_power_dbm = power_dbm;
 }

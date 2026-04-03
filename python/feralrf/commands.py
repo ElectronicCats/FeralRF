@@ -97,6 +97,13 @@ class CommandBuilder:
         return b""
 
     @staticmethod
+    def set_ble_addr(addr: bytes) -> bytes:
+        """Payload for SET_BLE_ADDR (6 bytes, little-endian)"""
+        if len(addr) != 6:
+            raise ValueError("BLE address must be 6 bytes")
+        return addr
+
+    @staticmethod
     def set_prop_config(
         frequency_hz: int,
         mod_type: int = 1,

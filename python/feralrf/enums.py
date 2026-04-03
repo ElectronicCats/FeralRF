@@ -30,6 +30,7 @@ class Command(IntEnum):
     GET_STATS = 0x06
     SET_ADV_HOP = 0x07
     SET_PROP_CONFIG = 0x08
+    SET_BLE_ADDR = 0x09
 
     # RX Operations
     RX_START = 0x10

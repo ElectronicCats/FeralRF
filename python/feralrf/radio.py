@@ -367,6 +367,30 @@ class Radio:
         if cmd_id != Response.ACK:
             raise ProtocolError(f"Unexpected response to SET_POWER: 0x{cmd_id:02X}")
 
+    def set_ble_addr(self, addr: bytes) -> None:
+        """Set BLE advertising TX address.
+
+        Args:
+            addr: 6-byte address in little-endian (e.g. b'\\x01\\xEE\\xDD\\xCC\\xBB\\xAA')
+                  or use set_ble_addr_str("AA:BB:CC:DD:EE:01") for human-readable format.
+        """
+        self._send_command(Command.SET_BLE_ADDR, CommandBuilder.set_ble_addr(addr))
+        cmd_id, seq, payload = self._read_response(expected={Response.ACK, Response.ERROR})
+        if cmd_id == Response.ERROR:
+            raise CommandError("Set BLE addr failed", payload[0] if payload else 0)
+
+    def set_ble_addr_str(self, addr_str: str) -> None:
+        """Set BLE advertising TX address from string format.
+
+        Args:
+            addr_str: Address like "AA:BB:CC:DD:EE:FF" (MSB first, stored little-endian)
+        """
+        parts = addr_str.split(":")
+        if len(parts) != 6:
+            raise ValueError("Address must be XX:XX:XX:XX:XX:XX format")
+        addr_bytes = bytes(int(p, 16) for p in reversed(parts))
+        self.set_ble_addr(addr_bytes)
+
     def configure_prop(
         self,
         frequency_hz: int,

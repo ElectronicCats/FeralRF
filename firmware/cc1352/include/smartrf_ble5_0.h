@@ -15,6 +15,7 @@ extern rfc_CMD_BLE5_RADIO_SETUP_PA_t Ble5_0_cmdBle5RadioSetup;
 extern rfc_CMD_FS_t Ble5_0_cmdFs;
 extern rfc_CMD_BLE5_GENERIC_RX_t Ble5_0_cmdBle5GenericRx;
 extern rfc_CMD_BLE5_ADV_NC_t Ble5_0_cmdBle5AdvNc;
+extern rfc_CMD_BLE_ADV_NC_t Ble5_0_cmdBleAdvNc;
 
 extern uint32_t Ble5_0_pOverridesCommon[];
 extern uint32_t Ble5_0_pOverrides1Mbps[];

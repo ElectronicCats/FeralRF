@@ -17,66 +17,39 @@ RF_Mode Ble5_0_mode = {
     .rfePatchFxn = 0,
 };
 
-/* Common overrides — HPA pilot tone, IPEAK, DTX, synth calibration */
+/* Common overrides — CatSniffer reference sniffer firmware (working for TX) */
 uint32_t Ble5_0_pOverridesCommon[] = {
-    /* Reconfigure to 35 us pilot tone length for high output power PA */
-    HW_REG_OVERRIDE(0x6024, 0x5B20),
-    /* Compensate for 35 us pilot tone length */
-    (uint32_t)0x01640263,
-    /* Set IPEAK = 3 and DCDC dither off for TX */
-    (uint32_t)0x00F388D3,
+    /* Reconfigure pilot tone length */
+    HW_REG_OVERRIDE(0x6024, 0x4C20),
+    /* Compensate for modified pilot tone length */
+    (uint32_t)0x01500263,
     /* Default to no CTE */
     HW_REG_OVERRIDE(0x5328, 0x0000),
-    /* Increase mid code calibration time to 5 us */
-    (uint32_t)0x00058683,
-    HW32_ARRAY_OVERRIDE(0x4004, 1),
-    (uint32_t)0x38183C30,
-    /* Move synth start code */
-    HW_REG_OVERRIDE(0x4064, 0x3C),
-    /* Set DTX gain -5% for 1 Mbps */
-    (uint32_t)0x00E787E3,
-    /* Set DTX threshold 1 Mbps */
-    (uint32_t)0x00950803,
-    /* Set DTX gain -2.5% for 2 Mbps */
-    (uint32_t)0x00F487F3,
-    /* Set DTX threshold 2 Mbps */
-    (uint32_t)0x012A0823,
-    /* Set enhanced TX shape */
-    (uint32_t)0x000D8C73,
-    /* Set synth fine code calibration interval */
-    HW32_ARRAY_OVERRIDE(0x4020, 1),
-    (uint32_t)0x41005F00,
-    /* Adapt to synth fine code calibration interval */
-    (uint32_t)0xC0040141,
-    (uint32_t)0x0007DD44,
+    /* Support for BLE 4.2 Data Length Extension */
+    (uint32_t)0x00FF8A53,
     (uint32_t)0xFFFFFFFF,
 };
 
 uint32_t Ble5_0_pOverrides1Mbps[] = {
-    /* Reconfigure pilot tone length for HPA */
-    HW_REG_OVERRIDE(0x5320, 0x0690),
+    /* Reconfigure pilot tone length */
+    HW_REG_OVERRIDE(0x5320, 0x05A0),
     /* Compensate for modified pilot tone length */
-    (uint32_t)0x018F02A3,
+    (uint32_t)0x017B02A3,
+    /* AGC tuning (SRFSNIFF-475) */
+    HW_REG_OVERRIDE(0x6098, 0x25F8),
+    HW_REG_OVERRIDE(0x60A0, 0x0026),
     (uint32_t)0xFFFFFFFF,
 };
 
 uint32_t Ble5_0_pOverrides2Mbps[] = {
-    HW_REG_OVERRIDE(0x5320, 0x0690),
-    (uint32_t)0x012D02A3,
-    /* Increase low gain AGC delay for 2 Mbps */
-    HW_REG_OVERRIDE(0x60A4, 0x7D00),
+    HW_REG_OVERRIDE(0x5320, 0x05A0),
+    (uint32_t)0x011902A3,
     (uint32_t)0xFFFFFFFF,
 };
 
 uint32_t Ble5_0_pOverridesCoded[] = {
-    HW_REG_OVERRIDE(0x5320, 0x0690),
-    (uint32_t)0x07E502A3,
-    /* AGC magnitude target — 0x001B for CC1352P7, 0x0021 for CC1352P */
-#if defined(DeviceFamily_CC13X2X7)
-    HW_REG_OVERRIDE(0x609C, 0x001B),
-#else
-    HW_REG_OVERRIDE(0x609C, 0x0021),
-#endif
+    HW_REG_OVERRIDE(0x5320, 0x05A0),
+    (uint32_t)0x07D102A3,
     (uint32_t)0xFFFFFFFF,
 };
 
@@ -132,7 +105,7 @@ rfc_CMD_FS_t Ble5_0_cmdFs = {
     .condition.nSkip = 0x0,
     .frequency = 0x0962,
     .fractFreq = 0x0000,
-    .synthConf.bTxMode = 0x0,
+    .synthConf.bTxMode = 0x1,
     .synthConf.refFreq = 0x0,
     .__dummy0 = 0x00,
     .__dummy1 = 0x00,
@@ -142,8 +115,8 @@ rfc_CMD_FS_t Ble5_0_cmdFs = {
 
 static rfc_bleGenericRxPar_t s_bleGenericRxPar = {
     .pRxQ = 0,
-    .rxConfig.bAutoFlushIgnored = 0x0,
-    .rxConfig.bAutoFlushCrcErr = 0x0,
+    .rxConfig.bAutoFlushIgnored = 0x1,
+    .rxConfig.bAutoFlushCrcErr = 0x1,
     .rxConfig.bAutoFlushEmpty = 0x0,
     .rxConfig.bIncludeLenByte = 0x1,
     .rxConfig.bIncludeCrc = 0x0,
@@ -212,11 +185,29 @@ static rfc_bleAdvPar_t s_bleAdvPar = {
     .behConfig.scanRspEndType = 0x0,
     .__dummy0 = 0x00,
     .__dummy1 = 0x00,
-    .endTrigger.triggerType = 0x1,
+    .endTrigger.triggerType = TRIG_NEVER,
     .endTrigger.bEnaCmd = 0x0,
     .endTrigger.triggerNo = 0x0,
-    .endTrigger.pastTrig = 0x1,
+    .endTrigger.pastTrig = 0x0,
     .endTime = 0x00000000,
+};
+
+rfc_CMD_BLE_ADV_NC_t Ble5_0_cmdBleAdvNc = {
+    .commandNo = CMD_BLE_ADV_NC,
+    .status = 0x0000,
+    .pNextOp = 0,
+    .startTime = 0x00000000,
+    .startTrigger.triggerType = 0x0,
+    .startTrigger.bEnaCmd = 0x0,
+    .startTrigger.triggerNo = 0x0,
+    .startTrigger.pastTrig = 0x1,
+    .condition.rule = COND_NEVER,
+    .condition.nSkip = 0x0,
+    .channel = 0x25,
+    .whitening.init = 0x0,
+    .whitening.bOverride = 0x0,
+    .pParams = &s_bleAdvPar,
+    .pOutput = 0,
 };
 
 rfc_CMD_BLE5_ADV_NC_t Ble5_0_cmdBle5AdvNc = {

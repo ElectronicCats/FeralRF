@@ -29,6 +29,7 @@
 #define CMD_TX_BURST 0x22u
 #define CMD_TX_FRAME 0x23u
 #define CMD_TX_STOP 0x24u
+#define CMD_SET_ADV_HOP 0x07u
 #define CMD_JAM_CONTINUOUS 0x30u
 #define CMD_JAM_STOP 0x33u
 
@@ -178,6 +179,15 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
             return;
         }
         ControlTask_onSetPower((int8_t)payload[0]);
+        send_ack(seq);
+        return;
+
+    case CMD_SET_ADV_HOP:
+        if (payload_len != 1) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            return;
+        }
+        RadioIF_setAdvHopEnabled(payload[0] != 0u);
         send_ack(seq);
         return;
 

@@ -309,6 +309,16 @@ class Radio:
         if cmd_id != Response.ACK:
             raise ProtocolError(f"Unexpected response to SET_POWER: 0x{cmd_id:02X}")
 
+    def set_adv_hop(self, enabled: bool) -> None:
+        """Enable/disable BLE advertising channel hopping on RX"""
+        self._send_command(Command.SET_ADV_HOP, CommandBuilder.set_adv_hop(enabled))
+        cmd_id, seq, payload = self._read_response(expected={Response.ACK, Response.ERROR})
+
+        if cmd_id == Response.ERROR:
+            raise CommandError("Set ADV hop failed", payload[0] if payload else 0)
+        if cmd_id != Response.ACK:
+            raise ProtocolError(f"Unexpected response to SET_ADV_HOP: 0x{cmd_id:02X}")
+
     def get_stats(self, timeout: float = 2.0) -> DeviceStats:
         """Get device RX metrics"""
         self._send_command(Command.GET_STATS)

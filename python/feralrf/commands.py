@@ -24,6 +24,11 @@ class CommandBuilder:
         return bytes([power_dbm & 0xFF])
 
     @staticmethod
+    def set_adv_hop(enabled: bool) -> bytes:
+        """Payload for SET_ADV_HOP"""
+        return bytes([1 if enabled else 0])
+
+    @staticmethod
     def set_phy(phy: int, channel: int = 0, frequency_hz: int = 0) -> bytes:
         """Payload for SET_PHY"""
         return struct.pack("<BHI", phy & 0xFF, channel & 0xFFFF, frequency_hz & 0xFFFFFFFF)

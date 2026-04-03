@@ -21,7 +21,7 @@
 /* Radio Configuration */
 #define TX_POWER_DBM 0                         /* Default TX power */
 #define RADIO_IF_SYNTH_PACKET_INTERVAL_MS 100u /* Synthetic packet cadence */
-#define RADIO_IF_BLE_ADV_HOP_ENABLE 1u         /* 1: enable basic BLE adv hopping 37/38/39 */
+#define RADIO_IF_BLE_ADV_HOP_ENABLE 1u         /* Default: enable BLE adv hopping (host can override at runtime) */
 #define RADIO_IF_BLE_ADV_HOP_INTERVAL_MS 50u   /* Hop dwell time per adv channel */
 
 /* JAM Safe-Mode Configuration */

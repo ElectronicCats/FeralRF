@@ -327,7 +327,21 @@ class Radio:
             deviation: Deviation register value (for FSK/GFSK)
             rx_bw: RX bandwidth register value
             sync_word: 32-bit sync word
+
+        Warning:
+            OOK mode (mod_type=2) loads dedicated RF core patches that lock
+            the radio to OOK. After configuring OOK, the device is locked to
+            that frequency and modulation. Power cycle required to use any
+            other mode or change OOK frequency. Set your target frequency
+            in the first configure_prop(mod_type=2) call.
         """
+        if mod_type == 2:
+            import warnings
+            warnings.warn(
+                "OOK mode locks the radio — power cycle required to change "
+                "frequency or switch to other modes. Set target frequency now.",
+                stacklevel=2,
+            )
         self._send_command(
             Command.SET_PROP_CONFIG,
             CommandBuilder.set_prop_config(

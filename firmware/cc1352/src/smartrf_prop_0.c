@@ -98,19 +98,22 @@ uint32_t Prop0_pOverrides169[] = {
     (uint32_t)0xFFFFFFFF,
 };
 
-/* OOK-specific overrides (adapted from SDK setting_tc599.json — without MCE/RFE patch enable) */
+/* OOK overrides (from SDK setting_tc599.json).
+ * WARNING: Once applied, RF Core cannot switch to other modes without
+ * power cycle. MCE_RFE_OVERRIDE loads genook patches into MCE/RFE RAM
+ * that cannot be unloaded (TI SDK bug: RFCCpePatchReset is a no-op). */
 uint32_t Prop0_pOverridesOok[] = {
-    /* MCE_RFE_OVERRIDE removed — causes hang without genook patches loaded */
-    ADI_2HALFREG_OVERRIDE(0, 16, 0x8, 0x8, 17, 0x1, 0x1), /* PA ramp time */
-    HW_REG_OVERRIDE(0x609C, 0x001E),                    /* AGC reference level (lower for OOK) */
-    (uint32_t)0x000288A3,                                /* RSSI offset -2 dB */
-    ADI_HALFREG_OVERRIDE(0, 61, 0xF, 0xF),              /* Anti-aliasing filter BW */
+    MCE_RFE_OVERRIDE(1, 0, 0, 1, 0, 0),                /* Enable MCE+RFE genook patches */
+    ADI_2HALFREG_OVERRIDE(0, 16, 0x8, 0x8, 17, 0x1, 0x1),
+    HW_REG_OVERRIDE(0x609C, 0x001E),                    /* AGC ref level for OOK */
+    (uint32_t)0x000288A3,                                /* RSSI offset */
+    ADI_HALFREG_OVERRIDE(0, 61, 0xF, 0xF),              /* Anti-aliasing filter */
     HW32_ARRAY_OVERRIDE(0x405C, 1),                      /* FSCA divider bias */
-    (uint32_t)0x08141131,                                /* FSCA divider bias (cont) */
+    (uint32_t)0x08141131,
     HW_REG_OVERRIDE(0x51E4, 0x80AF),                     /* OOK duty cycle compensation */
-    HW_REG_OVERRIDE(0x5270, 0x0002),                     /* Viterbi code length k=7 */
+    HW_REG_OVERRIDE(0x5270, 0x0002),                     /* Viterbi k=7 */
     HW_REG_OVERRIDE(0x6028, 0x001A),                     /* PA ramp timing */
-    (uint32_t)0x00F788D3,                                /* DC/DC regulator config */
+    (uint32_t)0x00F788D3,                                /* DC/DC regulator */
     (uint32_t)0xFFFFFFFF,
 };
 

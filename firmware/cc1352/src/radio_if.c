@@ -24,6 +24,7 @@
 #include DeviceFamily_constructPath(driverlib/systick.h)
 /* clang-format on */
 #include <ti/drivers/rf/RF.h>
+#include <ti/drivers/dpl/ClockP.h>
 
 #define RADIO_IF_RX_QUEUE_DEPTH 8u
 #define RADIO_IF_SYSTICK_MAX 0x00FFFFFFu
@@ -145,11 +146,11 @@ static int8_t s_jam_power_dbm = 0;
 static bool s_prop_ook_active = false;
 
 static RF_Mode *RadioIF_getPropMode(void) {
-    /* Always use multi_protocol CPE patch — OOK overrides handle the rest.
-     * Using Prop0_modeOok (with mce_genook + rfe_genook patches) causes
-     * firmware hang when switching back to GFSK/BLE modes. */
-    (void)s_prop_ook_active;
-    return &Prop0_mode;
+    /* OOK requires genook MCE/RFE patches for TX and RX. Once loaded, these
+     * patches cannot be unloaded safely (TI SDK bug: RFCCpePatchReset is a
+     * no-op). Switching to another mode after OOK will hang the RF Core.
+     * The user must power-cycle/reflash to use other modes after OOK. */
+    return s_prop_ook_active ? &Prop0_modeOok : &Prop0_mode;
 }
 #if defined(__GNUC__)
 static uint8_t s_ieee154_tx_buffer[IEEE_15_4_TX_MAX_PAYLOAD_LEN] __attribute__((aligned(4)));
@@ -951,7 +952,16 @@ static void RadioIF_stopRfBackend(void) {
             RF_cancelCmd(s_rf_handle, s_rf_rx_cmd, 0);
         }
         RF_flushCmd(s_rf_handle, RF_CMDHANDLE_FLUSH_ALL, 0);
+        if (s_prop_ook_active) {
+            /* OOK genook patches corrupt RF Core state on normal close.
+             * Force full power-down: cancel → yield → long delay → close. */
+            RF_yield(s_rf_handle);
+            ClockP_usleep(50000); /* 50ms for RF Core full power-down */
+        }
         RF_close(s_rf_handle);
+        if (s_prop_ook_active) {
+            ClockP_usleep(20000); /* 20ms post-close for RF domain reset */
+        }
         s_rf_handle = NULL;
     }
 
@@ -1333,21 +1343,28 @@ void RadioIF_init(void) {
 static void RadioIF_closeTxSession(void) {
     if (s_tx_session_handle != NULL) {
         RF_flushCmd(s_tx_session_handle, RF_CMDHANDLE_FLUSH_ALL, 0);
+        if (s_prop_ook_active) {
+            RF_yield(s_tx_session_handle);
+            ClockP_usleep(50000); /* 50ms for RF Core full power-down */
+        }
         RF_close(s_tx_session_handle);
+        if (s_prop_ook_active) {
+            ClockP_usleep(20000); /* 20ms post-close */
+        }
         s_tx_session_handle = NULL;
         s_tx_session_mode = NULL;
     }
 }
 
 void RadioIF_setPhy(uint8_t phy, uint16_t channel, uint32_t frequency_hz) {
-    /* Close all RF sessions to ensure clean state for new PHY */
+    /* Close all RF sessions BEFORE resetting OOK flag — RF_yield needs it */
     RadioIF_closeTxSession();
     if (s_rf_handle != NULL) {
         RadioIF_stopRfBackend();
     }
     s_rx_running = false;
+    /* Now safe to reset OOK state */
     s_prop_ook_active = false;
-    /* Restore default prop overrides when switching PHY */
     Prop0_cmdPropRadioDivSetup.pRegOverride = Prop0_pOverrides;
     Prop0_cmdPropRadioDivSetup.pRegOverrideTxStd = Prop0_pOverridesTxStd;
     Prop0_cmdPropRadioDivSetup.pRegOverrideTx20 = Prop0_pOverridesTx20;
@@ -1433,10 +1450,17 @@ void RadioIF_setPropConfig(const RadioIF_PropConfig *config) {
         return;
     }
 
-    /* Force close any open RF session — patches/overrides may change */
-    RadioIF_closeTxSession();
-    if (s_rf_handle != NULL) {
-        RadioIF_stopRfBackend();
+    /* Close RF sessions before reconfiguring.
+     * EXCEPTION: if OOK is active, RF_close will hang (TI SDK bug).
+     * OOK is locked to its initial frequency — power cycle to change. */
+    if (s_prop_ook_active) {
+        /* Cannot reconfigure while OOK patches are loaded.
+         * Silently update config struct but don't close/reopen RF. */
+    } else {
+        RadioIF_closeTxSession();
+        if (s_rf_handle != NULL) {
+            RadioIF_stopRfBackend();
+        }
     }
 
     /* Frequency */
@@ -1508,7 +1532,10 @@ void RadioIF_setPropConfig(const RadioIF_PropConfig *config) {
 
     /* Select overrides by modulation type and frequency band */
     if (config->mod_type == 2u) {
-        /* OOK: dedicated patches + overrides */
+        /* OOK: use genook patches + OOK overrides.
+         * WARNING: after this, only OOK operations are safe. Switching to
+         * BLE/GFSK/IEEE will hang the RF Core (TI SDK bug). Power cycle
+         * required to use other modes. */
         Prop0_cmdPropRadioDivSetup.pRegOverride = Prop0_pOverridesOok;
         Prop0_cmdPropRadioDivSetup.pRegOverrideTxStd = Prop0_pOverridesOokTxStd;
         Prop0_cmdPropRadioDivSetup.pRegOverrideTx20 = Prop0_pOverridesOokTx20;

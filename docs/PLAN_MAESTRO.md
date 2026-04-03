@@ -1,442 +1,191 @@
-# FeralRF - Plan Maestro Consolidado
+# FeralRF - Plan Maestro
 
-> Referencia: el plan activo detallado es `docs/NUEVO_PLAN_MAESTRO.md`. Este documento queda como consolidado/histórico de avance.
+**Version:** 3.0 | **Fecha:** 2026-04-02
 
-Firmware universal para CatSniffer (CC1352P + RP2040) con capacidades de sniffing, TX/RX, jamming y spectrum analysis para BLE, Zigbee y Sub-1GHz.
-
-## Estado Actual (2026-02-18)
-
-- Base de comunicacion CC1352 estable a `921600` con `COBS + CRC16`.
-- Smoke test de fase 2 en verde (`RADIO_INIT`, `GET_INFO`, `SET_PHY`, `SET_CHANNEL`, `SET_POWER`, `RX_START`, `RX_STOP`).
-- RX BLE real operativo en hardware (ya no sintetico), con parser robusto y filtro CRC.
-- BLE adv hopping basico activo en firmware (`37/38/39`, dwell configurable).
-- Metricas RX base expuestas al host (`rx_ok`, `rx_crc_err`, `rx_drop`, `rx_overflow`).
-- Base de Fase 5 integrada: `phy_manager` tabular + seleccion `LL_DEFAULT/LL_BLE` en pipeline.
-- Metadata LL en `RSP_RX_PACKET` (capability-gated): clasificacion `ADV/SCAN/CONNECT/DATA` + tipo PDU.
-- `GET_STATS` extendido (compat) con contadores LL por tipo para regresion automatizada.
-- Parser LL BLE ampliado para subtipos advertising/extended y deteccion de tipos reservados.
-- Backend RF real `IEEE_802_15_4` (RX) integrado y validado en hardware con captura real (`packets>0`, `delta_ok>0`) y barrido por canales (`11..26`).
-- `TX_RAW` fase 1 operativo en PHY4 (802.15.4): `ACK` estable y ruta no bloqueante en firmware.
-- `TX_RAW` fase 1 operativo en BLE (PHY0, ADV): `ACK` estable en smoke dedicado.
-- `JAM_CONTINUOUS` + `JAM_STOP` fase 1 operativos en PHY4 y BLE (incluye robustez de `JAM_STOP`).
-- Gate multi-PHY disponible y validado en hardware (`python/examples/release_gate_multi_phy.py`) para ejecución unificada BLE + PHY4 RX/TX + BLE TX.
-- Estabilidad validada: soak BLE de 30 minutos completado en hardware.
-- Canary de regresion validado en hardware (`CANARY PASS`, 60s, monotonia de stats y `RX_STOP ACK`).
-- `docs/protocol.md` publicado con contrato vigente host<->firmware.
-- Pendiente principal: endurecer estabilidad post-switch PHY/TX y expandir TX (`BURST/CONTINUOUS/FRAME`) manteniendo gate de no-regresion.
+Firmware universal para CatSniffer (CC1352P + RP2040). Objetivo: API Python facil de usar para pentesting RF con todos los protocolos del CC1352.
 
 ---
 
-## 1. Arquitectura del Sistema
+## Estado Actual
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                      HOST (PC/Linux)                         │
-│  ┌────────────────────────────────────────────────────────┐ │
-│  │              Python API (feralrf)                      │ │
-│  │  - Async/Sync interfaces                              │ │
-│  │  - Command builder                                    │ │
-│  │  - Event dispatcher                                   │ │
-│  │  - Protocol codec (COBS)                              │ │
-│  └──────────────────────┬─────────────────────────────────┘ │
-│                         │ USB-CDC                           │
-└─────────────────────────┼───────────────────────────────────┘
-                          │
-┌─────────────────────────┼───────────────────────────────────┐
-│                         │         RP2040                     │
-│  ┌──────────────────────▼────────────────────────────────┐  │
-│  │            USB-CDC Bridge (TinyUSB)                   │  │
-│  │  - Transparent UART ↔ USB                             │  │
-│  │  - Hardware Flow Control (RTS/CTS)                    │  │
-│  │  - Microsecond Timestamping                           │  │
-│  │  - CC1352 Reset Monitoring & Recovery                 │  │
-│  └──────────────────────┬────────────────────────────────┘  │
-└─────────────────────────┼───────────────────────────────────┘
-                          │ UART (921600, RTS/CTS)
-┌─────────────────────────┼───────────────────────────────────┐
-│                         │         CC1352P                    │
-│  ┌──────────────────────▼────────────────────────────────┐  │
-│  │            Command Processor                          │  │
-│  │  - COBS framing                                       │  │
-│  │  - Command dispatcher                                 │  │
-│  │  - Response formatter                                 │  │
-│  └──────────────────────┬────────────────────────────────┘  │
-│                         │                                    │
-│  ┌──────────────────────▼────────────────────────────────┐  │
-│  │            Radio Abstraction Layer                    │  │
-│  │  - PHY Manager (BLE/Zigbee/Sub-1GHz)                 │  │
-│  │  - TX/RX Engine                                       │  │
-│  │  - Jamming Engine                                     │  │
-│  │  - Spectrum Analyzer                                  │  │
-│  │  - Autonomous Policy Engine                           │  │
-│  └──────────────────────┬────────────────────────────────┘  │
-│                         │                                    │
-│  ┌──────────────────────▼────────────────────────────────┐  │
-│  │          TI Driverlib + RF Core                       │  │
-│  │  - RF patches (BLE5, IEEE 802.15.4)                  │  │
-│  │  - SmartRF configs                                    │  │
-│  │  - Cortex-M0+ RF Core firmware                       │  │
-│  └───────────────────────────────────────────────────────┘  │
-└──────────────────────────────────────────────────────────────┘
-```
+### Funcionando (validado OTA)
+| Componente | Estado |
+|-----------|--------|
+| COBS + CRC16 (921600 baud) | OK |
+| BLE 1M RX (ch37-39, hopping, LL metadata) | OK |
+| IEEE 802.15.4 RX (ch11-26) | OK |
+| TX_RAW (BLE + IEEE) | OK |
+| TX_FRAME (BLE + IEEE) | OK |
+| TX_BURST | OK |
+| TX_CONTINUOUS + TX_STOP | OK |
+| Python API completa | OK |
+| RP2040 USB-CDC bridge | OK |
+| Metricas RX (rx_ok, crc_err, drop, overflow) | OK |
+
+### NO funcionando
+| Componente | Nota |
+|-----------|------|
+| BLE 2M / Coded S8 / Coded S2 | Overrides existen, no wired en radio_if.c |
+| Sub-1GHz 868/915 MHz | Sin SmartRF config ni backend |
+| Proprietary GFSK | Sin backend |
+| Jamming | Modo propietario 2.4 GHz fallo, no interfiere senales |
+| Spectrum Analyzer | Solo skeleton Python |
+| Attack commands | No implementados |
+| Bootloader/OTA | Solo stub |
 
 ---
 
-## 2. Stack Tecnológico
+## Arquitectura
 
-### Firmware CC1352
-| Componente | Tecnología |
-|------------|------------|
-| SDK | TI SimpleLink CC13xx/CC26xx SDK 7.10.01.24 (fijo) |
-| Compiler | ARM GCC 10.3 / TI Arm Clang v3.x |
-| Build | CMake 3.20+ + Ninja |
-| RTOS | TI-RTOS 7 |
-| Memoria | Asignación estática (no malloc) |
-| Buffer RX | 16KB circular buffer |
+```
+HOST (Python API) <-> RP2040 (USB Bridge) <-> CC1352P (Radio Engine)
+```
 
-### Firmware RP2040
-| Componente | Tecnología |
-|------------|------------|
-| SDK | Pico SDK |
-| Compiler | ARM GCC |
-| Build | CMake |
-| USB | TinyUSB (CDC dual interface) |
+- **CC1352P**: Radio operations, COBS protocol, command processing, TI-RTOS 7
+- **RP2040**: USB-CDC bridge, timestamping, CC1352 reset monitoring
+- **Python API**: `feralrf` package, sync interface, pyserial
 
-### Python API
-| Componente | Tecnología |
-|------------|------------|
-| Core | Python 3.9+ |
-| Serial | pyserial-asyncio |
-| Protocol | COBS (cobs library) + struct |
-| Testing | pytest, pytest-asyncio |
-
-### Build & CI/CD
-| Componente | Tecnología |
-|------------|------------|
-| Container | Docker (Ubuntu 22.04) |
-| CI | GitHub Actions |
-| Artifacts | .hex, .bin, .elf, .whl |
+### Radio IF internals
+- `radio_if.c`: RF abstraction, enum RadioIF_RfMode (NONE=0, BLE=1, IEEE=2)
+- `phy_manager.c`: Tabla de 8 PHYs, solo 2 con rf_backend_rx_supported=true
+- SmartRF configs: `smartrf_ble5_0.c` (BLE5) y `smartrf_ieee_15_4_0.c` (IEEE)
+- Patron: RF_open(mode, setup) -> RF_runCmd(fs) -> RF_postCmd(rx) para RX
 
 ---
 
-## 3. Protocolo de Comunicación
+## Protocolo
 
-### Framing: COBS
+COBS-framed binary protocol con CRC16-CCITT.
 
 ```
-Frame format (pre-COBS):
-┌────────┬────────┬────────┬─────────────┬─────────┐
-│ CMD_ID │  SEQ   │  LEN   │   PAYLOAD   │  CRC16  │
-│  (1B)  │  (1B)  │ (2B LE)│  (0-255B)   │ (2B LE) │
-└────────┴────────┴────────┴─────────────┴─────────┘
-└──────────── COBS encoded, 0x00 delimited ─────────┘
+Frame: [CMD_ID(1B)][SEQ(1B)][LEN(2B LE)][PAYLOAD(0-255B)][CRC16(2B LE)]
+       └──────────── COBS encoded, 0x00 delimited ──────────┘
 ```
-
-- **COBS**: Elimina todos los 0x00 del payload, permite usar 0x00 como delimitador
-- **CRC16**: CRC-16-CCITT sobre CMD_ID + SEQ + LEN + PAYLOAD
-- **SEQ**: Número de secuencia para detectar paquetes perdidos
 
 ### Command IDs
-
-```c
-// ============= Configuration =============
-#define CMD_RADIO_INIT          0x01
-#define CMD_SET_CHANNEL         0x02
-#define CMD_SET_POWER           0x03
-#define CMD_SET_PHY             0x04
-#define CMD_GET_INFO            0x05
-
-// ============= RX Operations =============
-#define CMD_RX_START            0x10
-#define CMD_RX_STOP             0x11
-#define CMD_RX_SET_FILTER       0x12
-#define CMD_RX_SET_PROMISCUOUS  0x13
-
-// ============= TX Operations =============
-#define CMD_TX_RAW              0x20
-#define CMD_TX_CONTINUOUS       0x21
-#define CMD_TX_BURST            0x22
-
-// ============= Jamming =============
-#define CMD_JAM_CONTINUOUS      0x30
-#define CMD_JAM_REACTIVE        0x31
-#define CMD_JAM_PATTERN         0x32
-#define CMD_JAM_STOP            0x33
-
-// ============= Spectrum Analysis =============
-#define CMD_SPECTRUM_SCAN       0x40
-#define CMD_SPECTRUM_MONITOR    0x41
-#define CMD_SPECTRUM_STOP       0x42
-
-// ============= Autonomous Policies =============
-#define CMD_POLICY_SET          0x50
-#define CMD_POLICY_START        0x51
-#define CMD_POLICY_STOP         0x52
-
-// ============= Bootloader =============
-#define CMD_ENTER_BOOTLOADER    0xF0
-#define CMD_BOOTLOADER_VERSION  0xF1
-
-// ============= Responses =============
-#define RSP_ACK                 0x80
-#define RSP_ERROR               0x81
-#define RSP_RX_PACKET           0x90
-#define RSP_SPECTRUM_DATA       0x91
-#define RSP_JAM_EVENT           0x95
+```
+Config:    RADIO_INIT(0x01) SET_CHANNEL(0x02) SET_POWER(0x03) SET_PHY(0x04) GET_INFO(0x05) GET_STATS(0x06) SET_ADV_HOP(0x07)
+RX:        RX_START(0x10) RX_STOP(0x11)
+TX:        TX_RAW(0x20) TX_CONTINUOUS(0x21) TX_BURST(0x22) TX_FRAME(0x23) TX_STOP(0x24)
+Jam:       JAM_CONTINUOUS(0x30) JAM_REACTIVE(0x31) JAM_PATTERN(0x32) JAM_STOP(0x33)
+Spectrum:  SPECTRUM_SCAN(0x40) SPECTRUM_MONITOR(0x41) SPECTRUM_STOP(0x42)
+Response:  ACK(0x80) ERROR(0x81) RX_PACKET(0x90) SPECTRUM_DATA(0x91) JAM_EVENT(0x95)
 ```
 
 ---
 
-## 4. Estructura del Proyecto
+## Fases de Desarrollo
+
+### FASE 1: Habilitar todos los PHYs (RX + TX)
+
+**Objetivo:** Todos los protocolos del CC1352 operativos con la misma API.
+
+#### 1a. BLE 2M / Coded S8 / Coded S2
+- Riesgo: Bajo (overrides ya existen en smartrf_ble5_0.c)
+- Agregar `RadioIF_applyBlePhyMode()` en radio_if.c
+- Configurar `defaultPhy.mainMode` y `coding` en cmdBle5RadioSetup
+- Habilitar rf_backend_rx_supported para PHY 1,2,3 en phy_manager.c
+
+#### 1b. Sub-1GHz 868 MHz
+- Riesgo: Medio (nuevo RF mode completo)
+- Crear smartrf_prop_0.c/h (CMD_PROP_RADIO_DIV_SETUP_PA, 50kBaud GFSK, loDivider=0x05)
+- Agregar RADIO_IF_RF_MODE_SUB_1GHZ=3 en radio_if.c
+- Implementar: startSub1ghzRfBackend(), processSub1ghzPackets(), transmitSub1ghzRaw()
+- Power table Sub-1GHz separada
+- Actualizar todos los dispatch points
+
+#### 1c. Sub-1GHz 915 MHz
+- Riesgo: Bajo (reutiliza backend de 1b, diferente frecuencia)
+
+#### 1d. Proprietary GFSK
+- Riesgo: Bajo-Medio (reutiliza CMD_PROP con loDivider dinamico)
+
+**Orden:** 1a -> 1b -> 1c -> 1d
+
+---
+
+### FASE 2: Spectrum Analyzer
+
+**Objetivo:** Escaneo RSSI en todas las bandas para reconocimiento pre-ataque.
+
+- Firmware: SPECTRUM_SCAN(0x40), SPECTRUM_MONITOR(0x41), SPECTRUM_STOP(0x42)
+- 2.4 GHz: CMD_IEEE_ED_SCAN o RF_getRssi()
+- Sub-1GHz: CMD_PROP_RX con dwell corto + RF_getRssi()
+- Python: `Radio.spectrum_scan(start_hz, end_hz, step_khz, dwell_ms)`
+
+---
+
+### FASE 3: Attack Commands
+
+**Objetivo:** Metodos Python de alto nivel para ataques RF.
+
+Ataques en Python sobre TX existente (no en firmware). Mas flexible.
 
 ```
-feralrf/
-├── docker/
-│   └── Dockerfile                    # Build container
-│
-├── firmware/
-│   ├── cc1352/
-│   │   ├── CMakeLists.txt
-│   │   ├── src/
-│   │   │   ├── main.c
-│   │   │   ├── command_processor.c
-│   │   │   ├── radio_hal.c
-│   │   │   ├── phy_manager.c
-│   │   │   ├── tx_engine.c
-│   │   │   ├── rx_engine.c
-│   │   │   ├── jam_engine.c
-│   │   │   ├── spectrum.c
-│   │   │   ├── policy_engine.c
-│   │   │   └── uart.c
-│   │   ├── include/
-│   │   │   ├── protocol.h
-│   │   │   ├── radio_hal.h
-│   │   │   └── config.h
-│   │   └── smartrf_settings/
-│   │
-│   ├── rp2040/
-│   │   ├── CMakeLists.txt
-│   │   ├── src/
-│   │   │   ├── main.c
-│   │   │   ├── usb_bridge.c
-│   │   │   ├── uart.c
-│   │   │   └── timestamp.c
-│   │   └── include/
-│   │
-│   ├── bootloader/
-│   │   └── src/
-│   │
-│   └── tests/
-│       ├── unit/
-│       └── integration/
-│
-├── python/
-│   ├── pyproject.toml
-│   ├── feralrf/
-│   │   ├── __init__.py
-│   │   ├── radio.py
-│   │   ├── protocol.py
-│   │   ├── commands.py
-│   │   ├── responses.py
-│   │   ├── enums.py
-│   │   ├── jamming.py
-│   │   └── spectrum.py
-│   ├── examples/
-│   │   ├── ble_sniffer.py
-│   │   ├── zigbee_jam.py
-│   │   └── spectrum_scan.py
-│   └── tests/
-│
-├── docs/
-│   ├── hardware.md
-│   ├── protocol.md
-│   ├── regulatory.md
-│   └── api.md
-│
-├── .github/
-│   └── workflows/
-│       ├── build.yml
-│       └── release.yml
-│
-├── LICENSE
-├── README.md
-└── CLAUDE.md
+python/feralrf/attacks/
+    ble.py          # beacon_flood(), adv_spoof(), replay()
+    ieee154.py      # beacon_inject(), disassociate(), replay()
+    sub1ghz.py      # replay(), brute_force()
 ```
 
 ---
 
-## 5. Fases de Desarrollo
+### FASE 4: Emulacion de Targets
 
-### FASE 0: Setup (Semana 1) ✅ COMPLETADA
-- [x] Repo con estructura completa
-- [x] Dockerfile con TI SDK + ARM GCC + Pico SDK
-- [x] CMake compilando blinky en CC1352 (392 bytes code)
-- [x] CMake compilando USB echo en RP2040 (46KB uf2)
-- [x] GitHub Actions operativo (build.yml, release.yml)
-- [x] Python package skeleton (13/13 tests passing)
-- [x] COBS protocol implementado (librería cobs)
-- [x] Documentación actualizada (CLAUDE.md, PLAN_MAESTRO.md, PINOUT.md)
+**Objetivo:** CatSniffer como dispositivo victima para validar ataques.
 
-### FASE 1: MVP BLE Sniffer (Semanas 2-3)
-- [x] COBS implementation (C + Python)
-- [x] Command processor funcional
-- [x] BLE PHY initialization
-- [x] RX streaming via UART
-- [x] Python API basica (sync)
-- [x] Ejemplo: `ble_sniffer.py`
+Setup: 2 CatSniffers (atacante + target)
 
-### FASE 2: TX + Jamming Básico (Semanas 4-5)
-- [x] TX raw packets (fase 1 ACK path + validación RF over-the-air en PHY4 y BLE completadas)
-- [x] Jamming continuo (CW) fase 1 (`CMD_JAM_CONTINUOUS` + `CMD_JAM_STOP` en PHY4/BLE)
-- [ ] Power control (-20 a +20 dBm)
-- [ ] Regulatory warnings
-
-### FASE 3: Spectrum Analyzer (Semana 6)
-- [ ] Spectrum scan (2.4 GHz)
-- [ ] RSSI measurements
-- [ ] Python visualization (matplotlib)
-
-### FASE 4: Zigbee + Multi-PHY (Semanas 7-8)
-- [x] IEEE 802.15.4 RX/TX (RX real validado; TX_RAW ACK path + validación TX over-the-air completadas)
-- [ ] PHY switching dinámico
-- [ ] Channel translation
-
-### FASE 5: Reactive Jamming (Semanas 9-10)
-- [ ] Jamming reactivo (<500µs)
-- [ ] Policy engine autónomo
-- [ ] Event streaming
-
-### FASE 6: Sub-1GHz + Testing (Semanas 11-12)
-- [ ] Sub-1GHz PHY (868/915 MHz)
-- [ ] Unit tests >80% coverage
-- [ ] Integration tests
-- [ ] Documentación
-
-### FASE 7: Bootloader + Release (Semanas 13-14)
-- [ ] Custom bootloader
-- [ ] OTA firmware update
-- [ ] GitHub release
-- [ ] PyPI package
-
----
-
-## 6. Testing Strategy
-
-### Unit Tests (CI/CD)
-```c
-// tests/unit/test_command_processor.c
-void test_parse_set_channel(void) {
-    uint8_t frame[] = {CMD_SET_CHANNEL, 0x01, 0x01, 0x00, 0x0F, 0xAB, 0xCD};
-    command_t cmd;
-    int result = parse_command(frame, sizeof(frame), &cmd);
-    TEST_ASSERT_EQUAL(0, result);
-    TEST_ASSERT_EQUAL(CMD_SET_CHANNEL, cmd.id);
-}
 ```
-
-### Integration Tests (HW)
-```python
-@pytest.mark.hardware
-def test_ble_sniffer_receive():
-    radio = Radio('/dev/ttyUSB0')
-    radio.set_phy(PHY.BLE_1M)
-    radio.set_channel(37)
-    radio.start_rx()
-    packets = list(radio.read_packets(timeout=5))
-    assert len(packets) > 0
+python/feralrf/emulation/
+    ble_peripheral.py    # BLE advertising + scan response
+    ieee154_device.py    # 802.15.4 beacon + data
+    sub1ghz_device.py    # Sub-1GHz device emulation
 ```
 
 ---
 
-## 7. Riesgos y Mitigaciones
+### FASE 5: Jamming
 
-| Riesgo | Nivel | Mitigación |
-|--------|-------|------------|
-| Latencia jamming reactive >500µs | Alto | Autonomous mode, pre-cargar TX buffer |
-| TI SDK breaking changes | Alto | Fijar versión 7.10.01.24, versionar configs |
-| Regulatory compliance | Alto | Warnings explícitos, potencia limitada por defecto |
-| UART buffer overflow | Medio | Flow control RTS/CTS, ring buffer 16KB |
-| RF Core crashes | Medio | Watchdog timer, auto-recovery |
+**Objetivo:** Interferencia RF funcional.
 
----
-
-## 8. Decisiones Finalizadas
-
-### Especificaciones Técnicas
-
-| Parámetro | Valor |
-|-----------|-------|
-| Licencia | GPL-3.0 |
-| Repositorio | Privado |
-| Reactive Jamming | En MVP, target <500µs |
-| Potencia TX máxima | +20 dBm |
-| Bandas Sub-1GHz | 868 MHz + 915 MHz |
-| Python package | `feralrf` |
-
-### Hardware RP2040 ↔ CC1352
-
-| Conexión | RP2040 | CC1352 | Dirección |
-|----------|--------|--------|-----------|
-| UART TX | UART0_TX | DIO12 | RP2040 → CC1352 |
-| UART RX | UART0_RX | DIO13 | RP2040 ← CC1352 |
-| UART RTS | UART0_RTS | DIO14 | RP2040 → CC1352 |
-| UART CTS | UART0_CTS | DIO15 | RP2040 ← CC1352 |
-| RESET_CC | GPIO15 | RESET_N | RP2040 → CC1352 |
-| LED1 | GPIO28 | - | Active Low |
-| LED2 | GPIO27 | - | Active Low |
-| LED3 | GPIO26 | - | Active Low |
-| SWD | No | - | Solo JTAG (DIO16/DIO17) |
-
-### Proceso
-
-| Aspecto | Decisión |
-|---------|----------|
-| Workflow tracking | PLAN_MAESTRO.md |
-| Docker | Dockerfile local |
-| Bootloader custom | FASE 7 (no en MVP) |
+- Debuggear CMD_TX_TEST (modo propietario 2.4 GHz que fallo)
+- Alternativa: CMD_PROP_TX con payload largo y bFsOff=0
+- Reactive jamming (<500us): ISR en sync word detection
+- Pattern jamming: timer-based on/off
 
 ---
 
-## 9. Próximos Pasos
+## Hardware
 
-1. Mantener baseline BLE (no-regresion):
-   1. `OK` canario smoke+soak+stats LL implementado (`python/examples/canary_regression.py`).
-   2. `OK` perfiles por entorno (`lab/ci_manual/quiet`) y piso dinámico por duración.
-   3. `OK` gate operativo de release formalizado (`python/examples/release_gate_ble.py`).
-   4. `OK` corridas 1/2 y 2/2 consecutivas validadas en hardware (`BLE RELEASE GATE PASS`).
-   5. `OK` baseline BLE congelado para evitar regresiones.
-   6. `OK` integrado a flujo manual/CI:
-      1. workflow HW manual `ble_release_gate_hw.yml` (runner `self-hosted, feralrf-hw`).
-      2. validacion CI de scripts gate (`--help`) en `build.yml`.
-2. Cerrar FASE 5 (multi-PHY real):
-   1. `OK` backend `IEEE_802_15_4` RX estable en hardware (control path + captura real).
-   2. `OK` barrido `11..26` con deteccion de actividad en canales reales (`python/examples/sweep_phy4_ieee154.py`).
-3. Siguiente vertical:
-   1. `OK` baseline BLE estable congelado.
-   2. `OK` gate multi-PHY formalizado y validado en hardware (`python/examples/release_gate_multi_phy.py`, `MULTI-PHY RELEASE GATE PASS`).
-   3. `OK` validación TX over-the-air cerrada (PHY4: marcador `a1b2c3d4`, `marker_hits=80`; BLE: marcador `beef01`, `marker_hits=24`).
-   4. `OK` `TX_BURST` integrado y validado en hardware (smoke dedicado + paso burst en gate multi-PHY).
-   5. `OK` `TX_CONTINUOUS` + `TX_STOP` integrados y validados en hardware (smoke dedicado + paso continuous en gate multi-PHY).
-   6. `OK` `TX_FRAME` integrado y validado en hardware (smoke dedicado PHY4/BLE + paso frame en gate multi-PHY).
-   7. `OK` evidencia OTA dedicada de `TX_FRAME` cerrada en hardware (PHY4 CH25 `marker_hits=40`, BLE CH37 `marker_hits=14`).
-   8. siguiente: endurecer recuperación/estabilidad tras cambios de PHY/TX y formalizar contrato final de `TX_FRAME`.
+### Boards disponibles
+- Board ...82:2E: Funcional (TX y RX)
+- Board ...C1:82: RF muerta (danada durante PA testing)
+- Board ...6B:F6: Funcional (reemplazo de C1:82)
+
+### Conexiones RP2040 <-> CC1352 (UART 921600, sin flow control)
+| Signal | RP2040 | CC1352 |
+|--------|--------|--------|
+| TX | GPIO0 | DIO12 |
+| RX | GPIO1 | DIO13 |
+
+### Restricciones
+- Memoria: Solo allocacion estatica (no malloc) en CC1352
+- RX Buffer: 16KB circular
+- TX Power: -20 a +20 dBm (High PA necesita DIO29, no configurado)
+- SDK: TI SimpleLink CC13xx/CC26xx 7.10.01.24 (fijo)
 
 ---
 
-## 10. Brecha vs Planes Originales
+## PHYs del CC1352
 
-1. Ya logrado del plan original:
-   1. MVP BLE sniffing estable end-to-end con UART `921600` y `COBS+CRC16`.
-   2. Pipeline de RX robusto con métricas y parser LL BLE ampliado.
-   3. Soak BLE prolongado y canario de regresión en hardware.
-2. En progreso:
-   1. IEEE 802.15.4 + BLE TX raw/frame/burst/continuous: `TX_RAW ACK` + `TX_FRAME ACK` + `TX_BURST ACK` + `TX_CONTINUOUS ACK` + `TX_STOP ACK` + gate multi-PHY + evidencia OTA dedicada validados; pendiente hardening y criterios finales de release RF extendido.
-3. No iniciado respecto al plan original amplio:
-   1. TX features pendientes de alto nivel: formalizar contrato final de `TX_FRAME` y capas de ataque superiores.
-   2. Jamming (`CW/reactivo/patrones`) y policy engine autónomo.
-   3. Spectrum analyzer (scan + visualización).
-   4. Sub-1GHz operativo.
-   5. Bootloader custom/OTA y gate de release completo.
-4. Ajuste recomendado de alcance:
-   1. baseline BLE + 802.15.4 RX real ya cerrado.
-   2. abrir verticales nuevas una por una (TX -> spectrum -> jamming -> Sub-1GHz).
+| ID | PHY | RF Backend | Estado |
+|----|-----|-----------|--------|
+| 0 | BLE 1M | BLE5 SmartRF | OK |
+| 1 | BLE 2M | BLE5 SmartRF (override existe) | Fase 1a |
+| 2 | BLE Coded S8 | BLE5 SmartRF (override existe) | Fase 1a |
+| 3 | BLE Coded S2 | BLE5 SmartRF (override existe) | Fase 1a |
+| 4 | IEEE 802.15.4 | IEEE SmartRF | OK |
+| 5 | Sub-1GHz 868 | CMD_PROP (nuevo) | Fase 1b |
+| 6 | Sub-1GHz 915 | CMD_PROP (nuevo) | Fase 1c |
+| 7 | Proprietary GFSK | CMD_PROP (nuevo) | Fase 1d |

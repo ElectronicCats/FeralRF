@@ -102,9 +102,74 @@ Response:  ACK(0x80) ERROR(0x81) RX_PACKET(0x90) SPECTRUM_DATA(0x91) JAM_EVENT(0
 
 **Orden:** 1a -> 1b -> 1c -> 1d
 
+**Estado:** COMPLETADA (2026-04-02). 8/8 PHYs validados OTA con marcadores.
+
 ---
 
-### FASE 2: Spectrum Analyzer
+### FASE 2: Radio Propietaria Configurable
+
+**Objetivo:** Exponer TODAS las capacidades RF del CC1352 al usuario: cualquier frecuencia, modulacion y data rate.
+
+El CC1352 soporta bandas 143-1315 MHz + 2.4 GHz, modulaciones 2(G)FSK/4(G)FSK/MSK/OOK/ASK. Hoy solo usamos GFSK 50kBaud. Esta fase hace configurable todo via `CMD_PROP_RADIO_DIV_SETUP_PA`.
+
+#### 2a. Firmware: CMD_SET_PROP_CONFIG (nuevo comando)
+- Nuevo comando 0x08 que configura los campos del radio setup propietario:
+  - `frequency_hz` (uint32): Frecuencia exacta
+  - `modulation` (uint8): FSK=1, GFSK=1, 4FSK=2, 4GFSK=2, OOK=3, MSK=4
+  - `symbol_rate` (uint32): Baud rate
+  - `deviation` (uint16): Desviacion en Hz (para FSK/GFSK)
+  - `rx_bandwidth` (uint8): Ancho de banda RX
+  - `sync_word` (uint32): Palabra de sincronizacion
+- Modifica campos de `Prop0_cmdPropRadioDivSetup` en runtime
+- Calcula loDivider automaticamente segun frecuencia
+- Calcula rateWord/preScale desde symbol_rate
+
+#### 2b. Python API: radio.configure_prop()
+```python
+radio.configure_prop(
+    frequency_hz=433920000,  # 433.92 MHz
+    modulation='OOK',        # FSK, GFSK, 4GFSK, OOK, MSK
+    data_rate=4800,          # baud
+    deviation=5000,          # Hz
+    sync_word=0x930B51DE,    # optional
+)
+# Despues usar normalmente:
+radio.start_rx()
+radio.transmit(payload)
+```
+
+#### 2c. Presets por protocolo comun
+```python
+radio.configure_prop(**PRESETS['wireless_mbus'])   # 868 MHz, FSK
+radio.configure_prop(**PRESETS['sidewalk'])         # 900 MHz, FSK  
+radio.configure_prop(**PRESETS['433_ook'])          # 433.92 MHz, OOK (garages, sensores)
+radio.configure_prop(**PRESETS['315_ask'])          # 315 MHz, ASK (controles remotos)
+```
+
+#### Bandas soportadas por el CC1352
+| Rango MHz | loDivider | Uso tipico |
+|-----------|-----------|------------|
+| 2360-2500 | 0x00 | BLE, IEEE 802.15.4, Prop 2.4 GHz |
+| 1076-1315 | 0x04 | - |
+| 861-1054 | 0x05 | 868/915 ISM, Wi-SUN, W-MBus, Sidewalk |
+| 431-527 | 0x0A | 433 MHz ISM (sensores, garages) |
+| 359-439 | 0x0C | 390-433 MHz (controles remotos) |
+| 287-351 | 0x0F | 315 MHz (controles remotos NA) |
+| 143-176 | 0x1E | 169 MHz (smart metering EU) |
+
+#### Modulaciones
+| Tipo | modType | Uso tipico |
+|------|---------|------------|
+| 2-GFSK | 0x1 | BLE, la mayoria IoT |
+| 2-FSK | 0x1 | Wi-SUN, W-MBus |
+| 4-GFSK | 0x2 | Mayor throughput |
+| OOK | 0x3 | Garages, sensores baratos, 315/433 MHz |
+| ASK | 0x3 | Controles remotos |
+| MSK | 0x4 | Telemetria |
+
+---
+
+### FASE 3: Spectrum Analyzer
 
 **Objetivo:** Escaneo RSSI en todas las bandas para reconocimiento pre-ataque.
 
@@ -112,10 +177,11 @@ Response:  ACK(0x80) ERROR(0x81) RX_PACKET(0x90) SPECTRUM_DATA(0x91) JAM_EVENT(0
 - 2.4 GHz: CMD_IEEE_ED_SCAN o RF_getRssi()
 - Sub-1GHz: CMD_PROP_RX con dwell corto + RF_getRssi()
 - Python: `Radio.spectrum_scan(start_hz, end_hz, step_khz, dwell_ms)`
+- Cubre TODAS las bandas de Fase 2 (143 MHz a 2.5 GHz)
 
 ---
 
-### FASE 3: Attack Commands
+### FASE 4: Attack Commands
 
 **Objetivo:** Metodos Python de alto nivel para ataques RF.
 
@@ -125,12 +191,13 @@ Ataques en Python sobre TX existente (no en firmware). Mas flexible.
 python/feralrf/attacks/
     ble.py          # beacon_flood(), adv_spoof(), replay()
     ieee154.py      # beacon_inject(), disassociate(), replay()
-    sub1ghz.py      # replay(), brute_force()
+    sub1ghz.py      # replay(), brute_force(), ook_brute()
+    prop.py         # generic replay, frequency hopping attacks
 ```
 
 ---
 
-### FASE 4: Emulacion de Targets
+### FASE 5: Emulacion de Targets
 
 **Objetivo:** CatSniffer como dispositivo victima para validar ataques.
 
@@ -141,14 +208,16 @@ python/feralrf/emulation/
     ble_peripheral.py    # BLE advertising + scan response
     ieee154_device.py    # 802.15.4 beacon + data
     sub1ghz_device.py    # Sub-1GHz device emulation
+    ook_device.py        # OOK/ASK device (garage, sensor)
 ```
 
 ---
 
-### FASE 5: Jamming
+### FASE 6: Jamming
 
-**Objetivo:** Interferencia RF funcional.
+**Objetivo:** Interferencia RF funcional en todas las bandas (143 MHz - 2.5 GHz).
 
+- Jamming en cualquier frecuencia/banda configurada en Fase 2
 - Debuggear CMD_TX_TEST (modo propietario 2.4 GHz que fallo)
 - Alternativa: CMD_PROP_TX con payload largo y bFsOff=0
 - Reactive jamming (<500us): ISR en sync word detection

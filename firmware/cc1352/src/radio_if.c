@@ -145,7 +145,11 @@ static int8_t s_jam_power_dbm = 0;
 static bool s_prop_ook_active = false;
 
 static RF_Mode *RadioIF_getPropMode(void) {
-    return s_prop_ook_active ? &Prop0_modeOok : &Prop0_mode;
+    /* Always use multi_protocol CPE patch — OOK overrides handle the rest.
+     * Using Prop0_modeOok (with mce_genook + rfe_genook patches) causes
+     * firmware hang when switching back to GFSK/BLE modes. */
+    (void)s_prop_ook_active;
+    return &Prop0_mode;
 }
 #if defined(__GNUC__)
 static uint8_t s_ieee154_tx_buffer[IEEE_15_4_TX_MAX_PAYLOAD_LEN] __attribute__((aligned(4)));
@@ -1293,14 +1297,24 @@ static void RadioIF_processRfPackets(void) {
 }
 
 void RadioIF_init(void) {
+    /* Close ALL RF sessions before resetting state */
+    RadioIF_stopJamSession();
     RadioIF_closeTxSession();
+    RadioIF_stopRfBackend();
+
     s_rx_running = false;
     s_timestamp_us = 0;
     s_selected_phy = 0;
     s_channel = 37;
     s_tx_power_dbm = 0;
     s_frequency_hz = 2402000000u;
+    s_prop_ook_active = false;
     s_backend = RADIO_IF_BACKEND_SYNTH;
+
+    /* Restore default prop overrides */
+    Prop0_cmdPropRadioDivSetup.pRegOverride = Prop0_pOverrides;
+    Prop0_cmdPropRadioDivSetup.pRegOverrideTxStd = Prop0_pOverridesTxStd;
+    Prop0_cmdPropRadioDivSetup.pRegOverrideTx20 = Prop0_pOverridesTx20;
 
     RadioIF_resetRxQueue();
     RadioIF_initSyntheticCadence();
@@ -1318,6 +1332,7 @@ void RadioIF_init(void) {
 
 static void RadioIF_closeTxSession(void) {
     if (s_tx_session_handle != NULL) {
+        RF_flushCmd(s_tx_session_handle, RF_CMDHANDLE_FLUSH_ALL, 0);
         RF_close(s_tx_session_handle);
         s_tx_session_handle = NULL;
         s_tx_session_mode = NULL;
@@ -1325,7 +1340,12 @@ static void RadioIF_closeTxSession(void) {
 }
 
 void RadioIF_setPhy(uint8_t phy, uint16_t channel, uint32_t frequency_hz) {
+    /* Close all RF sessions to ensure clean state for new PHY */
     RadioIF_closeTxSession();
+    if (s_rf_handle != NULL) {
+        RadioIF_stopRfBackend();
+    }
+    s_rx_running = false;
     s_prop_ook_active = false;
     /* Restore default prop overrides when switching PHY */
     Prop0_cmdPropRadioDivSetup.pRegOverride = Prop0_pOverrides;

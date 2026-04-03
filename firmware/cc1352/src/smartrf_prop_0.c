@@ -98,9 +98,9 @@ uint32_t Prop0_pOverrides169[] = {
     (uint32_t)0xFFFFFFFF,
 };
 
-/* OOK-specific overrides (from SDK setting_tc599.json — 433 MHz OOK reference) */
+/* OOK-specific overrides (adapted from SDK setting_tc599.json — without MCE/RFE patch enable) */
 uint32_t Prop0_pOverridesOok[] = {
-    MCE_RFE_OVERRIDE(1, 0, 0, 1, 0, 0),                /* Enable MCE+RFE RAM patches */
+    /* MCE_RFE_OVERRIDE removed — causes hang without genook patches loaded */
     ADI_2HALFREG_OVERRIDE(0, 16, 0x8, 0x8, 17, 0x1, 0x1), /* PA ramp time */
     HW_REG_OVERRIDE(0x609C, 0x001E),                    /* AGC reference level (lower for OOK) */
     (uint32_t)0x000288A3,                                /* RSSI offset -2 dB */

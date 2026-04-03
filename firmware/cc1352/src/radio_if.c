@@ -1326,6 +1326,11 @@ static void RadioIF_closeTxSession(void) {
 
 void RadioIF_setPhy(uint8_t phy, uint16_t channel, uint32_t frequency_hz) {
     RadioIF_closeTxSession();
+    s_prop_ook_active = false;
+    /* Restore default prop overrides when switching PHY */
+    Prop0_cmdPropRadioDivSetup.pRegOverride = Prop0_pOverrides;
+    Prop0_cmdPropRadioDivSetup.pRegOverrideTxStd = Prop0_pOverridesTxStd;
+    Prop0_cmdPropRadioDivSetup.pRegOverrideTx20 = Prop0_pOverridesTx20;
     s_selected_phy = phy;
 
     if (channel != 0u) {
@@ -1408,7 +1413,11 @@ void RadioIF_setPropConfig(const RadioIF_PropConfig *config) {
         return;
     }
 
+    /* Force close any open RF session — patches/overrides may change */
     RadioIF_closeTxSession();
+    if (s_rf_handle != NULL) {
+        RadioIF_stopRfBackend();
+    }
 
     /* Frequency */
     freq_mhz = config->frequency_hz / 1000000u;

@@ -2,9 +2,7 @@
 FeralRF - Proprietary Radio Presets
 
 Pre-configured radio parameters for common protocols and frequencies.
-Use with radio.configure_prop(**PRESETS['name']).
-
-Note: OOK/ASK (mod_type=2) requires special RF core patches not yet implemented.
+Use with radio.configure_prop(**PROP_PRESETS['name']).
 """
 
 PROP_PRESETS = {
@@ -21,6 +19,14 @@ PROP_PRESETS = {
         frequency_hz=433920000, mod_type=0, symbol_rate=50000,
         deviation=100, rx_bw=0x52, sync_word=0x930B51DE,
     ),
+    "ook_433_4k8": dict(
+        frequency_hz=433920000, mod_type=2, symbol_rate=4800,
+        deviation=0, rx_bw=76, sync_word=0x930B51DE,
+    ),
+    "ook_433_2k4": dict(
+        frequency_hz=433920000, mod_type=2, symbol_rate=2400,
+        deviation=0, rx_bw=76, sync_word=0x930B51DE,
+    ),
 
     # === 868 MHz ISM Band (EU) ===
     "gfsk_868_50k": dict(
@@ -30,6 +36,10 @@ PROP_PRESETS = {
     "gfsk_868_100k": dict(
         frequency_hz=868000000, mod_type=1, symbol_rate=100000,
         deviation=150, rx_bw=0x56, sync_word=0x930B51DE,
+    ),
+    "ook_868_4k8": dict(
+        frequency_hz=868000000, mod_type=2, symbol_rate=4800,
+        deviation=0, rx_bw=76, sync_word=0x930B51DE,
     ),
     "wireless_mbus_s_868": dict(
         frequency_hz=868300000, mod_type=1, symbol_rate=32768,

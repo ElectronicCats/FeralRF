@@ -11,6 +11,7 @@
 #include "phy_manager.h"
 #include "smartrf_ble5_0.h"
 #include "smartrf_ieee_15_4_0.h"
+#include "smartrf_prop_0.h"
 
 #include <stddef.h>
 #include <string.h>
@@ -67,6 +68,13 @@
 #define RADIO_IF_TX_SUCCESS_EVENTS                                                       \
     (RF_EventCmdDone | RF_EventLastCmdDone | RF_EventFGCmdDone | RF_EventLastFGCmdDone | \
      RF_EventTxDone)
+#define PROP_APPENDED_STATUS_LEN 1u
+#define PROP_APPENDED_RSSI_LEN 1u
+#define PROP_APPENDED_TIMESTAMP_LEN 4u
+#define PROP_APPENDED_TOTAL_LEN \
+    (PROP_APPENDED_STATUS_LEN + PROP_APPENDED_RSSI_LEN + PROP_APPENDED_TIMESTAMP_LEN)
+#define PROP_TX_MAX_PAYLOAD_LEN 255u
+#define PROP_STATUS_CRC_OK_BIT 0x80u
 
 typedef enum {
     RADIO_IF_BACKEND_SYNTH = 0,
@@ -74,11 +82,14 @@ typedef enum {
 } RadioIF_Backend;
 
 static void RadioIF_applyBlePhyMode(uint8_t phy);
+static bool RadioIF_isSub1ghzPhySelected(void);
+static void RadioIF_applySub1ghzChannelConfig(uint16_t channel, uint32_t frequency_hz);
 
 typedef enum {
     RADIO_IF_RF_MODE_NONE = 0,
     RADIO_IF_RF_MODE_BLE = 1,
     RADIO_IF_RF_MODE_IEEE_15_4 = 2,
+    RADIO_IF_RF_MODE_SUB_1GHZ = 3,
 } RadioIF_RfMode;
 
 static bool s_rx_running = false;
@@ -146,6 +157,31 @@ static uint8_t s_ble_adv_tx_device_addr[BLE_ADV_TX_DEVICE_ADDR_LEN] = {0x01u, 0x
 /* Output structure for BLE ADV commands — RF core writes TX stats here. */
 static rfc_bleAdvOutput_t s_ble_adv_output;
 
+#if defined(__GNUC__)
+static uint8_t s_prop_tx_buffer[PROP_TX_MAX_PAYLOAD_LEN] __attribute__((aligned(4)));
+#else
+static uint8_t s_prop_tx_buffer[PROP_TX_MAX_PAYLOAD_LEN];
+#endif
+
+/* Sub-1GHz power table (CC1352P7, 868/915 MHz band). */
+static RF_TxPowerTable_Entry s_tx_power_table_sub1g[] = {
+    {-20, RF_TxPowerTable_DEFAULT_PA_ENTRY(6, 3, 0, 2)},
+    {-15, RF_TxPowerTable_DEFAULT_PA_ENTRY(10, 3, 0, 3)},
+    {-10, RF_TxPowerTable_DEFAULT_PA_ENTRY(15, 3, 0, 5)},
+    {-5, RF_TxPowerTable_DEFAULT_PA_ENTRY(22, 3, 0, 9)},
+    {0, RF_TxPowerTable_DEFAULT_PA_ENTRY(19, 1, 0, 20)},
+    {3, RF_TxPowerTable_DEFAULT_PA_ENTRY(29, 1, 0, 28)},
+    {5, RF_TxPowerTable_DEFAULT_PA_ENTRY(23, 0, 0, 57)},
+    {8, RF_TxPowerTable_DEFAULT_PA_ENTRY(31, 0, 0, 67)},
+    {10, RF_TxPowerTable_DEFAULT_PA_ENTRY(37, 0, 0, 76)},
+    {12, RF_TxPowerTable_DEFAULT_PA_ENTRY(16, 0, 0, 82)},
+    {14, RF_TxPowerTable_DEFAULT_PA_ENTRY(63, 0, 1, 0)},
+    {15, RF_TxPowerTable_HIGH_PA_ENTRY(18, 0, 0, 36, 0)},
+    {17, RF_TxPowerTable_HIGH_PA_ENTRY(28, 0, 0, 51, 2)},
+    {20, RF_TxPowerTable_HIGH_PA_ENTRY(18, 3, 0, 71, 27)},
+    RF_TxPowerTable_TERMINATION_ENTRY,
+};
+
 /* Persistent TX session — avoids RF_open/FS/RF_close overhead per packet */
 static RF_Object s_rf_tx_session_object;
 static RF_Handle s_tx_session_handle = NULL;
@@ -188,8 +224,16 @@ static uint8_t s_rf_rx_data_buffer[RF_QUEUE_DATA_BUFFER_SIZE] __attribute__((ali
 static uint8_t s_rf_rx_data_buffer[RF_QUEUE_DATA_BUFFER_SIZE];
 #endif
 
+static RF_TxPowerTable_Entry *RadioIF_getActivePowerTable(void) {
+    if (RadioIF_isSub1ghzPhySelected()) {
+        return s_tx_power_table_sub1g;
+    }
+    return s_tx_power_table_24g;
+}
+
 static RF_TxPowerTable_Value RadioIF_resolveTxPowerValue(int8_t requested_dbm) {
-    RF_TxPowerTable_Value value = RF_TxPowerTable_findValue(s_tx_power_table_24g, requested_dbm);
+    RF_TxPowerTable_Entry *table = RadioIF_getActivePowerTable();
+    RF_TxPowerTable_Value value = RF_TxPowerTable_findValue(table, requested_dbm);
     size_t i = 0u;
     size_t best_index = 0u;
     int16_t best_diff = 0x7FFF;
@@ -198,8 +242,8 @@ static RF_TxPowerTable_Value RadioIF_resolveTxPowerValue(int8_t requested_dbm) {
         return value;
     }
 
-    while (s_tx_power_table_24g[i].value.rawValue != RF_TxPowerTable_INVALID_VALUE) {
-        int16_t diff = (int16_t)s_tx_power_table_24g[i].power - (int16_t)requested_dbm;
+    while (table[i].value.rawValue != RF_TxPowerTable_INVALID_VALUE) {
+        int16_t diff = (int16_t)table[i].power - (int16_t)requested_dbm;
         if (diff < 0) {
             diff = (int16_t)(-diff);
         }
@@ -214,7 +258,7 @@ static RF_TxPowerTable_Value RadioIF_resolveTxPowerValue(int8_t requested_dbm) {
         return value;
     }
 
-    return s_tx_power_table_24g[best_index].value;
+    return table[best_index].value;
 }
 
 static void RadioIF_applyRfTxPower(RF_Handle rf_handle, RF_TxPowerTable_Value value) {
@@ -691,8 +735,9 @@ static void RadioIF_rfCallback(RF_Handle h, RF_CmdHandle ch, RF_EventMask e) {
     }
 
     if ((e & RF_EventRxBufFull) != 0u) {
-        if ((s_rf_mode == RADIO_IF_RF_MODE_IEEE_15_4) && (s_rf_handle != NULL)) {
-            /* IEEE 802.15.4 RX does not always self-terminate on buffer full. */
+        if (((s_rf_mode == RADIO_IF_RF_MODE_IEEE_15_4) ||
+             (s_rf_mode == RADIO_IF_RF_MODE_SUB_1GHZ)) &&
+            (s_rf_handle != NULL)) {
             RF_cancelCmd(s_rf_handle, s_rf_rx_cmd, 0);
         }
         s_rf_event_flags |= RADIO_IF_RF_EVENT_RX_BUF_FULL;
@@ -717,6 +762,10 @@ static bool RadioIF_runFsAndPostRx(void) {
         fs_cmd = (RF_Op *)&Ieee154_0_cmdFs;
         rx_cmd = (RF_Op *)&Ieee154_0_cmdIeeeRx;
         event_mask |= RF_EventLastFGCmdDone;
+        break;
+    case RADIO_IF_RF_MODE_SUB_1GHZ:
+        fs_cmd = (RF_Op *)&Prop0_cmdFs;
+        rx_cmd = (RF_Op *)&Prop0_cmdPropRx;
         break;
     case RADIO_IF_RF_MODE_NONE:
     default:
@@ -887,7 +936,9 @@ static bool RadioIF_startIeee154RfBackend(void) {
 
 static void RadioIF_stopRfBackend(void) {
     if (s_rf_handle != NULL) {
-        if ((s_rf_mode == RADIO_IF_RF_MODE_IEEE_15_4) && (s_rf_rx_cmd >= 0)) {
+        if (((s_rf_mode == RADIO_IF_RF_MODE_IEEE_15_4) ||
+             (s_rf_mode == RADIO_IF_RF_MODE_SUB_1GHZ)) &&
+            (s_rf_rx_cmd >= 0)) {
             RF_cancelCmd(s_rf_handle, s_rf_rx_cmd, 0);
         }
         RF_flushCmd(s_rf_handle, RF_CMDHANDLE_FLUSH_ALL, 0);
@@ -1054,6 +1105,163 @@ static void RadioIF_processIeee154Packets(void) {
     }
 }
 
+/* ─── Sub-1GHz Proprietary Backend ─── */
+
+static bool RadioIF_isSub1ghzPhySelected(void) {
+    return (s_selected_phy == PHY_MANAGER_PHY_SUB_1GHZ_868) ||
+           (s_selected_phy == PHY_MANAGER_PHY_SUB_1GHZ_915);
+}
+
+static void RadioIF_applySub1ghzChannelConfig(uint16_t channel, uint32_t frequency_hz) {
+    uint16_t freq_mhz;
+    uint16_t frac = 0u;
+
+    /* Only use frequency_hz if it's in the Sub-1GHz range */
+    if (frequency_hz != 0u && (frequency_hz / 1000000u) < 1000u) {
+        freq_mhz = (uint16_t)(frequency_hz / 1000000u);
+        frac = (uint16_t)(((frequency_hz % 1000000u) * 65536u) / 1000000u);
+    } else if (s_selected_phy == PHY_MANAGER_PHY_SUB_1GHZ_915) {
+        freq_mhz = (uint16_t)(902u + channel);
+        frac = 0u;
+    } else {
+        /* 868 MHz default */
+        freq_mhz = 868u;
+        frac = 0u;
+    }
+
+    Prop0_cmdFs.frequency = freq_mhz;
+    Prop0_cmdFs.fractFreq = frac;
+    Prop0_cmdPropRadioDivSetup.centerFreq = freq_mhz;
+
+    /* loDivider: 0x05 for 779-930 MHz, 0x0A for 431-527 MHz */
+    if (freq_mhz >= 779u && freq_mhz <= 930u) {
+        Prop0_cmdPropRadioDivSetup.loDivider = 0x05;
+    } else if (freq_mhz >= 431u && freq_mhz <= 527u) {
+        Prop0_cmdPropRadioDivSetup.loDivider = 0x0A;
+    }
+}
+
+static bool RadioIF_startSub1ghzRfBackend(void) {
+    RF_Params rf_params;
+
+    if (!RadioIF_createRfDataQueue(&s_rf_data_queue, s_rf_rx_data_buffer,
+                                   (uint16_t)sizeof(s_rf_rx_data_buffer), RF_QUEUE_NUM_DATA_ENTRIES,
+                                   RF_QUEUE_ENTRY_PAYLOAD_LEN)) {
+        return false;
+    }
+
+    s_rf_mode = RADIO_IF_RF_MODE_SUB_1GHZ;
+    RadioIF_applySub1ghzChannelConfig(s_channel, s_frequency_hz);
+
+    Prop0_cmdPropRx.pQueue = &s_rf_data_queue;
+    Prop0_cmdPropRx.pOutput = NULL;
+    Prop0_cmdPropRx.pktConf.bRepeatOk = 1u;
+    Prop0_cmdPropRx.pktConf.bRepeatNok = 1u;
+    Prop0_cmdPropRx.rxConf.bAutoFlushIgnored = 0u;
+    Prop0_cmdPropRx.rxConf.bAutoFlushCrcErr = 0u;
+    Prop0_cmdPropRx.rxConf.bIncludeHdr = 1u;
+    Prop0_cmdPropRx.rxConf.bIncludeCrc = 1u;
+    Prop0_cmdPropRx.rxConf.bAppendRssi = 1u;
+    Prop0_cmdPropRx.rxConf.bAppendTimestamp = 1u;
+    Prop0_cmdPropRx.rxConf.bAppendStatus = 1u;
+    Prop0_cmdPropRx.maxPktLen = 0xFF;
+
+    RF_Params_init(&rf_params);
+    s_rf_handle = RF_open(&s_rf_object, &Prop0_mode,
+                          (RF_RadioSetup *)&Prop0_cmdPropRadioDivSetup, &rf_params);
+
+    if (s_rf_handle == NULL) {
+        s_rf_mode = RADIO_IF_RF_MODE_NONE;
+        return false;
+    }
+
+    if (!RadioIF_runFsAndPostRx()) {
+        RF_close(s_rf_handle);
+        s_rf_handle = NULL;
+        s_rf_rx_cmd = RF_SCHEDULE_CMD_ERROR;
+        s_rf_mode = RADIO_IF_RF_MODE_NONE;
+        return false;
+    }
+
+    s_rf_event_flags = 0u;
+    return true;
+}
+
+static void RadioIF_processPropPackets(void) {
+    while (RadioIF_rfHasPacket()) {
+        RadioIF_RxPacket pkt = {0};
+        uint8_t *raw_entry = (uint8_t *)&s_rf_read_entry->data;
+        uint16_t entry_len = (uint16_t)raw_entry[0] | ((uint16_t)raw_entry[1] << 8);
+        uint8_t *entry_data = raw_entry + RF_QUEUE_ENTRY_LEN_FIELD_SIZE;
+
+        if (entry_len <= PROP_APPENDED_TOTAL_LEN) {
+            s_metrics.rx_drop++;
+            RadioIF_rfConsumeEntry();
+            continue;
+        }
+
+        uint16_t pdu_len = (uint16_t)(entry_len - PROP_APPENDED_TOTAL_LEN);
+        uint16_t status_idx = pdu_len;
+        uint16_t rssi_idx = (uint16_t)(status_idx + PROP_APPENDED_STATUS_LEN);
+        uint16_t timestamp_idx = (uint16_t)(rssi_idx + PROP_APPENDED_RSSI_LEN);
+
+        uint8_t status = entry_data[status_idx];
+        bool crc_ok = (status & PROP_STATUS_CRC_OK_BIT) != 0u;
+
+        uint32_t rat_timestamp = (uint32_t)entry_data[timestamp_idx] |
+                                 ((uint32_t)entry_data[timestamp_idx + 1u] << 8) |
+                                 ((uint32_t)entry_data[timestamp_idx + 2u] << 16) |
+                                 ((uint32_t)entry_data[timestamp_idx + 3u] << 24);
+
+        pkt.timestamp_us = ((uint64_t)rat_timestamp) / 4u;
+        pkt.channel = (uint8_t)s_channel;
+        pkt.rssi_dbm = (int8_t)entry_data[rssi_idx];
+        pkt.lqi = 0u;
+        pkt.crc_ok = crc_ok;
+
+        if (!pkt.crc_ok) {
+            s_metrics.rx_crc_err++;
+            RadioIF_rfConsumeEntry();
+            continue;
+        }
+
+        pkt.data_len = (pdu_len > RADIO_IF_MAX_PACKET_DATA)
+                            ? (uint8_t)RADIO_IF_MAX_PACKET_DATA
+                            : (uint8_t)pdu_len;
+        memcpy(pkt.data, entry_data, pkt.data_len);
+
+        if (RadioIF_enqueuePacket(&pkt)) {
+            s_metrics.rx_ok++;
+        } else {
+            s_metrics.rx_drop++;
+        }
+        RadioIF_rfConsumeEntry();
+    }
+}
+
+static bool RadioIF_transmitPropRaw(const uint8_t *payload, uint8_t payload_len) {
+    RF_TxPowerTable_Value tx_power = RadioIF_resolveTxPowerValue(s_tx_power_dbm);
+
+    if (payload == NULL || payload_len == 0u) {
+        return false;
+    }
+
+    memcpy(s_prop_tx_buffer, payload, payload_len);
+    RadioIF_applySub1ghzChannelConfig(s_channel, s_frequency_hz);
+
+    Prop0_cmdPropTx.pPkt = s_prop_tx_buffer;
+    Prop0_cmdPropTx.pktLen = payload_len;
+    Prop0_cmdPropTx.startTrigger.triggerType = TRIG_NOW;
+    Prop0_cmdPropTx.startTrigger.pastTrig = 1u;
+    Prop0_cmdPropTx.condition.rule = COND_NEVER;
+    Prop0_cmdPropTx.pNextOp = 0;
+
+    return RadioIF_executeTxCommand(&Prop0_mode,
+                                    (RF_RadioSetup *)&Prop0_cmdPropRadioDivSetup,
+                                    (RF_Op *)&Prop0_cmdFs,
+                                    (RF_Op *)&Prop0_cmdPropTx, tx_power);
+}
+
 static void RadioIF_processRfPackets(void) {
     switch (s_rf_mode) {
     case RADIO_IF_RF_MODE_BLE:
@@ -1061,6 +1269,9 @@ static void RadioIF_processRfPackets(void) {
         break;
     case RADIO_IF_RF_MODE_IEEE_15_4:
         RadioIF_processIeee154Packets();
+        break;
+    case RADIO_IF_RF_MODE_SUB_1GHZ:
+        RadioIF_processPropPackets();
         break;
     case RADIO_IF_RF_MODE_NONE:
     default:
@@ -1126,6 +1337,8 @@ void RadioIF_setPhy(uint8_t phy, uint16_t channel, uint32_t frequency_hz) {
         RadioIF_applyBleChannelConfig((uint8_t)s_channel);
     } else if (RadioIF_isIeee154PhySelected()) {
         RadioIF_applyIeee154ChannelConfig(s_channel);
+    } else if (RadioIF_isSub1ghzPhySelected()) {
+        RadioIF_applySub1ghzChannelConfig(s_channel, s_frequency_hz);
     }
 
     RadioIF_updateBleHopMode();
@@ -1135,7 +1348,8 @@ void RadioIF_setPhy(uint8_t phy, uint16_t channel, uint32_t frequency_hz) {
 
     if ((s_backend == RADIO_IF_BACKEND_RF) && (s_rf_handle != NULL) &&
         ((PhyManager_isBlePhy(s_selected_phy) && (s_rf_mode == RADIO_IF_RF_MODE_BLE)) ||
-         (RadioIF_isIeee154PhySelected() && (s_rf_mode == RADIO_IF_RF_MODE_IEEE_15_4)))) {
+         (RadioIF_isIeee154PhySelected() && (s_rf_mode == RADIO_IF_RF_MODE_IEEE_15_4)) ||
+         (RadioIF_isSub1ghzPhySelected() && (s_rf_mode == RADIO_IF_RF_MODE_SUB_1GHZ)))) {
         (void)RadioIF_restartRfRx();
     }
 }
@@ -1154,6 +1368,8 @@ void RadioIF_setChannel(uint8_t channel) {
         RadioIF_applyBleChannelConfig((uint8_t)s_channel);
     } else if (RadioIF_isIeee154PhySelected()) {
         RadioIF_applyIeee154ChannelConfig(s_channel);
+    } else if (RadioIF_isSub1ghzPhySelected()) {
+        RadioIF_applySub1ghzChannelConfig(s_channel, s_frequency_hz);
     }
 
     RadioIF_updateBleHopMode();
@@ -1163,7 +1379,8 @@ void RadioIF_setChannel(uint8_t channel) {
 
     if ((s_backend == RADIO_IF_BACKEND_RF) && (s_rf_handle != NULL) &&
         ((PhyManager_isBlePhy(s_selected_phy) && (s_rf_mode == RADIO_IF_RF_MODE_BLE)) ||
-         (RadioIF_isIeee154PhySelected() && (s_rf_mode == RADIO_IF_RF_MODE_IEEE_15_4)))) {
+         (RadioIF_isIeee154PhySelected() && (s_rf_mode == RADIO_IF_RF_MODE_IEEE_15_4)) ||
+         (RadioIF_isSub1ghzPhySelected() && (s_rf_mode == RADIO_IF_RF_MODE_SUB_1GHZ)))) {
         (void)RadioIF_restartRfRx();
     }
 }
@@ -1187,6 +1404,10 @@ bool RadioIF_transmitRaw(const uint8_t *data, uint8_t data_len, int8_t power_dbm
         return RadioIF_transmitBleAdvRaw(data, data_len);
     }
 
+    if (RadioIF_isSub1ghzPhySelected()) {
+        return RadioIF_transmitPropRaw(data, data_len);
+    }
+
     return false;
 }
 
@@ -1202,6 +1423,8 @@ bool RadioIF_startRx(void) {
             rf_started = RadioIF_startBleRfBackend();
         } else if (RadioIF_isIeee154PhySelected()) {
             rf_started = RadioIF_startIeee154RfBackend();
+        } else if (RadioIF_isSub1ghzPhySelected()) {
+            rf_started = RadioIF_startSub1ghzRfBackend();
         }
 
         if (rf_started) {
@@ -1384,6 +1607,21 @@ static bool RadioIF_executeJamTx(RF_Handle rf_handle, uint8_t phy, uint8_t chann
         return (result & RADIO_IF_TX_SUCCESS_EVENTS) != 0u;
     }
 
+    if (phy == PHY_MANAGER_PHY_SUB_1GHZ_868 || phy == PHY_MANAGER_PHY_SUB_1GHZ_915) {
+        RadioIF_applySub1ghzChannelConfig((uint16_t)channel, 0u);
+
+        Prop0_cmdPropTx.pPkt = (uint8_t *)s_jam_ieee154_payload; /* reuse 125-byte payload */
+        Prop0_cmdPropTx.pktLen = 125u;
+        Prop0_cmdPropTx.startTrigger.triggerType = TRIG_NOW;
+        Prop0_cmdPropTx.startTrigger.pastTrig = 1u;
+        Prop0_cmdPropTx.condition.rule = COND_NEVER;
+        Prop0_cmdPropTx.pNextOp = 0;
+
+        result = RF_runCmd(rf_handle, (RF_Op *)&Prop0_cmdPropTx,
+                          RF_PriorityNormal, NULL, RADIO_IF_TX_TERM_EVENTS);
+        return (result & RADIO_IF_TX_SUCCESS_EVENTS) != 0u;
+    }
+
     return false;
 }
 
@@ -1408,6 +1646,10 @@ bool RadioIF_startJamSession(uint8_t phy, uint8_t channel, int8_t power_dbm) {
     } else if (phy == PHY_MANAGER_PHY_IEEE_802_15_4) {
         mode = &Ieee154_0_mode;
         setup_cmd = (RF_RadioSetup *)&Ieee154_0_cmdRadioSetup;
+    } else if (phy == PHY_MANAGER_PHY_SUB_1GHZ_868 || phy == PHY_MANAGER_PHY_SUB_1GHZ_915) {
+        RadioIF_applySub1ghzChannelConfig((uint16_t)channel, 0u);
+        mode = &Prop0_mode;
+        setup_cmd = (RF_RadioSetup *)&Prop0_cmdPropRadioDivSetup;
     } else {
         return false;
     }
@@ -1421,13 +1663,15 @@ bool RadioIF_startJamSession(uint8_t phy, uint8_t channel, int8_t power_dbm) {
 
     /* Run CMD_FS to tune synthesizer before first TX */
     {
-        RF_Op *fs_cmd = PhyManager_isBlePhy(phy)
-            ? (RF_Op *)&Ble5_0_cmdFs
-            : (RF_Op *)&Ieee154_0_cmdFs;
-
+        RF_Op *fs_cmd;
         if (PhyManager_isBlePhy(phy)) {
+            fs_cmd = (RF_Op *)&Ble5_0_cmdFs;
             RadioIF_applyBleChannelConfig(channel);
+        } else if (phy == PHY_MANAGER_PHY_SUB_1GHZ_868 || phy == PHY_MANAGER_PHY_SUB_1GHZ_915) {
+            fs_cmd = (RF_Op *)&Prop0_cmdFs;
+            RadioIF_applySub1ghzChannelConfig((uint16_t)channel, 0u);
         } else {
+            fs_cmd = (RF_Op *)&Ieee154_0_cmdFs;
             RadioIF_applyIeee154ChannelConfig((uint16_t)channel);
         }
         fs_cmd->status = 0x0000;

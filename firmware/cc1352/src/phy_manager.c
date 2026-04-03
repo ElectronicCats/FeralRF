@@ -15,9 +15,9 @@ typedef struct {
 
 static const PhyManager_Profile s_phy_profiles[] = {
     {PHY_MANAGER_PHY_BLE_1M, PHY_MANAGER_LL_BLE, true, true},
-    {PHY_MANAGER_PHY_BLE_2M, PHY_MANAGER_LL_BLE, true, false},
-    {PHY_MANAGER_PHY_BLE_CODED_S8, PHY_MANAGER_LL_BLE, true, false},
-    {PHY_MANAGER_PHY_BLE_CODED_S2, PHY_MANAGER_LL_BLE, true, false},
+    {PHY_MANAGER_PHY_BLE_2M, PHY_MANAGER_LL_BLE, true, true},
+    {PHY_MANAGER_PHY_BLE_CODED_S8, PHY_MANAGER_LL_BLE, true, true},
+    {PHY_MANAGER_PHY_BLE_CODED_S2, PHY_MANAGER_LL_BLE, true, true},
     {PHY_MANAGER_PHY_IEEE_802_15_4, PHY_MANAGER_LL_DEFAULT, false, true},
     {PHY_MANAGER_PHY_SUB_1GHZ_868, PHY_MANAGER_LL_DEFAULT, false, false},
     {PHY_MANAGER_PHY_SUB_1GHZ_915, PHY_MANAGER_LL_DEFAULT, false, false},

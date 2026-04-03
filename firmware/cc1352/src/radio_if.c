@@ -73,6 +73,8 @@ typedef enum {
     RADIO_IF_BACKEND_RF = 1,
 } RadioIF_Backend;
 
+static void RadioIF_applyBlePhyMode(uint8_t phy);
+
 typedef enum {
     RADIO_IF_RF_MODE_NONE = 0,
     RADIO_IF_RF_MODE_BLE = 1,
@@ -401,16 +403,9 @@ static bool RadioIF_transmitBleAdvRaw(const uint8_t *payload, uint8_t payload_le
 
     /* Configure BLE FS command for this channel */
     RadioIF_applyBleChannelConfig((uint8_t)s_channel);
+    RadioIF_applyBlePhyMode(s_selected_phy);
 
-    /* Configure BLE4 ADV_NC command — simpler, less overhead than BLE5 */
-    Ble5_0_cmdBleAdvNc.channel = ble_channel;
-    Ble5_0_cmdBleAdvNc.whitening.init = 0u;
-    Ble5_0_cmdBleAdvNc.whitening.bOverride = 0u;
-    Ble5_0_cmdBleAdvNc.startTrigger.triggerType = TRIG_NOW;
-    Ble5_0_cmdBleAdvNc.startTrigger.pastTrig = 1u;
-    Ble5_0_cmdBleAdvNc.condition.rule = COND_NEVER;
-    Ble5_0_cmdBleAdvNc.pNextOp = 0;
-
+    /* Shared ADV params for both BLE4 and BLE5 commands */
     if (Ble5_0_cmdBleAdvNc.pParams == NULL) {
         return false;
     }
@@ -423,10 +418,32 @@ static bool RadioIF_transmitBleAdvRaw(const uint8_t *payload, uint8_t payload_le
     Ble5_0_cmdBleAdvNc.pParams->pWhiteList = NULL;
 
     memset(&s_ble_adv_output, 0, sizeof(s_ble_adv_output));
-    Ble5_0_cmdBleAdvNc.pOutput = &s_ble_adv_output;
 
-    /* TX power uses default from radio setup (0x0000) — like Sniffle */
-    /* Power is set via RF_setTxPower on the handle in executeTxCommand */
+    /* Use BLE5 ADV_NC for 2M/Coded (has phyMode), BLE4 for 1M (simpler) */
+    if (s_selected_phy != PHY_MANAGER_PHY_BLE_1M) {
+        Ble5_0_cmdBle5AdvNc.channel = ble_channel;
+        Ble5_0_cmdBle5AdvNc.whitening.init = 0u;
+        Ble5_0_cmdBle5AdvNc.whitening.bOverride = 0u;
+        Ble5_0_cmdBle5AdvNc.startTrigger.triggerType = TRIG_NOW;
+        Ble5_0_cmdBle5AdvNc.startTrigger.pastTrig = 1u;
+        Ble5_0_cmdBle5AdvNc.condition.rule = COND_NEVER;
+        Ble5_0_cmdBle5AdvNc.pNextOp = 0;
+        Ble5_0_cmdBle5AdvNc.pOutput = &s_ble_adv_output;
+
+        return RadioIF_executeTxCommand(&Ble5_0_mode, (RF_RadioSetup *)&Ble5_0_cmdBle5RadioSetup,
+                                        (RF_Op *)&Ble5_0_cmdFs, (RF_Op *)&Ble5_0_cmdBle5AdvNc,
+                                        tx_power);
+    }
+
+    /* BLE 1M: use BLE4 ADV_NC (simpler, validated) */
+    Ble5_0_cmdBleAdvNc.channel = ble_channel;
+    Ble5_0_cmdBleAdvNc.whitening.init = 0u;
+    Ble5_0_cmdBleAdvNc.whitening.bOverride = 0u;
+    Ble5_0_cmdBleAdvNc.startTrigger.triggerType = TRIG_NOW;
+    Ble5_0_cmdBleAdvNc.startTrigger.pastTrig = 1u;
+    Ble5_0_cmdBleAdvNc.condition.rule = COND_NEVER;
+    Ble5_0_cmdBleAdvNc.pNextOp = 0;
+    Ble5_0_cmdBleAdvNc.pOutput = &s_ble_adv_output;
 
     return RadioIF_executeTxCommand(&Ble5_0_mode, (RF_RadioSetup *)&Ble5_0_cmdBle5RadioSetup,
                                     (RF_Op *)&Ble5_0_cmdFs, (RF_Op *)&Ble5_0_cmdBleAdvNc,
@@ -747,6 +764,40 @@ static bool RadioIF_advanceBleHopChannel(void) {
     return RadioIF_restartRfRx();
 }
 
+static void RadioIF_applyBlePhyMode(uint8_t phy) {
+    uint8_t mainMode = 0u; /* 1M */
+    uint8_t coding = 0u;   /* S8 for Coded */
+
+    switch (phy) {
+    case PHY_MANAGER_PHY_BLE_2M:
+        mainMode = 1u;
+        break;
+    case PHY_MANAGER_PHY_BLE_CODED_S8:
+        mainMode = 2u;
+        coding = 0u;
+        break;
+    case PHY_MANAGER_PHY_BLE_CODED_S2:
+        mainMode = 2u;
+        coding = 1u;
+        break;
+    default: /* BLE_1M */
+        mainMode = 0u;
+        break;
+    }
+
+    /* Radio setup default PHY */
+    Ble5_0_cmdBle5RadioSetup.defaultPhy.mainMode = mainMode;
+    Ble5_0_cmdBle5RadioSetup.defaultPhy.coding = coding;
+
+    /* RX command PHY mode */
+    Ble5_0_cmdBle5GenericRx.phyMode.mainMode = mainMode;
+    Ble5_0_cmdBle5GenericRx.phyMode.coding = coding;
+
+    /* BLE5 ADV NC TX command PHY mode */
+    Ble5_0_cmdBle5AdvNc.phyMode.mainMode = mainMode;
+    Ble5_0_cmdBle5AdvNc.phyMode.coding = coding;
+}
+
 static bool RadioIF_startBleRfBackend(void) {
     RF_Params rf_params;
 
@@ -757,6 +808,7 @@ static bool RadioIF_startBleRfBackend(void) {
     }
 
     s_rf_mode = RADIO_IF_RF_MODE_BLE;
+    RadioIF_applyBlePhyMode(s_selected_phy);
     RadioIF_applyBleChannelConfig((uint8_t)s_channel);
 
     Ble5_0_cmdBle5GenericRx.pParams->pRxQ = &s_rf_data_queue;
@@ -1284,6 +1336,7 @@ static bool RadioIF_executeJamTx(RF_Handle rf_handle, uint8_t phy, uint8_t chann
 
     if (PhyManager_isBlePhy(phy)) {
         uint8_t ble_channel = RadioIF_convertToBleChannel(channel);
+        RadioIF_applyBlePhyMode(phy);
         RadioIF_applyBleChannelConfig(ble_channel);
 
         Ble5_0_cmdBle5AdvNc.channel = ble_channel;
@@ -1349,6 +1402,7 @@ bool RadioIF_startJamSession(uint8_t phy, uint8_t channel, int8_t power_dbm) {
 
     /* Determine mode based on PHY */
     if (PhyManager_isBlePhy(phy)) {
+        RadioIF_applyBlePhyMode(phy);
         mode = &Ble5_0_mode;
         setup_cmd = (RF_RadioSetup *)&Ble5_0_cmdBle5RadioSetup;
     } else if (phy == PHY_MANAGER_PHY_IEEE_802_15_4) {

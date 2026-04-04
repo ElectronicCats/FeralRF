@@ -10,6 +10,7 @@
 /* clang-format off */
 #include DeviceFamily_constructPath(rf_patches/rf_patch_cpe_bt5.h)
 #include DeviceFamily_constructPath(rf_patches/rf_patch_mce_bt5.h)
+#include DeviceFamily_constructPath(rf_patches/rf_patch_cpe_multi_protocol.h)
 /* clang-format on */
 
 /* BLE stack overrides — only if BLE stack is linked */
@@ -19,84 +20,44 @@
 
 RF_Mode Ble5_0_mode = {
     .rfMode = RF_MODE_AUTO,
-    .cpePatchFxn = &rf_patch_cpe_bt5,
-    .mcePatchFxn = &rf_patch_mce_bt5,
+    .cpePatchFxn = &rf_patch_cpe_multi_protocol,
+    .mcePatchFxn = 0,
     .rfePatchFxn = 0,
 };
 
-/* Common overrides for SDK 8.30 BLE5 (from SysConfig output) */
+/* Overrides — CatSniffer reference (proven working for GENERIC_RX) */
 uint32_t Ble5_0_pOverridesCommon[] = {
-    /* Bluetooth 5: Set IPEAK = 3 and DCDC dither off for TX */
-    (uint32_t)0x00F388D3,
-    /* Synth: Increase mid code calibration time to 5 us */
-    (uint32_t)0x00058683,
-    HW32_ARRAY_OVERRIDE(0x4004, 0x0001),
-    (uint32_t)0x38183C30,
-    /* Bluetooth 5: Default to no CTE */
+    /* Reconfigure pilot tone length */
+    HW_REG_OVERRIDE(0x6024, 0x4C20),
+    /* Compensate for modified pilot tone length */
+    (uint32_t)0x01500263,
+    /* Default to no CTE */
     HW_REG_OVERRIDE(0x5328, 0x0000),
-    /* Synth: Set calibration fine point code to 60 */
-    HW_REG_OVERRIDE(0x4064, 0x003C),
-    /* Bluetooth 5: Set DTX threshold 1 Mbps */
-    (uint32_t)0x00950803,
-    /* Bluetooth 5: Set DTX threshold 2 Mbps */
-    (uint32_t)0x012A0823,
-    /* Bluetooth 5: Set DTX gain -5% for 1 Mbps */
-    (uint32_t)0x00E787E3,
-    /* Bluetooth 5: Set DTX gain -2.5% for 2 Mbps */
-    (uint32_t)0x00F487F3,
-    /* Bluetooth 5: Set synth fine code calibration interval */
-    HW32_ARRAY_OVERRIDE(0x4020, 0x0001),
-    (uint32_t)0x41005F00,
-    /* Bluetooth 5: Adapt to synth fine code calibration interval */
-    (uint32_t)0xC0040141,
-    (uint32_t)0x0007DD44,
-    /* Bluetooth 5: Set pilot tone length to 35 us */
-    HW_REG_OVERRIDE(0x6024, 0x5B20),
-    /* Bluetooth 5: Compensate for 35 us pilot tone length */
-    (uint32_t)0x01640263,
-    /* Rx: Set RSSI offset to adjust reported RSSI by -1 dB */
-    (uint32_t)0x000188A3,
-#ifdef ICALL_JT
-    BLE_STACK_OVERRIDES(),
-#endif
+    /* Support for BLE 4.2 Data Length Extension */
+    (uint32_t)0x00FF8A53,
     (uint32_t)0xFFFFFFFF,
 };
 
 uint32_t Ble5_0_pOverrides1Mbps[] = {
-    /* Bluetooth 5: Set pilot tone length to 35 us */
-    HW_REG_OVERRIDE(0x5320, 0x0690),
-    /* Bluetooth 5: Compensate for modified pilot tone length */
-    (uint32_t)0x018F02A3,
-    /* Symbol tracking: timing correction */
-    HW_REG_OVERRIDE(0x50D4, 0x00F9),
-    /* Symbol tracking: reduce sample delay */
-    HW_REG_OVERRIDE(0x50E0, 0x0087),
-    /* Symbol tracking: demodulation order */
-    HW_REG_OVERRIDE(0x50F8, 0x0014),
+    /* Reconfigure pilot tone length */
+    HW_REG_OVERRIDE(0x5320, 0x05A0),
+    /* Compensate for modified pilot tone length */
+    (uint32_t)0x017B02A3,
+    /* AGC tuning */
+    HW_REG_OVERRIDE(0x6098, 0x25F8),
+    HW_REG_OVERRIDE(0x60A0, 0x0026),
     (uint32_t)0xFFFFFFFF,
 };
 
 uint32_t Ble5_0_pOverrides2Mbps[] = {
-    /* PHY: Use MCE RAM (patch), RFE ROM */
-    MCE_RFE_OVERRIDE(1, 0, 2, 0, 3, 2),
-    /* Rx: increase AGC hysteresis */
-    HW_REG_OVERRIDE(0x6098, 0x75FB),
-    /* Bluetooth 5: increase low gain AGC delay for 2 Mbps */
-    HW_REG_OVERRIDE(0x60A4, 0x7D00),
-    HW_REG_OVERRIDE(0x5320, 0x0690),
-    (uint32_t)0x012D02A3,
-    /* Symbol tracking */
-    HW_REG_OVERRIDE(0x50D4, 0x00F9),
-    HW_REG_OVERRIDE(0x50E0, 0x0087),
-    HW_REG_OVERRIDE(0x50F8, 0x0014),
+    HW_REG_OVERRIDE(0x5320, 0x05A0),
+    (uint32_t)0x011902A3,
     (uint32_t)0xFFFFFFFF,
 };
 
 uint32_t Ble5_0_pOverridesCoded[] = {
-    HW_REG_OVERRIDE(0x5320, 0x0690),
-    (uint32_t)0x07E502A3,
-    /* Bluetooth 5: Set AGC magnitude target */
-    HW_REG_OVERRIDE(0x609C, 0x0021),
+    HW_REG_OVERRIDE(0x5320, 0x05A0),
+    (uint32_t)0x07D102A3,
     (uint32_t)0xFFFFFFFF,
 };
 
@@ -182,11 +143,11 @@ static rfc_bleGenericRxPar_t s_bleGenericRxPar = {
     .crcInit0 = 0x55,
     .crcInit1 = 0x55,
     .crcInit2 = 0x55,
-    .endTrigger.triggerType = 0x1,
+    .endTrigger.triggerType = TRIG_NEVER,
     .endTrigger.bEnaCmd = 0x0,
     .endTrigger.triggerNo = 0x0,
     .endTrigger.pastTrig = 0x0,
-    .endTime = 0x00000001,
+    .endTime = 0x00000000,
 };
 
 rfc_CMD_BLE5_GENERIC_RX_t Ble5_0_cmdBle5GenericRx = {
@@ -313,11 +274,11 @@ static rfc_bleAdvPar_t s_bleAdvPar = {
     .behConfig.scanRspEndType = 0x0,
     .__dummy0 = 0x00,
     .__dummy1 = 0x00,
-    .endTrigger.triggerType = TRIG_NEVER,
+    .endTrigger.triggerType = TRIG_REL_START,
     .endTrigger.bEnaCmd = 0x0,
     .endTrigger.triggerNo = 0x0,
     .endTrigger.pastTrig = 0x0,
-    .endTime = 0x00000000,
+    .endTime = 40000u, /* 10ms at 4MHz RAT — enough for one ADV packet */
 };
 
 static rfc_bleAdvOutput_t s_bleAdvOutput;

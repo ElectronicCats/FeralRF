@@ -27,5 +27,6 @@ void TaskEvent_set(uint32_t event_mask);
 void TaskEvent_clear(uint32_t event_mask);
 bool TaskEvent_isSet(uint32_t event_mask);
 uint32_t TaskEvent_get(void);
+bool TaskEvent_hasWork(void);
 
 #endif /* TASK_EVENT_H */

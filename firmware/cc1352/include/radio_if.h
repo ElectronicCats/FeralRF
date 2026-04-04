@@ -48,6 +48,7 @@ void RadioIF_poll(void);
 bool RadioIF_popRxPacket(RadioIF_RxPacket *out);
 void RadioIF_getMetrics(RadioIF_Metrics *out);
 void RadioIF_resetMetrics(void);
+void RadioIF_debugIncDrop(void);
 
 /* Proprietary radio configuration */
 typedef struct {

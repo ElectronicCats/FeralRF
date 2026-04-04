@@ -155,7 +155,44 @@ radio.set_phy(PHY.BLE_1M)  # funciona
 
 ---
 
-### FASE 3: BLE Security Testing — EN PROGRESO
+### FASE 0-RTOS: Reinicio Firmware TI-RTOS — EN PROGRESO
+
+**Objetivo**: Reconstruir el firmware CC1352 desde cero con TI-RTOS para habilitar GATT discovery.
+
+**Por que**: BLE5-Stack (GATT) requiere TI-RTOS + ICall. La migracion directa NoRTOS→TI-RTOS fallo por incompatibilidades del RF driver (RF_runCmd/RF_close cuelgan con semaforos internos). Empezamos limpio siguiendo el patron de Sniffle.
+
+**Rama**: `feature/ti-rtos-migration` (se descarta codigo anterior de migracion)
+
+**SDK**: 8.30.01.01 (submodulo en firmware/sdk/)
+
+**Lecciones aprendidas de la migracion fallida**:
+| Regla | Razon |
+|-------|-------|
+| UN solo RF_Object | N_MAX_CLIENTS=2 en RF driver, multiples objetos causan conflictos |
+| RF_open UNA vez, nunca RF_close | RF_close+RF_open crea deadlocks con semaforos TI-RTOS |
+| RF_postCmd para CMD_FS | RF_runCmd para FS cuelga (SemaphoreP_pend forever) |
+| NO CMD_FS para BLE | BLE commands manejan frecuencia internamente (patron Sniffle) |
+| endTrigger=TRIG_NEVER para RX | TRIG_NOW terminaba RX inmediatamente |
+| endTrigger=TRIG_REL_START para TX ADV | TRIG_NEVER en ADV causa RF_runCmd hang |
+| 1 task priority 3 | Patron simple, RF SWIs preemptean al task |
+| RF driver lib precompilada | gcc/m4f/rf_multiMode_cc13x2.a del SDK |
+
+**Sub-fases**:
+| Fase | Objetivo | Test |
+|------|----------|------|
+| 0.0 | LED + UART (skeleton TI-RTOS) | radio.init() OK, LED parpadea |
+| 0.1 | BLE RX | rx_ok > 0 (BLE ambiental 5s) |
+| 0.2 | BLE TX | TX 20/20, markers OTA recibidos |
+| 0.3 | IEEE 802.15.4 | TX/RX OTA markers |
+| 0.4 | Sub-1GHz + PHY switching | todos los PHYs OTA |
+| 0.5 | Re-integrar attacks + scanner | beacon_flood + scanner funcionales |
+| 0.6 | GATT discovery | servicios de Soundcore Boom 2 leidos |
+
+**Plan detallado**: ver `/home/sabas/.claude/plans/encapsulated-hatching-otter.md`
+
+---
+
+### FASE 3: BLE Security Testing — COMPLETADO ✅ (en rama main, NoRTOS)
 
 #### 3a. BLE Attacks (Python) — COMPLETADO ✅
 | Ataque | Estado | Validado |
@@ -289,7 +326,7 @@ python/feralrf/emulation/
 - Memoria: Solo allocacion estatica (no malloc) en CC1352
 - RX Buffer: 16KB circular
 - TX Power: -20 a +14 dBm (High PA +15-20 dBm necesita DIO29, no configurado)
-- SDK: TI SimpleLink CC13xx/CC26xx 7.10.01.24 (fijo)
+- SDK: TI SimpleLink CC13xx/CC26xx 8.30.01.01 (rama TI-RTOS) / 7.10.01.24 (rama main NoRTOS)
 - Antena CatSniffer: Optimizada para 868 MHz y 2.4 GHz. 433 MHz funciona con perdidas. <430 MHz no funcional.
 
 ---

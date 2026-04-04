@@ -141,9 +141,8 @@ static uint32_t s_ble_hop_cycles_accum = 0u;
 static uint32_t s_ble_hop_cycles_per_step = 0u;
 static const uint8_t s_ble_adv_hop_channels[3] = {37u, 38u, 39u};
 
-/* Jam session state - maintains open RF handle for continuous transmission */
+/* Jam session state - reuses s_rf_object (single RF_Object pattern) */
 static bool s_jam_session_active = false;
-static RF_Object s_jam_rf_object;
 static RF_Handle s_jam_rf_handle = NULL;
 static uint8_t s_jam_phy = 0u;
 static uint8_t s_jam_channel = 0u;
@@ -197,8 +196,7 @@ static RF_TxPowerTable_Entry s_tx_power_table_sub1g[] = {
     RF_TxPowerTable_TERMINATION_ENTRY,
 };
 
-/* Persistent TX session — avoids RF_open/FS/RF_close overhead per packet */
-static RF_Object s_rf_tx_session_object;
+/* Persistent TX session — reuses s_rf_object (single RF_Object pattern) */
 static RF_Handle s_tx_session_handle = NULL;
 static RF_Mode *s_tx_session_mode = NULL;
 
@@ -283,6 +281,23 @@ static void RadioIF_applyRfTxPower(RF_Handle rf_handle, RF_TxPowerTable_Value va
     (void)RF_setTxPower(rf_handle, value);
 }
 
+/* Post a command and wait with timeout. Cancel if it doesn't complete.
+ * Returns the event mask from RF_pendCmd. */
+static RF_EventMask RadioIF_postAndWaitCmd(RF_Handle h, RF_Op *cmd, RF_EventMask term_events) {
+    RF_CmdHandle ch = RF_postCmd(h, cmd, RF_PriorityNormal, NULL, term_events);
+    if (ch < 0) {
+        return 0u;
+    }
+    RF_EventMask result = RF_pendCmd(h, ch, term_events);
+    /* If command didn't complete with a success event, force-cancel it */
+    if ((result & (RADIO_IF_TX_SUCCESS_EVENTS | RF_EventCmdCancelled |
+                   RF_EventCmdAborted | RF_EventCmdStopped)) == 0u) {
+        RF_cancelCmd(h, ch, 1u);
+        RF_pendCmd(h, ch, RF_EventCmdCancelled | RF_EventCmdAborted | RF_EventCmdStopped);
+    }
+    return result;
+}
+
 static bool RadioIF_executeTxCommand(RF_Mode *mode, RF_RadioSetup *setup_cmd, RF_Op *fs_cmd,
                                      RF_Op *tx_cmd, RF_TxPowerTable_Value tx_power) {
     RF_EventMask result = 0u;
@@ -301,41 +316,36 @@ static bool RadioIF_executeTxCommand(RF_Mode *mode, RF_RadioSetup *setup_cmd, RF
         /* Session already open for this PHY — just update power and run TX */
         RadioIF_applyRfTxPower(s_tx_session_handle, tx_power);
 
-        result = RF_runCmd(s_tx_session_handle, tx_cmd, RF_PriorityNormal, NULL,
-                           RADIO_IF_TX_TERM_EVENTS);
+        result = RadioIF_postAndWaitCmd(s_tx_session_handle, tx_cmd, RADIO_IF_TX_TERM_EVENTS);
         return (result & RADIO_IF_TX_SUCCESS_EVENTS) != 0u;
     }
 
-    /* Close stale session if PHY changed */
-    if (s_tx_session_handle != NULL) {
-        RF_close(s_tx_session_handle);
-        s_tx_session_handle = NULL;
-        s_tx_session_mode = NULL;
-    }
-
-    /* Open new session */
-    RF_Params rf_params;
-    RF_Params_init(&rf_params);
-    s_tx_session_handle = RF_open(&s_rf_tx_session_object, mode, setup_cmd, &rf_params);
+    /* RF handle already open from RadioIF_init — reuse it.
+     * Run setup command if PHY changed. */
+    s_tx_session_handle = s_rf_handle;
     if (s_tx_session_handle == NULL) {
         return false;
     }
-    s_tx_session_mode = mode;
+    if (s_tx_session_mode != mode) {
+        /* PHY changed — run new setup command */
+        RF_EventMask setup_result = RadioIF_postAndWaitCmd(
+            s_tx_session_handle, (RF_Op *)setup_cmd, RADIO_IF_TX_TERM_EVENTS);
+        if ((setup_result & RADIO_IF_TX_SUCCESS_EVENTS) == 0u) {
+            return false;
+        }
+        s_tx_session_mode = mode;
+    }
     RadioIF_applyRfTxPower(s_tx_session_handle, tx_power);
 
-    /* Run FS once for the new session */
-    result = RF_runCmd(s_tx_session_handle, fs_cmd, RF_PriorityNormal, NULL,
-                       RADIO_IF_TX_TERM_EVENTS);
+    /* Run FS once for the new session (post+pend to avoid RF_runCmd hang) */
+    result = RadioIF_postAndWaitCmd(s_tx_session_handle, fs_cmd, RADIO_IF_TX_TERM_EVENTS);
     if ((result & RADIO_IF_TX_SUCCESS_EVENTS) == 0u) {
-        RF_close(s_tx_session_handle);
-        s_tx_session_handle = NULL;
         s_tx_session_mode = NULL;
         return false;
     }
 
-    /* Run TX command */
-    result = RF_runCmd(s_tx_session_handle, tx_cmd, RF_PriorityNormal, NULL,
-                       RADIO_IF_TX_TERM_EVENTS);
+    /* Run TX command (post+pend so we can cancel if it hangs) */
+    result = RadioIF_postAndWaitCmd(s_tx_session_handle, tx_cmd, RADIO_IF_TX_TERM_EVENTS);
     return (result & RADIO_IF_TX_SUCCESS_EVENTS) != 0u;
 }
 
@@ -614,6 +624,10 @@ void RadioIF_resetMetrics(void) {
     s_metrics.rx_overflow = 0u;
 }
 
+void RadioIF_debugIncDrop(void) {
+    s_metrics.rx_drop++;
+}
+
 static uint32_t RadioIF_getElapsedCycles(void) {
     uint32_t systick_now = SysTickValueGet();
     uint32_t elapsed_cycles = 0;
@@ -794,9 +808,17 @@ static bool RadioIF_runFsAndPostRx(void) {
         return false;
     }
 
-    (void)RF_runCmd(s_rf_handle, fs_cmd, RF_PriorityNormal, NULL, 0);
-    /* Use RF_postCmd with callback (TI-RTOS compatible).
-     * NOTE: RF_runCmd would block the task — need separate tasks for that. */
+    /* Run CMD_FS to tune synthesizer */
+    fs_cmd->status = 0x0000;
+    {
+        RF_EventMask fs_result = RF_runCmd(s_rf_handle, fs_cmd, RF_PriorityNormal, NULL,
+                                           RADIO_IF_TX_TERM_EVENTS);
+        if ((fs_result & RADIO_IF_TX_SUCCESS_EVENTS) == 0u) {
+            return false;
+        }
+    }
+
+    /* Post RX command with callback (non-blocking) */
     s_rf_rx_cmd =
         RF_postCmd(s_rf_handle, rx_cmd, RF_PriorityNormal, &RadioIF_rfCallback, event_mask);
     return s_rf_rx_cmd >= 0;
@@ -872,8 +894,6 @@ static void RadioIF_applyBlePhyMode(uint8_t phy) {
 }
 
 static bool RadioIF_startBleRfBackend(void) {
-    RF_Params rf_params;
-
     if (!RadioIF_createRfDataQueue(&s_rf_data_queue, s_rf_rx_data_buffer,
                                    (uint16_t)sizeof(s_rf_rx_data_buffer), RF_QUEUE_NUM_DATA_ENTRIES,
                                    RF_QUEUE_ENTRY_PAYLOAD_LEN)) {
@@ -917,18 +937,13 @@ static bool RadioIF_startBleRfBackend(void) {
         Ble5_0_cmdBle5GenericRx.pParams->rxConfig.bAppendTimestamp = 1u;
     }
 
-    RF_Params_init(&rf_params);
-    s_rf_handle =
-        RF_open(&s_rf_object, &Ble5_0_mode, (RF_RadioSetup *)&Ble5_0_cmdBle5RadioSetup, &rf_params);
-
+    /* RF handle already open from RadioIF_init — just run FS + RX */
     if (s_rf_handle == NULL) {
         s_rf_mode = RADIO_IF_RF_MODE_NONE;
         return false;
     }
 
     if (!RadioIF_runFsAndPostRx()) {
-        RF_close(s_rf_handle);
-        s_rf_handle = NULL;
         s_rf_rx_cmd = RF_SCHEDULE_CMD_ERROR;
         s_rf_mode = RADIO_IF_RF_MODE_NONE;
         return false;
@@ -955,8 +970,6 @@ void RadioIF_getScannerStats(uint16_t *tx_req, uint16_t *rx_adv_ok, uint16_t *rx
 }
 
 static bool RadioIF_startIeee154RfBackend(void) {
-    RF_Params rf_params;
-
     if (!RadioIF_createRfDataQueue(&s_rf_data_queue, s_rf_rx_data_buffer,
                                    (uint16_t)sizeof(s_rf_rx_data_buffer), RF_QUEUE_NUM_DATA_ENTRIES,
                                    RF_QUEUE_ENTRY_PAYLOAD_LEN)) {
@@ -976,18 +989,23 @@ static bool RadioIF_startIeee154RfBackend(void) {
     Ieee154_0_cmdIeeeRx.rxConfig.bAppendSrcInd = 0u;
     Ieee154_0_cmdIeeeRx.rxConfig.bAppendTimestamp = 1u;
 
-    RF_Params_init(&rf_params);
-    s_rf_handle = RF_open(&s_rf_object, &Ieee154_0_mode, (RF_RadioSetup *)&Ieee154_0_cmdRadioSetup,
-                          &rf_params);
-
+    /* RF handle already open — run IEEE setup + FS + RX */
     if (s_rf_handle == NULL) {
         s_rf_mode = RADIO_IF_RF_MODE_NONE;
         return false;
     }
 
+    /* Run IEEE RadioSetup to reconfigure RF Core for IEEE mode */
+    {
+        RF_EventMask sr = RadioIF_postAndWaitCmd(s_rf_handle,
+            (RF_Op *)&Ieee154_0_cmdRadioSetup, RADIO_IF_TX_TERM_EVENTS);
+        if ((sr & RADIO_IF_TX_SUCCESS_EVENTS) == 0u) {
+            s_rf_mode = RADIO_IF_RF_MODE_NONE;
+            return false;
+        }
+    }
+
     if (!RadioIF_runFsAndPostRx()) {
-        RF_close(s_rf_handle);
-        s_rf_handle = NULL;
         s_rf_rx_cmd = RF_SCHEDULE_CMD_ERROR;
         s_rf_mode = RADIO_IF_RF_MODE_NONE;
         return false;
@@ -999,23 +1017,11 @@ static bool RadioIF_startIeee154RfBackend(void) {
 
 static void RadioIF_stopRfBackend(void) {
     if (s_rf_handle != NULL) {
-        if (((s_rf_mode == RADIO_IF_RF_MODE_IEEE_15_4) ||
-             (s_rf_mode == RADIO_IF_RF_MODE_SUB_1GHZ)) &&
-            (s_rf_rx_cmd >= 0)) {
+        if (s_rf_rx_cmd >= 0) {
             RF_cancelCmd(s_rf_handle, s_rf_rx_cmd, 0);
         }
         RF_flushCmd(s_rf_handle, RF_CMDHANDLE_FLUSH_ALL, 0);
-        if (s_prop_ook_active) {
-            /* OOK genook patches corrupt RF Core state on normal close.
-             * Force full power-down: cancel → yield → long delay → close. */
-            RF_yield(s_rf_handle);
-            ClockP_usleep(50000); /* 50ms for RF Core full power-down */
-        }
-        RF_close(s_rf_handle);
-        if (s_prop_ook_active) {
-            ClockP_usleep(20000); /* 20ms post-close for RF domain reset */
-        }
-        s_rf_handle = NULL;
+        /* Don't RF_close — handle stays open forever */
     }
 
     s_rf_rx_cmd = RF_SCHEDULE_CMD_ERROR;
@@ -1221,8 +1227,6 @@ static void RadioIF_applySub1ghzChannelConfig(uint16_t channel, uint32_t frequen
 }
 
 static bool RadioIF_startSub1ghzRfBackend(void) {
-    RF_Params rf_params;
-
     if (!RadioIF_createRfDataQueue(&s_rf_data_queue, s_rf_rx_data_buffer,
                                    (uint16_t)sizeof(s_rf_rx_data_buffer), RF_QUEUE_NUM_DATA_ENTRIES,
                                    RF_QUEUE_ENTRY_PAYLOAD_LEN)) {
@@ -1245,17 +1249,23 @@ static bool RadioIF_startSub1ghzRfBackend(void) {
     Prop0_cmdPropRx.rxConf.bAppendStatus = 1u;
     Prop0_cmdPropRx.maxPktLen = 0xFF;
 
-    RF_Params_init(&rf_params);
-    s_rf_handle = RF_open(&s_rf_object, RadioIF_getPropMode(),
-                          (RF_RadioSetup *)&Prop0_cmdPropRadioDivSetup, &rf_params);
-
+    /* RF handle already open — run Prop setup + FS + RX */
     if (s_rf_handle == NULL) {
         s_rf_mode = RADIO_IF_RF_MODE_NONE;
         return false;
     }
 
+    /* Run Prop RadioSetup to reconfigure RF Core for Sub-1GHz mode */
+    {
+        RF_EventMask sr = RadioIF_postAndWaitCmd(s_rf_handle,
+            (RF_Op *)&Prop0_cmdPropRadioDivSetup, RADIO_IF_TX_TERM_EVENTS);
+        if ((sr & RADIO_IF_TX_SUCCESS_EVENTS) == 0u) {
+            s_rf_mode = RADIO_IF_RF_MODE_NONE;
+            return false;
+        }
+    }
+
     if (!RadioIF_runFsAndPostRx()) {
-        RF_close(s_rf_handle);
         s_rf_handle = NULL;
         s_rf_rx_cmd = RF_SCHEDULE_CMD_ERROR;
         s_rf_mode = RADIO_IF_RF_MODE_NONE;
@@ -1382,7 +1392,6 @@ void RadioIF_init(void) {
     RadioIF_resetRxQueue();
     RadioIF_initSyntheticCadence();
 
-    s_rf_handle = NULL;
     s_rf_rx_cmd = RF_SCHEDULE_CMD_ERROR;
     s_rf_event_flags = 0u;
     s_rf_mode = RADIO_IF_RF_MODE_NONE;
@@ -1391,22 +1400,32 @@ void RadioIF_init(void) {
     s_ble_adv_hop_enabled = false;
     s_ble_adv_hop_index = 0u;
     RadioIF_initBleHopCadence();
+
+    /* Open RF driver ONCE at boot — keep handle open forever.
+     * Uses BLE mode with multi_protocol patch (supports all PHYs).
+     * This must happen in the RF task context (DataTask_init). */
+    if (s_rf_handle == NULL) {
+        RF_Params rf_params;
+        RF_Params_init(&rf_params);
+        s_rf_handle = RF_open(&s_rf_object, &Ble5_0_mode,
+                              (RF_RadioSetup *)&Ble5_0_cmdBle5RadioSetup, &rf_params);
+    }
+    s_tx_session_handle = s_rf_handle; /* TX and RX share the same handle */
+    s_tx_session_mode = &Ble5_0_mode;
 }
 
 static void RadioIF_closeTxSession(void) {
+    /* With single-handle pattern, we flush pending TX commands but never close.
+     * The handle stays open for the lifetime of the firmware. */
     if (s_tx_session_handle != NULL) {
         RF_flushCmd(s_tx_session_handle, RF_CMDHANDLE_FLUSH_ALL, 0);
         if (s_prop_ook_active) {
             RF_yield(s_tx_session_handle);
             ClockP_usleep(50000); /* 50ms for RF Core full power-down */
         }
-        RF_close(s_tx_session_handle);
-        if (s_prop_ook_active) {
-            ClockP_usleep(20000); /* 20ms post-close */
-        }
-        s_tx_session_handle = NULL;
-        s_tx_session_mode = NULL;
     }
+    /* Don't close handle — just clear mode so next TX re-runs setup */
+    s_tx_session_mode = NULL;
 }
 
 void RadioIF_setPhy(uint8_t phy, uint16_t channel, uint32_t frequency_hz) {
@@ -1864,7 +1883,6 @@ static bool RadioIF_executeJamTx(RF_Handle rf_handle, uint8_t phy, uint8_t chann
 }
 
 bool RadioIF_startJamSession(uint8_t phy, uint8_t channel, int8_t power_dbm) {
-    RF_Params rf_params;
     RF_Mode *mode;
     RF_RadioSetup *setup_cmd;
     bool tx_ok;
@@ -1892,14 +1910,23 @@ bool RadioIF_startJamSession(uint8_t phy, uint8_t channel, int8_t power_dbm) {
         return false;
     }
 
-    /* Open RF handle for jamming session */
-    RF_Params_init(&rf_params);
-    s_jam_rf_handle = RF_open(&s_jam_rf_object, mode, setup_cmd, &rf_params);
+    /* Reuse global RF handle — run setup + FS + first TX */
+    s_jam_rf_handle = s_rf_handle;
     if (s_jam_rf_handle == NULL) {
         return false;
     }
 
-    /* Run CMD_FS to tune synthesizer before first TX */
+    /* Run RadioSetup for the jam PHY */
+    {
+        RF_EventMask sr = RadioIF_postAndWaitCmd(s_jam_rf_handle,
+            (RF_Op *)setup_cmd, RADIO_IF_TX_TERM_EVENTS);
+        if ((sr & RADIO_IF_TX_SUCCESS_EVENTS) == 0u) {
+            s_jam_rf_handle = NULL;
+            return false;
+        }
+    }
+
+    /* Run CMD_FS */
     {
         RF_Op *fs_cmd;
         if (PhyManager_isBlePhy(phy)) {
@@ -1914,20 +1941,17 @@ bool RadioIF_startJamSession(uint8_t phy, uint8_t channel, int8_t power_dbm) {
         }
         fs_cmd->status = 0x0000;
 
-        RF_EventMask fs_result = RF_runCmd(s_jam_rf_handle, fs_cmd,
-                                           RF_PriorityNormal, NULL,
-                                           RADIO_IF_TX_TERM_EVENTS);
+        RF_EventMask fs_result = RadioIF_postAndWaitCmd(s_jam_rf_handle, fs_cmd,
+                                                         RADIO_IF_TX_TERM_EVENTS);
         if ((fs_result & RADIO_IF_TX_SUCCESS_EVENTS) == 0u) {
-            RF_close(s_jam_rf_handle);
             s_jam_rf_handle = NULL;
             return false;
         }
     }
 
-    /* Execute first TX to start the jam session */
+    /* Execute first TX */
     tx_ok = RadioIF_executeJamTx(s_jam_rf_handle, phy, channel, power_dbm);
     if (!tx_ok) {
-        RF_close(s_jam_rf_handle);
         s_jam_rf_handle = NULL;
         return false;
     }
@@ -1957,12 +1981,11 @@ void RadioIF_stopJamSession(void) {
         return;
     }
 
-    /* Close RF handle */
+    /* Flush jam commands but don't close — handle stays open */
     if (s_jam_rf_handle != NULL) {
-        RF_close(s_jam_rf_handle);
-        s_jam_rf_handle = NULL;
+        RF_flushCmd(s_jam_rf_handle, RF_CMDHANDLE_FLUSH_ALL, 0);
     }
-
+    s_jam_rf_handle = NULL;
     s_jam_session_active = false;
     s_jam_phy = 0u;
     s_jam_channel = 0u;

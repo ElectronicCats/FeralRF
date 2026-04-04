@@ -101,9 +101,9 @@ static void RF_globalCallbackFunction(RF_Handle client, RF_GlobalEvent events, v
 
 const PowerCC26X2_Config PowerCC26X2_config = {
     .policyInitFxn = NULL,
-    .policyFxn = &PowerCC26XX_standbyPolicy,
+    .policyFxn = NULL,
     .calibrateFxn = &PowerCC26XX_calibrate,
-    .enablePolicy = true,
+    .enablePolicy = false,
     .calibrateRCOSC_LF = true,
     .calibrateRCOSC_HF = true,
     .enableTCXOFxn = NULL,

@@ -1,9 +1,12 @@
 /*
  * FeralRF CC1352 — TI-RTOS Main Entry Point
  *
- * Two-task architecture (like Sniffle):
- * - UART Task: command processing + TX output (high priority)
- * - RF Task: radio operations + packet processing (medium priority)
+ * Sniffle-style architecture:
+ * - Single RF task that blocks on RF_runCmd(RX) with callback
+ * - UART polling happens between RF_runCmd calls
+ * - When a command arrives, RF_cancelCmd stops RX, command is processed,
+ *   then RX restarts
+ * - RF_open happens ONCE at boot and the handle stays open forever
  */
 
 #include <stdbool.h>
@@ -12,8 +15,9 @@
 
 /* TI-RTOS */
 #include <ti/sysbios/BIOS.h>
-#include <ti/sysbios/knl/Task.h>
+#include <ti/sysbios/knl/Clock.h>
 #include <ti/sysbios/knl/Semaphore.h>
+#include <ti/sysbios/knl/Task.h>
 
 /* TI Drivers */
 #include <ti/drivers/Power.h>
@@ -53,21 +57,19 @@ icall_userCfg_t user0Cfg = BLE_USER_CFG;
 
 /* ─── Task Configuration ─── */
 
-#define UART_TASK_PRIORITY   3   /* High — must always respond to host */
-#define UART_TASK_STACK_SIZE 2048
+#define MAIN_TASK_PRIORITY   3 /* Same as Sniffle — cooperative with RF SWIs */
+#define MAIN_TASK_STACK_SIZE 4096
 
-#define RF_TASK_PRIORITY     2   /* Medium — processes RF events */
-#define RF_TASK_STACK_SIZE   4096
+static Task_Struct s_main_task;
+static uint8_t s_main_task_stack[MAIN_TASK_STACK_SIZE];
 
-static Task_Struct s_uart_task;
-static uint8_t s_uart_task_stack[UART_TASK_STACK_SIZE];
-
-static Task_Struct s_rf_task;
-static uint8_t s_rf_task_stack[RF_TASK_STACK_SIZE];
-
-/* Semaphore for RF callback → RF task notification */
+/* Semaphore for RF callback → main task notification */
 Semaphore_Struct s_rf_sem_struct;
 Semaphore_Handle g_rf_semaphore = NULL;
+
+/* Unused but kept for compatibility (tx-done semaphore) */
+Semaphore_Struct s_tx_done_sem_struct;
+Semaphore_Handle g_tx_done_semaphore = NULL;
 
 /* ─── Board Init ─── */
 
@@ -97,48 +99,38 @@ static void board_gpio_init(void) {
 #endif
 }
 
-/* ─── UART Task: commands + responses ─── */
+/* ─── Main Task: everything in one task (Sniffle pattern) ─── */
 
-static void UartTask_taskFxn(UArg a0, UArg a1) {
+static void MainTask_taskFxn(UArg a0, UArg a1) {
     (void)a0;
     (void)a1;
 
-    /* Initialize UART + command subsystems */
+    /* Initialize ALL subsystems */
     HostIF_init();
     TaskEvent_init();
     ControlTask_init();
     CommandProcessor_init();
     HostIFTask_init();
+    DataTask_init();
 
-    /* UART polling loop — always responsive */
+    /* Main loop: UART polling + RF event processing.
+     * Like Sniffle, everything happens in one task context.
+     * RF_runCmd/RF_postCmd/RF_pendCmd all work here because
+     * RF SWIs run at higher priority and can preempt. */
     uint32_t led_counter = 0;
     while (1) {
+        /* 1. Poll UART — read bytes, parse commands, send responses */
         HostIFTask_poll();
 
-        /* LED blink */
+        /* 2. Process RF events — drain RX packets, handle deferred ops */
+        DataTask_poll();
+
+        /* 3. LED blink */
         led_counter++;
         if (led_counter >= 50000u) {
             led_counter = 0;
             GPIO_toggleDio(LED_PIN);
         }
-    }
-}
-
-/* ─── RF Task: radio processing ─── */
-
-static void RfTask_taskFxn(UArg a0, UArg a1) {
-    (void)a0;
-    (void)a1;
-
-    /* Initialize RF subsystems */
-    DataTask_init();
-
-    /* RF processing loop — wakes on semaphore or polls periodically */
-    while (1) {
-        /* Wait for RF events or timeout (10ms for periodic polling) */
-        Semaphore_pend(g_rf_semaphore, 1000);  /* ~10ms at 10us tick */
-
-        DataTask_poll();
     }
 }
 
@@ -164,8 +156,13 @@ int main(void) {
     /* Create RF semaphore */
     Semaphore_Params semParams;
     Semaphore_Params_init(&semParams);
-    semParams.mode = Semaphore_Mode_BINARY;
+    semParams.mode = Semaphore_Mode_COUNTING;
     g_rf_semaphore = Semaphore_construct(&s_rf_sem_struct, 0, &semParams);
+
+    /* TX-done semaphore (unused for now but kept for forward compat) */
+    Semaphore_Params_init(&semParams);
+    semParams.mode = Semaphore_Mode_BINARY;
+    g_tx_done_semaphore = Semaphore_construct(&s_tx_done_sem_struct, 0, &semParams);
 
     /* BLE5-Stack ICall — disabled until Phase M3 */
 #if 0
@@ -175,19 +172,12 @@ int main(void) {
     ICall_createRemoteTasks();
 #endif
 
-    /* Create UART task (high priority — always responsive) */
+    /* Create single main task (Sniffle uses priority 3) */
     Task_Params_init(&taskParams);
-    taskParams.stack = s_uart_task_stack;
-    taskParams.stackSize = UART_TASK_STACK_SIZE;
-    taskParams.priority = UART_TASK_PRIORITY;
-    Task_construct(&s_uart_task, UartTask_taskFxn, &taskParams, NULL);
-
-    /* Create RF task (medium priority — processes radio events) */
-    Task_Params_init(&taskParams);
-    taskParams.stack = s_rf_task_stack;
-    taskParams.stackSize = RF_TASK_STACK_SIZE;
-    taskParams.priority = RF_TASK_PRIORITY;
-    Task_construct(&s_rf_task, RfTask_taskFxn, &taskParams, NULL);
+    taskParams.stack = s_main_task_stack;
+    taskParams.stackSize = MAIN_TASK_STACK_SIZE;
+    taskParams.priority = MAIN_TASK_PRIORITY;
+    Task_construct(&s_main_task, MainTask_taskFxn, &taskParams, NULL);
 
     /* Start TI-RTOS kernel — never returns */
     BIOS_start();

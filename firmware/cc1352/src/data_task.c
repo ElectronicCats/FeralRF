@@ -2,6 +2,7 @@
  * FeralRF CC1352 - Data Task (polling variant)
  *
  * Consumes control events and drains RX packets produced by radio_if.
+ * Called from the single main task loop.
  */
 
 #include "data_task.h"
@@ -67,6 +68,9 @@ void DataTask_init(void) {
 }
 
 void DataTask_poll(void) {
+    /* Debug: increment rx_drop each time poll runs, so we can verify RF task is alive */
+    RadioIF_debugIncDrop();
+
     if (TaskEvent_isSet(TASK_EVENT_CONTROL_RX_STOP)) {
         s_rx_active = false;
         RadioIF_stopRx();
@@ -93,10 +97,8 @@ void DataTask_poll(void) {
         }
     }
 
-    /* Poll jam session timeout (runs independently from TX continuous) */
+    /* Poll jam session timeout */
     ControlTask_processJamTimeout();
-
-    /* Keep jam session transmitting */
     RadioIF_pollJamSession();
 
     if (TaskEvent_isSet(TASK_EVENT_CONTROL_RX_START)) {
@@ -104,7 +106,6 @@ void DataTask_poll(void) {
         if (s_rx_active) {
             TaskEvent_set(TASK_EVENT_DATA_RX_ACTIVE);
         } else {
-            /* RF backend failed — notify host so failure is not silent. */
             uint8_t err_payload[1] = {ERR_RF_INIT_FAILED};
             OutputIF_sendResponse(RSP_ERROR, 0, err_payload, 1u);
         }
@@ -115,7 +116,7 @@ void DataTask_poll(void) {
 
     if (s_rx_active) {
         RadioIF_RxPacket pkt;
-        uint8_t max_pkts = 8u; /* Limit per poll to prevent UART starvation */
+        uint8_t max_pkts = 8u;
         while (max_pkts > 0u && RadioIF_popRxPacket(&pkt)) {
             if (LLManager_processRxPacket(&pkt)) {
                 DataTask_emitRxPacket(&pkt);

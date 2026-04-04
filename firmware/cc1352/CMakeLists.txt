@@ -76,6 +76,8 @@ if(USE_TIRTOS)
         ${TI_SDK_PATH}/source/ti/ble5stack/hal/src/inc
         ${TI_SDK_PATH}/source/ti/ble5stack/hal/src/target/_common
         ${TI_SDK_PATH}/source/ti/ble5stack/common/cc26xx/npi/stack
+        ${TI_SDK_PATH}/source/ti/common/nv
+        ${TI_SDK_PATH}/source/ti/ble5stack/rom
     )
 else()
     list(APPEND SDK_INCLUDE_DIRS
@@ -292,6 +294,11 @@ target_compile_definitions(${CMAKE_PROJECT_NAME}.elf PRIVATE
 if(USE_TIRTOS)
     target_compile_definitions(${CMAKE_PROJECT_NAME}.elf PRIVATE
         xdc_runtime_Log_DISABLE_ALL=1
+        ICALL_JT
+        ICALL_LITE
+        CC13XX
+        CC13X2P
+        SYSCFG
     )
     # Force-include RTOS config for C files only (not ASM)
     set_property(SOURCE ${APP_SOURCES} ${DRIVER_SOURCES} ${RTOS_KERNEL_SOURCES}

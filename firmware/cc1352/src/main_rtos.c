@@ -19,7 +19,16 @@
 #include <ti/drivers/power/PowerCC26XX.h>
 
 /* BLE5-Stack */
+#define ICALL_JT
+#define ICALL_LITE
+#define CC13XX
+#define CC13X2P
+#define SYSCFG
+#define BLE_V50_FEATURES (PHY_2MBPS_CFG | PHY_LR_CFG)
+#define PHY_2MBPS_CFG    0x01
+#define PHY_LR_CFG       0x02
 #include <icall.h>
+#include "icall_user_config.h"
 #include "ble_user_config.h"
 
 /* Device */

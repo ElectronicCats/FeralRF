@@ -12,9 +12,9 @@
 #define _TI_RADIO_CONFIG_H_
 
 #include <ti/devices/DeviceFamily.h>
-#include DeviceFamily_constructPath(driverlib / rf_mailbox.h)
-#include DeviceFamily_constructPath(driverlib / rf_common_cmd.h)
-#include DeviceFamily_constructPath(driverlib / rf_ble_cmd.h)
+#include DeviceFamily_constructPath(driverlib/rf_mailbox.h)
+#include DeviceFamily_constructPath(driverlib/rf_common_cmd.h)
+#include DeviceFamily_constructPath(driverlib/rf_ble_cmd.h)
 #include <ti/drivers/rf/RF.h>
 
 /* SmartRF Studio version that the RF data is fetched from */

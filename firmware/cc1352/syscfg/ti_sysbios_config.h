@@ -18,30 +18,11 @@
 
 #include <stdint.h>
 
-/* BLE5-Stack configuration (must be before any BLE headers) */
-#ifndef ICALL_JT
-#define ICALL_JT
-#endif
-#ifndef ICALL_LITE
-#define ICALL_LITE
-#endif
-#ifndef CC13XX
-#define CC13XX
-#endif
-#ifndef CC13X2P
-#define CC13X2P
-#endif
-#ifndef SYSCFG
-#define SYSCFG
-#endif
+/* BLE defines come from CMake -D flags, not here.
+ * ICALL_JT, CC13X2P, SYSCFG are set in CMakeLists.txt target_compile_definitions */
 
-/* Fix SDK DeviceFamily.h space-in-path bug for GCC */
-#ifdef DeviceFamily_constructPath
-#undef DeviceFamily_constructPath
-#endif
-#define DeviceFamily_PARENT ti/devices/cc13x2x7_cc26x2x7
-#define DeviceFamily_constructPath_(parent, x) <parent/x>
-#define DeviceFamily_constructPath(x) DeviceFamily_constructPath_(DeviceFamily_PARENT, x)
+/* SDK 8.30 typo fix: bleUserCfg_t uses txPwrBackOffTbl_t but typedef is txPwrBackoffTbl_t */
+#define txPwrBackOffTbl_t txPwrBackoffTbl_t
 
 /* BLE_USER_CFG for ICALL_JT mode */
 #ifndef BLE_USER_CFG

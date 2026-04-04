@@ -101,4 +101,4 @@
  */
 
 #include <ti/devices/DeviceFamily.h>
-#include DeviceFamily_constructPath(startup_files / ccfg.c)
+#include DeviceFamily_constructPath(startup_files/ccfg.c)

@@ -208,12 +208,39 @@ if(USE_TIRTOS)
         ${TIRTOS7_PATH}/packages/ti/dpl/TaskP_tirtos.c
     )
 
-    # ICall sources (BLE stack messaging)
-    set(ICALL_SOURCES
+    # ICall: compiled from SDK source but WITHOUT ICALL_JT
+    # These files are compiled as a separate static lib to avoid ICALL_JT conflict
+    add_library(icall_lib OBJECT
         ${TI_SDK_PATH}/source/ti/ble5stack/icall/src/icall.c
         ${TI_SDK_PATH}/source/ti/ble5stack/icall/src/icall_cc2650.c
-        ${TI_SDK_PATH}/source/ti/ble5stack/icall/app/icall_hci_tl.c
     )
+    target_include_directories(icall_lib PRIVATE
+        ${SDK_INCLUDE_DIRS}
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/syscfg
+    )
+    target_compile_definitions(icall_lib PRIVATE
+        ${DEVICE_FAMILY_DEFINE}
+        xdc_runtime_Log_DISABLE_ALL=1
+        CC13XX
+        CC13X2P
+        SYSCFG
+        # NO ICALL_JT here — icall.c implements the non-JT functions
+    )
+    target_compile_options(icall_lib PRIVATE
+        -mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16
+        -Wall -std=c11 -ffunction-sections -fdata-sections -g -O0
+        -include ${CMAKE_CURRENT_SOURCE_DIR}/syscfg/ti_sysbios_config.h
+        -isystem ${TI_SDK_PATH}/source/ti/posix/gcc
+        -I${TI_SDK_PATH}/source/ti/ble5stack/hal/src/inc
+        -I${TI_SDK_PATH}/source/ti/ble5stack/hal/src/target/_common
+        -I${TI_SDK_PATH}/source/ti/ble5stack/icall/src/inc
+        -I${TI_SDK_PATH}/source/ti/ble5stack/icall/inc
+        -I${TI_SDK_PATH}/source/ti/common/nv
+        -I${TI_SDK_PATH}/source/ti/ble5stack/controller/cc26xx/inc
+        -I${TI_SDK_PATH}/source/ti/ble5stack/heapmgr
+    )
+    set(ICALL_SOURCES "")
 
     # POSIX layer
     set(POSIX_SOURCES
@@ -239,7 +266,7 @@ if(USE_TIRTOS)
     # SysConfig generated files
     set(SYSCFG_SOURCES
         syscfg/ti_sysbios_config.c
-        # syscfg/ti_ble_config.c — SDK header bug with spaces in path, using stubs
+        syscfg/ti_ble_config.c
     )
 
     set(RTOS_STUBS src/rtos_stubs.c)
@@ -252,7 +279,7 @@ if(USE_TIRTOS)
         ${RTOS_ASM_SOURCES}
         ${DPL_SOURCES}
         # POSIX_SOURCES omitted for Phase M1 — added in M2 with BLE stack
-        ${ICALL_SOURCES}
+        # ICALL_SOURCES compiled as separate object lib (icall_lib) without ICALL_JT
         ${RTOS_STUBS}
         ${SYSCFG_SOURCES}
         ${MAIN_SOURCE}
@@ -319,6 +346,7 @@ if(USE_TIRTOS)
         -I${TI_SDK_PATH}/source/ti/common/nv
         -I${TI_SDK_PATH}/source/ti/ble5stack/controller/cc26xx/inc
         -I${TI_SDK_PATH}/source/ti/ble5stack/heapmgr
+        -isystem ${TI_SDK_PATH}/source/ti/posix/gcc
     )
 endif()
 
@@ -326,6 +354,7 @@ if(USE_TIRTOS)
     target_link_libraries(${CMAKE_PROJECT_NAME}.elf PRIVATE
         ${DRIVERLIB_LIB}
         ${RF_MULTI_MODE_LIB}
+        icall_lib
         -Wl,--whole-archive
         ${BLE5_LIBS_DIR}/OneLib.a
         ${BLE5_LIBS_DIR}/StackWrapper.a

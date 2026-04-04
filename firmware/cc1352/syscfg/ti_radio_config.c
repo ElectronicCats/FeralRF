@@ -10,8 +10,8 @@
  */
 
 #include "ti_radio_config.h"
-#include DeviceFamily_constructPath(rf_patches / rf_patch_cpe_bt5.h)
-#include DeviceFamily_constructPath(rf_patches / rf_patch_mce_bt5.h)
+#include DeviceFamily_constructPath(rf_patches/rf_patch_cpe_bt5.h)
+#include DeviceFamily_constructPath(rf_patches/rf_patch_mce_bt5.h)
 
 // Custom overrides
 #include <ti/ble5stack/icall/inc/ble_overrides.h>

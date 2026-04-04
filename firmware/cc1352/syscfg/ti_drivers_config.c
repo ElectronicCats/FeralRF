@@ -372,7 +372,7 @@ const PowerCC26X2_Config PowerCC26X2_config = {
  */
 #include <ti/drivers/GPIO.h>
 #include <ti/devices/DeviceFamily.h>
-#include DeviceFamily_constructPath(driverlib / ioc.h)
+#include DeviceFamily_constructPath(driverlib/ioc.h)
 #include <ti/drivers/rf/RF.h>
 
 /*

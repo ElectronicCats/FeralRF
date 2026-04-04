@@ -25,6 +25,7 @@
 /* clang-format on */
 #include <ti/drivers/rf/RF.h>
 #include <ti/drivers/dpl/ClockP.h>
+#include <ti/sysbios/knl/Semaphore.h>
 
 #define RADIO_IF_RX_QUEUE_DEPTH 8u
 #define RADIO_IF_SYSTICK_MAX 0x00FFFFFFu
@@ -120,10 +121,12 @@ static RF_Handle s_rf_handle = NULL;
 static RF_CmdHandle s_rf_rx_cmd = RF_SCHEDULE_CMD_ERROR;
 
 
-/* RF event flags produced by callback, consumed in poll() */
+/* RF event signaling — TI-RTOS Semaphore for ISR→task notification */
 static volatile uint32_t s_rf_event_flags = 0u;
 #define RADIO_IF_RF_EVENT_RX_ENTRY_DONE 0x01u
 #define RADIO_IF_RF_EVENT_RX_BUF_FULL 0x02u
+static Semaphore_Handle s_rf_semaphore = NULL;
+static Semaphore_Struct s_rf_semaphore_struct;
 
 static dataQueue_t s_rf_data_queue;
 static rfc_dataEntryGeneral_t *s_rf_read_entry = NULL;
@@ -754,6 +757,11 @@ static void RadioIF_rfCallback(RF_Handle h, RF_CmdHandle ch, RF_EventMask e) {
         }
         s_rf_event_flags |= RADIO_IF_RF_EVENT_RX_BUF_FULL;
     }
+
+    /* Wake up the processing task via semaphore (TI-RTOS pattern) */
+    if (s_rf_semaphore != NULL) {
+        Semaphore_post(s_rf_semaphore);
+    }
 }
 
 static bool RadioIF_runFsAndPostRx(void) {
@@ -1349,6 +1357,14 @@ static void RadioIF_processRfPackets(void) {
 }
 
 void RadioIF_init(void) {
+    /* Create semaphore for RF callback → task signaling (TI-RTOS) */
+    if (s_rf_semaphore == NULL) {
+        Semaphore_Params semParams;
+        Semaphore_Params_init(&semParams);
+        semParams.mode = Semaphore_Mode_BINARY;
+        s_rf_semaphore = Semaphore_construct(&s_rf_semaphore_struct, 0, &semParams);
+    }
+
     /* Close ALL RF sessions before resetting state */
     RadioIF_stopJamSession();
     RadioIF_closeTxSession();

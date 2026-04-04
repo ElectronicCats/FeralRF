@@ -25,9 +25,11 @@ static bool s_overflow = false;
 static void HostIFTask_flushTx(void) {
     uint8_t tx_frame[PACKET_QUEUE_MAX_FRAME_SIZE];
     size_t tx_len = 0;
+    uint8_t max_flush = 4u; /* Limit per poll to prevent starvation in TI-RTOS */
 
-    while (PacketQueue_dequeue(tx_frame, &tx_len)) {
+    while (max_flush > 0u && PacketQueue_dequeue(tx_frame, &tx_len)) {
         HostIF_writeBuffer(tx_frame, tx_len);
+        max_flush--;
     }
 
     if (PacketQueue_isEmpty()) {

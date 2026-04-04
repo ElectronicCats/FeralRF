@@ -22,7 +22,5 @@ extern uint32_t Ble5_0_pOverridesCommon[];
 extern uint32_t Ble5_0_pOverrides1Mbps[];
 extern uint32_t Ble5_0_pOverrides2Mbps[];
 extern uint32_t Ble5_0_pOverridesCoded[];
-extern uint32_t Ble5_0_pOverridesTxStd[];
-extern uint32_t Ble5_0_pOverridesTx20[];
 
 #endif /* SMARTRF_BLE5_0_H */

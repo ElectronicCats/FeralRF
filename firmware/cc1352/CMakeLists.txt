@@ -67,6 +67,15 @@ if(USE_TIRTOS)
         ${TIRTOS7_PATH}/packages
         ${TI_SDK_PATH}/kernel/tirtos7/packages/ti/dpl
         ${TI_SDK_PATH}/source/ti/posix/tirtos
+        # BLE5-Stack includes
+        ${TI_SDK_PATH}/source/ti/ble5stack/inc
+        ${TI_SDK_PATH}/source/ti/ble5stack/common/cc26xx
+        ${TI_SDK_PATH}/source/ti/ble5stack/icall/inc
+        ${TI_SDK_PATH}/source/ti/ble5stack/icall/src/inc
+        ${TI_SDK_PATH}/source/ti/ble5stack/osal/src/inc
+        ${TI_SDK_PATH}/source/ti/ble5stack/hal/src/inc
+        ${TI_SDK_PATH}/source/ti/ble5stack/hal/src/target/_common
+        ${TI_SDK_PATH}/source/ti/ble5stack/common/cc26xx/npi/stack
     )
 else()
     list(APPEND SDK_INCLUDE_DIRS
@@ -84,6 +93,10 @@ set(DRIVERLIB_LIB
 set(RF_MULTI_MODE_LIB
     ${TI_SDK_PATH}/source/ti/drivers/rf/lib/gcc/m4f/rf_multiMode_cc13x2.a
 )
+
+# BLE5-Stack libraries (Phase M2)
+set(BLE5_LIBS_DIR ${TI_SDK_PATH}/source/ti/ble5stack/libraries/cc1352p)
+set(BLE5_ROM_LIB ${TI_SDK_PATH}/source/ti/ble5stack/rom/enc_lib/cc26xx_ecc_rom_api.a)
 
 # ─── Application sources (common to both RTOS modes) ───
 
@@ -292,10 +305,20 @@ if(USE_TIRTOS)
     # )
 endif()
 
-target_link_libraries(${CMAKE_PROJECT_NAME}.elf PRIVATE
-    ${DRIVERLIB_LIB}
-    ${RF_MULTI_MODE_LIB}
-)
+if(USE_TIRTOS)
+    target_link_libraries(${CMAKE_PROJECT_NAME}.elf PRIVATE
+        ${DRIVERLIB_LIB}
+        ${RF_MULTI_MODE_LIB}
+        ${BLE5_LIBS_DIR}/OneLib.a
+        ${BLE5_LIBS_DIR}/StackWrapper.a
+        ${BLE5_ROM_LIB}
+    )
+else()
+    target_link_libraries(${CMAKE_PROJECT_NAME}.elf PRIVATE
+        ${DRIVERLIB_LIB}
+        ${RF_MULTI_MODE_LIB}
+    )
+endif()
 
 set_target_properties(${CMAKE_PROJECT_NAME}.elf PROPERTIES
     OUTPUT_NAME ${CMAKE_PROJECT_NAME}

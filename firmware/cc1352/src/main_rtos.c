@@ -1,8 +1,7 @@
 /*
  * FeralRF CC1352 — TI-RTOS Main Entry Point
  *
- * Phase M1: TI-RTOS kernel with FeralRF app as RTOS task.
- * BLE5-Stack will be added in Phase M2.
+ * Phase M2: TI-RTOS + BLE5-Stack (ICall + GATT client)
  */
 
 #include <stdbool.h>
@@ -18,6 +17,10 @@
 /* TI Drivers */
 #include <ti/drivers/Power.h>
 #include <ti/drivers/power/PowerCC26XX.h>
+
+/* BLE5-Stack */
+#include <icall.h>
+#include "ble_user_config.h"
 
 /* Device */
 #include <ti/devices/DeviceFamily.h>
@@ -37,6 +40,12 @@
 #include "host_if.h"
 #include "host_if_task.h"
 #include "task_event.h"
+
+/* ─── BLE User Config ─── */
+
+#ifndef USE_DEFAULT_USER_CFG
+icall_userCfg_t user0Cfg = BLE_USER_CFG;
+#endif
 
 /* ─── Task Configuration ─── */
 
@@ -80,7 +89,7 @@ static void FeralRF_taskFxn(UArg a0, UArg a1) {
     (void)a0;
     (void)a1;
 
-    /* Initialize subsystems (same as NoRTOS main) */
+    /* Initialize subsystems */
     HostIF_init();
     TaskEvent_init();
     ControlTask_init();
@@ -133,7 +142,17 @@ int main(void) {
     /* GPIO init */
     board_gpio_init();
 
-    /* Create FeralRF application task */
+    /* BLE5-Stack timer config */
+    user0Cfg.appServiceInfo->timerTickPeriod = Clock_tickPeriod;
+    user0Cfg.appServiceInfo->timerMaxMillisecond = ICall_getMaxMSecs();
+
+    /* Initialize ICall — BLE stack message framework */
+    ICall_init();
+
+    /* Start BLE stack tasks — Priority 5 */
+    ICall_createRemoteTasks();
+
+    /* Create FeralRF application task — Priority 1 */
     FeralRF_createTask();
 
     /* Start TI-RTOS kernel — never returns */

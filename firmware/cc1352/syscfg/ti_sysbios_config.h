@@ -18,6 +18,28 @@
 
 #include <stdint.h>
 
+/* BLE5-Stack configuration (must be before any BLE headers) */
+#ifndef ICALL_JT
+#define ICALL_JT
+#endif
+#ifndef ICALL_LITE
+#define ICALL_LITE
+#endif
+#ifndef CC13XX
+#define CC13XX
+#endif
+#ifndef CC13X2P
+#define CC13X2P
+#endif
+#ifndef SYSCFG
+#define SYSCFG
+#endif
+
+/* BLE_USER_CFG for ICALL_JT mode */
+#ifndef BLE_USER_CFG
+#define BLE_USER_CFG { &bleStackConfig, &driverTable, &boardConfig, &bleAppServiceInfoTable }
+#endif
+
 /* support C++ sources */
 #ifdef __cplusplus
 extern "C" {

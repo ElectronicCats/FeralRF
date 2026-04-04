@@ -1,4 +1,6 @@
 
+/* ICall types needed before BLE headers */
+#include <icall.h>
 
 #include <bcomdef.h>
 #include <gapgattserver.h>

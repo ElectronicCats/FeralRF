@@ -232,6 +232,7 @@ if(USE_TIRTOS)
     # SysConfig generated files
     set(SYSCFG_SOURCES
         syscfg/ti_sysbios_config.c
+        # syscfg/ti_ble_config.c — SDK header bug with spaces in path, using stubs
     )
 
     set(RTOS_STUBS src/rtos_stubs.c)
@@ -300,24 +301,26 @@ if(USE_TIRTOS)
         CC13X2P
         SYSCFG
     )
-    # Force-include RTOS config for C files only (not ASM)
-    set_property(SOURCE ${APP_SOURCES} ${DRIVER_SOURCES} ${RTOS_KERNEL_SOURCES}
-        ${DPL_SOURCES} ${POSIX_SOURCES} ${SYSCFG_SOURCES} ${MAIN_SOURCE}
-        APPEND PROPERTY COMPILE_OPTIONS
-        -include ${CMAKE_CURRENT_SOURCE_DIR}/syscfg/ti_sysbios_config.h
+    # Force-include RTOS config + BLE include paths
+    target_compile_options(${CMAKE_PROJECT_NAME}.elf PRIVATE
+        $<$<COMPILE_LANGUAGE:C>:-include${CMAKE_CURRENT_SOURCE_DIR}/syscfg/ti_sysbios_config.h>
+        -I${TI_SDK_PATH}/source/ti/ble5stack/hal/src/inc
+        -I${TI_SDK_PATH}/source/ti/ble5stack/hal/src/target/_common
+        -I${TI_SDK_PATH}/source/ti/ble5stack/icall/src/inc
+        -I${TI_SDK_PATH}/source/ti/ble5stack/icall/inc
+        -I${TI_SDK_PATH}/source/ti/common/nv
+        -I${TI_SDK_PATH}/source/ti/ble5stack/controller/cc26xx/inc
     )
-    # POSIX GCC headers added in Phase M2 when BLE stack needs them
-    # target_compile_options(${CMAKE_PROJECT_NAME}.elf PRIVATE
-    #     -isystem ${TI_SDK_PATH}/source/ti/posix/gcc
-    # )
 endif()
 
 if(USE_TIRTOS)
     target_link_libraries(${CMAKE_PROJECT_NAME}.elf PRIVATE
         ${DRIVERLIB_LIB}
         ${RF_MULTI_MODE_LIB}
+        -Wl,--whole-archive
         ${BLE5_LIBS_DIR}/OneLib.a
         ${BLE5_LIBS_DIR}/StackWrapper.a
+        -Wl,--no-whole-archive
         ${BLE5_ROM_LIB}
     )
 else()

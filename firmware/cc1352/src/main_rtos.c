@@ -88,15 +88,20 @@ static void FeralRF_taskFxn(UArg a0, UArg a1) {
     DataTask_init();
     HostIFTask_init();
 
-    /* Main loop — same polling as before, but inside RTOS task.
-     * In Phase M2 this will become Event_pend based. */
+    /* Main loop — polling inside RTOS task */
+    uint32_t led_counter = 0;
     while (1) {
         HostIFTask_poll();
         DataTask_poll();
 
-        /* LED blink via RTOS Clock instead of SysTick (added in M2) */
-        GPIO_toggleDio(LED_PIN);
-        Task_sleep(LED_BLINK_MS * (1000 / Clock_tickPeriod));
+        /* LED blink via counter (non-blocking) */
+        led_counter++;
+        if (led_counter >= 50000u) {
+            led_counter = 0;
+            GPIO_toggleDio(LED_PIN);
+        }
+
+        Task_yield();
     }
 }
 

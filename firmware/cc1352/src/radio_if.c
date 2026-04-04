@@ -758,9 +758,10 @@ static void RadioIF_rfCallback(RF_Handle h, RF_CmdHandle ch, RF_EventMask e) {
         s_rf_event_flags |= RADIO_IF_RF_EVENT_RX_BUF_FULL;
     }
 
-    /* Wake up the processing task via semaphore (TI-RTOS pattern) */
-    if (s_rf_semaphore != NULL) {
-        Semaphore_post(s_rf_semaphore);
+    /* Wake up the RF processing task via global semaphore */
+    extern Semaphore_Handle g_rf_semaphore;
+    if (g_rf_semaphore != NULL) {
+        Semaphore_post(g_rf_semaphore);
     }
 }
 
@@ -794,6 +795,8 @@ static bool RadioIF_runFsAndPostRx(void) {
     }
 
     (void)RF_runCmd(s_rf_handle, fs_cmd, RF_PriorityNormal, NULL, 0);
+    /* Use RF_postCmd with callback (TI-RTOS compatible).
+     * NOTE: RF_runCmd would block the task — need separate tasks for that. */
     s_rf_rx_cmd =
         RF_postCmd(s_rf_handle, rx_cmd, RF_PriorityNormal, &RadioIF_rfCallback, event_mask);
     return s_rf_rx_cmd >= 0;
@@ -1357,14 +1360,6 @@ static void RadioIF_processRfPackets(void) {
 }
 
 void RadioIF_init(void) {
-    /* Create semaphore for RF callback → task signaling (TI-RTOS) */
-    if (s_rf_semaphore == NULL) {
-        Semaphore_Params semParams;
-        Semaphore_Params_init(&semParams);
-        semParams.mode = Semaphore_Mode_BINARY;
-        s_rf_semaphore = Semaphore_construct(&s_rf_semaphore_struct, 0, &semParams);
-    }
-
     /* Close ALL RF sessions before resetting state */
     RadioIF_stopJamSession();
     RadioIF_closeTxSession();

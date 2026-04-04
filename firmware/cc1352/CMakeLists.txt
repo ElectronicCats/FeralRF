@@ -94,9 +94,9 @@ file(GLOB DRIVERLIB_SOURCES
     ${TI_SDK_PATH}/source/ti/devices/${DEVICE_SUBFAMILY}/driverlib/*.c
 )
 
-# RF driver — compile from source for SDK 8.30 compatibility
-set(RF_DRIVER_SOURCE
-    ${TI_SDK_PATH}/source/ti/drivers/rf/RFCC26X2_multiMode.c
+# RF driver — use precompiled lib (source had issues with TI-RTOS)
+set(RF_MULTI_MODE_LIB
+    ${TI_SDK_PATH}/source/ti/drivers/rf/lib/gcc/m4f/rf_multiMode_cc13x2.a
 )
 
 # BLE5-Stack libraries (Phase M2)
@@ -138,7 +138,6 @@ set(RF_PATCH_SOURCES
 )
 
 set(DRIVER_SOURCES
-    ${RF_DRIVER_SOURCE}
     ${RF_PATCH_SOURCES}
     ${TI_SDK_PATH}/source/ti/drivers/ITM.c
     ${TI_SDK_PATH}/source/ti/drivers/Temperature.c
@@ -368,7 +367,7 @@ endif()
 
 if(USE_TIRTOS)
     target_link_libraries(${CMAKE_PROJECT_NAME}.elf PRIVATE
-        # RF driver compiled from source
+        ${RF_MULTI_MODE_LIB}
         icall_lib
         -Wl,--whole-archive
         ${BLE5_LIBS_DIR}/OneLib.a
@@ -379,7 +378,7 @@ if(USE_TIRTOS)
 else()
     target_link_libraries(${CMAKE_PROJECT_NAME}.elf PRIVATE
         ${DRIVERLIB_LIB}
-        # RF driver compiled from source
+        ${RF_MULTI_MODE_LIB}
     )
 endif()
 

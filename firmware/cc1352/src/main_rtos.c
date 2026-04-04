@@ -1,7 +1,9 @@
 /*
  * FeralRF CC1352 — TI-RTOS Main Entry Point
  *
- * Phase M2: TI-RTOS + BLE5-Stack (ICall + GATT client)
+ * Two-task architecture (like Sniffle):
+ * - UART Task: command processing + TX output (high priority)
+ * - RF Task: radio operations + packet processing (medium priority)
  */
 
 #include <stdbool.h>
@@ -11,25 +13,11 @@
 /* TI-RTOS */
 #include <ti/sysbios/BIOS.h>
 #include <ti/sysbios/knl/Task.h>
-#include <ti/sysbios/knl/Clock.h>
-#include <ti/sysbios/knl/Event.h>
+#include <ti/sysbios/knl/Semaphore.h>
 
 /* TI Drivers */
 #include <ti/drivers/Power.h>
 #include <ti/drivers/power/PowerCC26XX.h>
-
-/* BLE5-Stack */
-#define ICALL_JT
-#define ICALL_LITE
-#define CC13XX
-#define CC13X2P
-#define SYSCFG
-#define BLE_V50_FEATURES (PHY_2MBPS_CFG | PHY_LR_CFG)
-#define PHY_2MBPS_CFG    0x01
-#define PHY_LR_CFG       0x02
-#include <icall.h>
-#include "icall_user_config.h"
-#include "ble_user_config.h"
 
 /* Device */
 #include <ti/devices/DeviceFamily.h>
@@ -41,6 +29,14 @@
 #include DeviceFamily_constructPath(driverlib/vims.h)
 /* clang-format on */
 
+/* BLE5-Stack (Phase M3) */
+#define ICALL_JT
+#define ICALL_LITE
+#define CC13XX
+#define CC13X2P
+#define SYSCFG
+#include "ble_user_config.h"
+
 /* FeralRF app */
 #include "command_processor.h"
 #include "config.h"
@@ -51,18 +47,27 @@
 #include "task_event.h"
 
 /* ─── BLE User Config ─── */
-
 #ifndef USE_DEFAULT_USER_CFG
 icall_userCfg_t user0Cfg = BLE_USER_CFG;
 #endif
 
 /* ─── Task Configuration ─── */
 
-#define FERALRF_TASK_PRIORITY   3  /* Higher than idle(0), lower than BLE stack(5) */
-#define FERALRF_TASK_STACK_SIZE 4096
+#define UART_TASK_PRIORITY   3   /* High — must always respond to host */
+#define UART_TASK_STACK_SIZE 2048
 
-static Task_Struct s_feralrf_task;
-static uint8_t s_feralrf_task_stack[FERALRF_TASK_STACK_SIZE];
+#define RF_TASK_PRIORITY     2   /* Medium — processes RF events */
+#define RF_TASK_STACK_SIZE   4096
+
+static Task_Struct s_uart_task;
+static uint8_t s_uart_task_stack[UART_TASK_STACK_SIZE];
+
+static Task_Struct s_rf_task;
+static uint8_t s_rf_task_stack[RF_TASK_STACK_SIZE];
+
+/* Semaphore for RF callback → RF task notification */
+Semaphore_Struct s_rf_sem_struct;
+Semaphore_Handle g_rf_semaphore = NULL;
 
 /* ─── Board Init ─── */
 
@@ -92,26 +97,23 @@ static void board_gpio_init(void) {
 #endif
 }
 
-/* ─── FeralRF App Task ─── */
+/* ─── UART Task: commands + responses ─── */
 
-static void FeralRF_taskFxn(UArg a0, UArg a1) {
+static void UartTask_taskFxn(UArg a0, UArg a1) {
     (void)a0;
     (void)a1;
 
-    /* Initialize subsystems */
+    /* Initialize UART + command subsystems */
     HostIF_init();
     TaskEvent_init();
     ControlTask_init();
     CommandProcessor_init();
-    DataTask_init();
     HostIFTask_init();
 
-    /* Main loop — polling inside RTOS task */
+    /* UART polling loop — always responsive */
     uint32_t led_counter = 0;
-    volatile uint32_t delay;
     while (1) {
         HostIFTask_poll();
-        DataTask_poll();
 
         /* LED blink */
         led_counter++;
@@ -119,29 +121,36 @@ static void FeralRF_taskFxn(UArg a0, UArg a1) {
             led_counter = 0;
             GPIO_toggleDio(LED_PIN);
         }
-
-        /* Brief busy-wait to prevent CPU starvation */
-        for (delay = 0; delay < 100u; delay++) {}
     }
 }
 
-static void FeralRF_createTask(void) {
-    Task_Params taskParams;
-    Task_Params_init(&taskParams);
-    taskParams.stack = s_feralrf_task_stack;
-    taskParams.stackSize = FERALRF_TASK_STACK_SIZE;
-    taskParams.priority = FERALRF_TASK_PRIORITY;
-    Task_construct(&s_feralrf_task, FeralRF_taskFxn, &taskParams, NULL);
+/* ─── RF Task: radio processing ─── */
+
+static void RfTask_taskFxn(UArg a0, UArg a1) {
+    (void)a0;
+    (void)a1;
+
+    /* Initialize RF subsystems */
+    DataTask_init();
+
+    /* RF processing loop — wakes on semaphore or polls periodically */
+    while (1) {
+        /* Wait for RF events or timeout (10ms for periodic polling) */
+        Semaphore_pend(g_rf_semaphore, 1000);  /* ~10ms at 10us tick */
+
+        DataTask_poll();
+    }
 }
 
 /* ─── Main ─── */
 
 int main(void) {
+    Task_Params taskParams;
+
     /* Board init */
     board_power_init();
     Power_init();
 
-    /* Enable instruction cache */
     VIMSConfigure(VIMS_BASE, TRUE, TRUE);
     VIMSModeSet(VIMS_BASE, VIMS_MODE_ENABLED);
 
@@ -150,21 +159,35 @@ int main(void) {
     Power_setConstraint(PowerCC26XX_IDLE_PD_DISALLOW);
 #endif
 
-    /* GPIO init */
     board_gpio_init();
 
-    /* BLE5-Stack ICall — disabled until real BLE config is provided (Phase M3).
-     * Enabling with NULL config stubs crashes.
-     */
-#if 0  /* Enable in M3 when ti_ble_config.c compiles */
+    /* Create RF semaphore */
+    Semaphore_Params semParams;
+    Semaphore_Params_init(&semParams);
+    semParams.mode = Semaphore_Mode_BINARY;
+    g_rf_semaphore = Semaphore_construct(&s_rf_sem_struct, 0, &semParams);
+
+    /* BLE5-Stack ICall — disabled until Phase M3 */
+#if 0
     user0Cfg.appServiceInfo->timerTickPeriod = Clock_tickPeriod;
     user0Cfg.appServiceInfo->timerMaxMillisecond = ICall_getMaxMSecs();
     ICall_init();
     ICall_createRemoteTasks();
 #endif
 
-    /* Create FeralRF application task — Priority 1 */
-    FeralRF_createTask();
+    /* Create UART task (high priority — always responsive) */
+    Task_Params_init(&taskParams);
+    taskParams.stack = s_uart_task_stack;
+    taskParams.stackSize = UART_TASK_STACK_SIZE;
+    taskParams.priority = UART_TASK_PRIORITY;
+    Task_construct(&s_uart_task, UartTask_taskFxn, &taskParams, NULL);
+
+    /* Create RF task (medium priority — processes radio events) */
+    Task_Params_init(&taskParams);
+    taskParams.stack = s_rf_task_stack;
+    taskParams.stackSize = RF_TASK_STACK_SIZE;
+    taskParams.priority = RF_TASK_PRIORITY;
+    Task_construct(&s_rf_task, RfTask_taskFxn, &taskParams, NULL);
 
     /* Start TI-RTOS kernel — never returns */
     BIOS_start();

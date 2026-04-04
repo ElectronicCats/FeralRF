@@ -127,6 +127,8 @@ static volatile uint32_t s_rf_event_flags = 0u;
 
 static dataQueue_t s_rf_data_queue;
 static rfc_dataEntryGeneral_t *s_rf_read_entry = NULL;
+static bool s_ble_active_scan = false;
+static rfc_ble5ScanInitOutput_t s_ble5_scanner_output;
 static bool s_ble_adv_hop_enabled = false;
 static bool s_ble_adv_hop_allowed = RADIO_IF_BLE_ADV_HOP_ENABLE;
 static uint8_t s_ble_adv_hop_index = 0u;
@@ -766,7 +768,8 @@ static bool RadioIF_runFsAndPostRx(void) {
     switch (s_rf_mode) {
     case RADIO_IF_RF_MODE_BLE:
         fs_cmd = (RF_Op *)&Ble5_0_cmdFs;
-        rx_cmd = (RF_Op *)&Ble5_0_cmdBle5GenericRx;
+        rx_cmd = s_ble_active_scan ? (RF_Op *)&Ble5_0_cmdBle5Scanner
+                                   : (RF_Op *)&Ble5_0_cmdBle5GenericRx;
         break;
     case RADIO_IF_RF_MODE_IEEE_15_4:
         fs_cmd = (RF_Op *)&Ieee154_0_cmdFs;
@@ -870,15 +873,38 @@ static bool RadioIF_startBleRfBackend(void) {
     RadioIF_applyBlePhyMode(s_selected_phy);
     RadioIF_applyBleChannelConfig((uint8_t)s_channel);
 
-    Ble5_0_cmdBle5GenericRx.pParams->pRxQ = &s_rf_data_queue;
-    Ble5_0_cmdBle5GenericRx.pParams->rxConfig.bAutoFlushIgnored = 0u;
-    Ble5_0_cmdBle5GenericRx.pParams->rxConfig.bAutoFlushCrcErr = 0u;
-    Ble5_0_cmdBle5GenericRx.pParams->rxConfig.bAutoFlushEmpty = 0u;
-    Ble5_0_cmdBle5GenericRx.pParams->rxConfig.bIncludeLenByte = 1u;
-    Ble5_0_cmdBle5GenericRx.pParams->rxConfig.bIncludeCrc = 1u;
-    Ble5_0_cmdBle5GenericRx.pParams->rxConfig.bAppendRssi = 1u;
-    Ble5_0_cmdBle5GenericRx.pParams->rxConfig.bAppendStatus = 1u;
-    Ble5_0_cmdBle5GenericRx.pParams->rxConfig.bAppendTimestamp = 1u;
+    if (s_ble_active_scan) {
+        /* Active scan: use CMD_BLE5_SCANNER (sends SCAN_REQ, captures SCAN_RSP) */
+        Ble5_0_cmdBle5Scanner.pParams->pRxQ = &s_rf_data_queue;
+        Ble5_0_cmdBle5Scanner.pParams->rxConfig.bAutoFlushIgnored = 0u;
+        Ble5_0_cmdBle5Scanner.pParams->rxConfig.bAutoFlushCrcErr = 0u;
+        Ble5_0_cmdBle5Scanner.pParams->rxConfig.bAutoFlushEmpty = 0u;
+        Ble5_0_cmdBle5Scanner.pParams->rxConfig.bIncludeLenByte = 1u;
+        Ble5_0_cmdBle5Scanner.pParams->rxConfig.bIncludeCrc = 1u;
+        Ble5_0_cmdBle5Scanner.pParams->rxConfig.bAppendRssi = 1u;
+        Ble5_0_cmdBle5Scanner.pParams->rxConfig.bAppendStatus = 1u;
+        Ble5_0_cmdBle5Scanner.pParams->rxConfig.bAppendTimestamp = 1u;
+        Ble5_0_cmdBle5Scanner.pParams->scanConfig.bActiveScan = 1u;
+        Ble5_0_cmdBle5Scanner.pParams->scanConfig.scanFilterPolicy = 0u;
+        Ble5_0_cmdBle5Scanner.pParams->scanConfig.bEndOnRpt = 0u;
+        memset(&s_ble5_scanner_output, 0, sizeof(s_ble5_scanner_output));
+        Ble5_0_cmdBle5Scanner.pOutput = &s_ble5_scanner_output;
+        Ble5_0_cmdBle5Scanner.phyMode.mainMode =
+            Ble5_0_cmdBle5GenericRx.phyMode.mainMode;
+        Ble5_0_cmdBle5Scanner.phyMode.coding =
+            Ble5_0_cmdBle5GenericRx.phyMode.coding;
+    } else {
+        /* Passive scan: use CMD_BLE5_GENERIC_RX (receive only) */
+        Ble5_0_cmdBle5GenericRx.pParams->pRxQ = &s_rf_data_queue;
+        Ble5_0_cmdBle5GenericRx.pParams->rxConfig.bAutoFlushIgnored = 0u;
+        Ble5_0_cmdBle5GenericRx.pParams->rxConfig.bAutoFlushCrcErr = 0u;
+        Ble5_0_cmdBle5GenericRx.pParams->rxConfig.bAutoFlushEmpty = 0u;
+        Ble5_0_cmdBle5GenericRx.pParams->rxConfig.bIncludeLenByte = 1u;
+        Ble5_0_cmdBle5GenericRx.pParams->rxConfig.bIncludeCrc = 1u;
+        Ble5_0_cmdBle5GenericRx.pParams->rxConfig.bAppendRssi = 1u;
+        Ble5_0_cmdBle5GenericRx.pParams->rxConfig.bAppendStatus = 1u;
+        Ble5_0_cmdBle5GenericRx.pParams->rxConfig.bAppendTimestamp = 1u;
+    }
 
     RF_Params_init(&rf_params);
     s_rf_handle =
@@ -899,6 +925,22 @@ static bool RadioIF_startBleRfBackend(void) {
 
     s_rf_event_flags = 0u;
     return true;
+}
+
+void RadioIF_setActiveScan(bool enabled) {
+    s_ble_active_scan = enabled;
+}
+
+void RadioIF_getScannerStats(uint16_t *tx_req, uint16_t *rx_adv_ok, uint16_t *rx_rsp_ok) {
+    if (tx_req != NULL) {
+        *tx_req = s_ble5_scanner_output.nTxReq;
+    }
+    if (rx_adv_ok != NULL) {
+        *rx_adv_ok = s_ble5_scanner_output.nRxAdvOk;
+    }
+    if (rx_rsp_ok != NULL) {
+        *rx_rsp_ok = s_ble5_scanner_output.nRxRspOk;
+    }
 }
 
 static bool RadioIF_startIeee154RfBackend(void) {

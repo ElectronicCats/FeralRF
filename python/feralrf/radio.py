@@ -392,6 +392,22 @@ class Radio:
         addr_bytes = bytes(int(p, 16) for p in reversed(parts))
         self.set_ble_addr(addr_bytes)
 
+    def set_ble_scan_mode(self, active: bool = True) -> None:
+        """Set BLE scan mode: passive or active.
+
+        Active scan sends SCAN_REQ to devices, which respond with SCAN_RSP
+        containing additional data (full name, extra UUIDs, etc.).
+        Must be called BEFORE start_rx().
+
+        Args:
+            active: True for active scan (SCAN_REQ/RSP), False for passive.
+        """
+        payload = bytes([1 if active else 0])
+        self._send_command(Command.SET_BLE_SCAN_MODE, payload)
+        cmd_id, seq, resp = self._read_response(expected={Response.ACK, Response.ERROR})
+        if cmd_id == Response.ERROR:
+            raise CommandError("Set BLE scan mode failed", resp[0] if resp else 0)
+
     def configure_prop(
         self,
         frequency_hz: int,

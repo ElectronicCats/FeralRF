@@ -32,6 +32,7 @@
 #define CMD_SET_ADV_HOP 0x07u
 #define CMD_SET_PROP_CONFIG 0x08u
 #define CMD_SET_BLE_ADDR 0x09u
+#define CMD_SET_BLE_SCAN_MODE 0x0Bu
 #define CMD_JAM_CONTINUOUS 0x30u
 #define CMD_JAM_STOP 0x33u
 
@@ -217,6 +218,15 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
             return;
         }
         RadioIF_setBleAdvAddress(payload);
+        send_ack(seq);
+        return;
+
+    case CMD_SET_BLE_SCAN_MODE:
+        if (payload_len != 1u) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            return;
+        }
+        RadioIF_setActiveScan(payload[0] != 0u);
         send_ack(seq);
         return;
 

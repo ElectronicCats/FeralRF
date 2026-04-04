@@ -60,6 +60,8 @@ typedef struct {
 } RadioIF_PropConfig;
 
 void RadioIF_setPropConfig(const RadioIF_PropConfig *config);
+void RadioIF_setActiveScan(bool enabled);
+void RadioIF_getScannerStats(uint16_t *tx_req, uint16_t *rx_adv_ok, uint16_t *rx_rsp_ok);
 void RadioIF_setBleAdvAddress(const uint8_t *addr);
 
 /* Jamming functions - optimized continuous transmission */

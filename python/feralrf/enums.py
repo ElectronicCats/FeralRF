@@ -31,6 +31,7 @@ class Command(IntEnum):
     SET_ADV_HOP = 0x07
     SET_PROP_CONFIG = 0x08
     SET_BLE_ADDR = 0x09
+    SET_BLE_SCAN_MODE = 0x0B
 
     # RX Operations
     RX_START = 0x10

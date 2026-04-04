@@ -94,9 +94,9 @@ file(GLOB DRIVERLIB_SOURCES
     ${TI_SDK_PATH}/source/ti/devices/${DEVICE_SUBFAMILY}/driverlib/*.c
 )
 
-# RF multiMode lib
-set(RF_MULTI_MODE_LIB
-    ${TI_SDK_PATH}/source/ti/drivers/rf/lib/gcc/m4f/rf_multiMode_cc13x2.a
+# RF driver — compile from source for SDK 8.30 compatibility
+set(RF_DRIVER_SOURCE
+    ${TI_SDK_PATH}/source/ti/drivers/rf/RFCC26X2_multiMode.c
 )
 
 # BLE5-Stack libraries (Phase M2)
@@ -127,7 +127,19 @@ set(APP_SOURCES
 
 # ─── TI Driver sources (common) ───
 
+# RF patches needed by SmartRF configs
+set(RF_PATCH_SOURCES
+    ${TI_SDK_PATH}/source/ti/devices/${DEVICE_SUBFAMILY}/rf_patches/rf_patch_cpe_bt5.c
+    ${TI_SDK_PATH}/source/ti/devices/${DEVICE_SUBFAMILY}/rf_patches/rf_patch_mce_bt5.c
+    ${TI_SDK_PATH}/source/ti/devices/${DEVICE_SUBFAMILY}/rf_patches/rf_patch_cpe_multi_protocol.c
+    ${TI_SDK_PATH}/source/ti/devices/${DEVICE_SUBFAMILY}/rf_patches/rf_patch_cpe_prop.c
+    ${TI_SDK_PATH}/source/ti/devices/${DEVICE_SUBFAMILY}/rf_patches/rf_patch_mce_genook.c
+    ${TI_SDK_PATH}/source/ti/devices/${DEVICE_SUBFAMILY}/rf_patches/rf_patch_rfe_genook.c
+)
+
 set(DRIVER_SOURCES
+    ${RF_DRIVER_SOURCE}
+    ${RF_PATCH_SOURCES}
     ${TI_SDK_PATH}/source/ti/drivers/ITM.c
     ${TI_SDK_PATH}/source/ti/drivers/Temperature.c
     ${TI_SDK_PATH}/source/ti/drivers/utils/List.c
@@ -356,7 +368,7 @@ endif()
 
 if(USE_TIRTOS)
     target_link_libraries(${CMAKE_PROJECT_NAME}.elf PRIVATE
-        ${RF_MULTI_MODE_LIB}
+        # RF driver compiled from source
         icall_lib
         -Wl,--whole-archive
         ${BLE5_LIBS_DIR}/OneLib.a
@@ -367,7 +379,7 @@ if(USE_TIRTOS)
 else()
     target_link_libraries(${CMAKE_PROJECT_NAME}.elf PRIVATE
         ${DRIVERLIB_LIB}
-        ${RF_MULTI_MODE_LIB}
+        # RF driver compiled from source
     )
 endif()
 

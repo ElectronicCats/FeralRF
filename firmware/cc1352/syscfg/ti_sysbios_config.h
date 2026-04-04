@@ -18,17 +18,6 @@
 
 #include <stdint.h>
 
-/* BLE defines come from CMake -D flags, not here.
- * ICALL_JT, CC13X2P, SYSCFG are set in CMakeLists.txt target_compile_definitions */
-
-/* SDK 8.30 typo fix: bleUserCfg_t uses txPwrBackOffTbl_t but typedef is txPwrBackoffTbl_t */
-#define txPwrBackOffTbl_t txPwrBackoffTbl_t
-
-/* BLE_USER_CFG for ICALL_JT mode */
-#ifndef BLE_USER_CFG
-#define BLE_USER_CFG { &bleStackConfig, &driverTable, &boardConfig, &bleAppServiceInfoTable }
-#endif
-
 /* support C++ sources */
 #ifdef __cplusplus
 extern "C" {
@@ -48,12 +37,11 @@ extern "C" {
 #define BIOS_rtsLockType_D BIOS_GateMutexPri
 #define BIOS_numStartUserFuncs_D 0
 
-#include <ti/sysbios/gates/GateMutexPri.h>
 #define BIOS_RTS_GATE_STRUCT GateMutexPri_Struct
 #define BIOS_RTS_GATE_HANDLE(x) GateMutexPri_handle(x)
 #define BIOS_RTS_GATE_ENTER(x) GateMutexPri_enter(x)
-#define BIOS_RTS_GATE_LEAVE(x, y) GateMutexPri_leave(x, y)
-#define BIOS_RTS_GATE_CONSTRUCT(x, y) GateMutexPri_construct(x, y)
+#define BIOS_RTS_GATE_LEAVE(x,y) GateMutexPri_leave(x,y)
+#define BIOS_RTS_GATE_CONSTRUCT(x,y) GateMutexPri_construct(x,y)
 
 /* ensure Error and Assert defines come before dependent modules */
 
@@ -70,6 +58,8 @@ extern "C" {
 #define Error_raiseHookFxn(x)
 
 /* Settings module definitions */
+
+
 
 /* Seconds module definitions */
 
@@ -213,38 +203,14 @@ extern void System_exitSpin(int);
 
 /* ti_sysbios_runtime_Timestamp module definitions */
 
-#define TimestampProvider_get32_D \
-	ti_sysbios_family_arm_cc26xx_TimestampProvider_get32
-#define TimestampProvider_get64_D \
-	ti_sysbios_family_arm_cc26xx_TimestampProvider_get64
-#define TimestampProvider_getFreq_D \
-	ti_sysbios_family_arm_cc26xx_TimestampProvider_getFreq
-#define TimestampProvider_init_D \
-	ti_sysbios_family_arm_cc26xx_TimestampProvider_init
+#define TimestampProvider_get32_D ti_sysbios_family_arm_cc26xx_TimestampProvider_get32
+#define TimestampProvider_get64_D ti_sysbios_family_arm_cc26xx_TimestampProvider_get64
+#define TimestampProvider_getFreq_D ti_sysbios_family_arm_cc26xx_TimestampProvider_getFreq
+#define TimestampProvider_init_D ti_sysbios_family_arm_cc26xx_TimestampProvider_init
 
-/* SysMin module definitions (missing from SysConfig output) */
-#define SysMin_bufSize_D 256
-#define SysMin_flushAtExit_D true
-#define SysMin_outputFunc_D SysMin_output
+/* ──── FeralRF additions (not in SysConfig output) ──── */
 
-/* Load module definitions */
-#define Load_autoAddTasks_D true
-#define Load_enableCPULoadCalc_D false
-#define Load_hwiEnabled_D false
-#define Load_postUpdate_D NULL
-#define Load_swiEnabled_D false
-#define Load_taskEnabled_D true
-#define Load_updateInIdle_D true
-#define Load_windowInMs_D 500
-
-/* HeapMem gate type */
-#define HeapMem_GateStruct GateMutexPri_Struct
-
-/* Gate assert stubs */
-#define GateTask_A_badContext NULL
-#define GateSwi_A_badContext NULL
-
-/* Enable long names for all RTOS modules (fully-qualified symbol names) */
+/* Enable long names for RTOS modules */
 #define ti_sysbios_runtime_Startup_long_names
 #define ti_sysbios_runtime_Memory_long_names
 #define ti_sysbios_runtime_System_long_names
@@ -265,33 +231,38 @@ extern void System_exitSpin(int);
 #define ti_sysbios_family_arm_cc26xx_Timer_long_names
 #define ti_sysbios_family_arm_cc26xx_TimestampProvider_long_names
 
-/* Include _defs.h for name mangling (fully-qualified symbol names) */
 #include <ti/sysbios/runtime/Startup_defs.h>
 #include <ti/sysbios/runtime/Memory_defs.h>
-#include <ti/sysbios/runtime/System_defs.h>
-#include <ti/sysbios/runtime/Error_defs.h>
-#include <ti/sysbios/runtime/Timestamp_defs.h>
-#include <ti/sysbios/runtime/SysCallback_defs.h>
 #include <ti/sysbios/knl/Clock_defs.h>
-#include <ti/sysbios/knl/Task_defs.h>
-#include <ti/sysbios/knl/Swi_defs.h>
-#include <ti/sysbios/knl/Semaphore_defs.h>
-#include <ti/sysbios/knl/Event_defs.h>
-#include <ti/sysbios/knl/Queue_defs.h>
-#include <ti/sysbios/knl/Idle_defs.h>
-#include <ti/sysbios/knl/Mailbox_defs.h>
-#include <ti/sysbios/heaps/HeapCallback_defs.h>
-#include <ti/sysbios/heaps/HeapMem_defs.h>
-#include <ti/sysbios/family/arm/m3/Hwi_defs.h>
-#include <ti/sysbios/family/arm/cc26xx/Timer_defs.h>
-#include <ti/sysbios/family/arm/cc26xx/TimestampProvider_defs.h>
 
-/* Extern declarations for const variables defined in BIOS.c.
- * TI-RTOS kernel files reference these without extern declarations. */
+/* Missing _D defines for non-unity build */
+#define Load_autoAddTasks_D true
+#define Load_enableCPULoadCalc_D false
+#define Load_hwiEnabled_D false
+#define Load_postUpdate_D NULL
+#define Load_swiEnabled_D false
+#define Load_taskEnabled_D true
+#define Load_updateInIdle_D true
+#define Load_windowInMs_D 500
+#define HeapMem_GateStruct GateMutexPri_Struct
+#define GateTask_A_badContext NULL
+#define GateSwi_A_badContext NULL
+
+/* SDK 8.30 typo fix */
+#define txPwrBackOffTbl_t txPwrBackoffTbl_t
+
+/* BLE_USER_CFG for ICALL_JT mode */
+#ifndef BLE_USER_CFG
+#define BLE_USER_CFG { &bleStackConfig, &driverTable, &boardConfig, &bleAppServiceInfoTable }
+#endif
+
+/* Extern declarations for BIOS const variables */
 extern const bool BIOS_runtimeCreatesEnabled;
 extern const bool BIOS_taskEnabled;
 extern const bool BIOS_swiEnabled;
 extern const bool BIOS_clockEnabled;
+
+#include <ti/sysbios/gates/GateMutexPri.h>
 
 #ifdef __cplusplus
 }

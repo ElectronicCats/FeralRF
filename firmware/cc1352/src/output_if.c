@@ -31,8 +31,8 @@ void OutputIF_sendResponse(uint8_t rsp_cmd, uint8_t seq, const uint8_t *payload,
     tx_frame[encoded_len] = 0x00u;
 
     if (!PacketQueue_enqueue(tx_frame, encoded_len + 1u)) {
-        /* Fallback path for queue saturation to keep command/response alive. */
-        HostIF_writeBuffer(tx_frame, encoded_len + 1u);
+        /* Queue full — drop instead of blocking UARTCharPut.
+         * Blocking UART causes deadlock in TI-RTOS. */
         TaskEvent_set(TASK_EVENT_PACKET_QUEUE_DROPPED);
     } else {
         TaskEvent_set(TASK_EVENT_HOST_IF_TX_PENDING);

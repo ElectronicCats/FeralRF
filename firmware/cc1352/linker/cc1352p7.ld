@@ -1,4 +1,4 @@
-/* CC1352P7 Linker Script */
+/* CC1352P7 Linker Script — TI-RTOS7 compatible */
 /* 704KB Flash, 144KB SRAM */
 
 MEMORY
@@ -9,7 +9,11 @@ MEMORY
     STACK (RWX) : ORIGIN = 0x20023000, LENGTH = 0x00001000  /* 4KB stack */
 }
 
-ENTRY(ResetISR)
+ENTRY(_c_int00)
+
+/* TI-RTOS expects these symbols for stack and data init */
+__TI_STACK_BASE = ORIGIN(STACK);
+__TI_STACK_SIZE = LENGTH(STACK);
 
 SECTIONS
 {
@@ -23,7 +27,12 @@ SECTIONS
         *(.glue_7t)
         KEEP(*(.init))
         KEEP(*(.fini))
+        *(.error_str*)
         . = ALIGN(4);
+        __init_array_start = .;
+        KEEP(*(SORT(.init_array.*)))
+        KEEP(*(.init_array))
+        __init_array_end = .;
     } > FLASH
 
     .ARM.extab :
@@ -46,22 +55,27 @@ SECTIONS
     {
         . = ALIGN(4);
         _data = .;
+        __data_start__ = .;
         *(.data*)
         *(.ramfunc*)
         . = ALIGN(4);
         _edata = .;
+        __data_end__ = .;
     } > SRAM
 
     _ldata = LOADADDR(.data);
+    __data_load__ = LOADADDR(.data);
 
     .bss :
     {
         . = ALIGN(4);
         _bss = .;
+        __bss_start__ = .;
         *(.bss*)
         *(COMMON)
         . = ALIGN(4);
         _ebss = .;
+        __bss_end__ = .;
     } > SRAM
 
     .stack (NOLOAD) :

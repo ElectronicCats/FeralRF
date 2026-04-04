@@ -149,7 +149,7 @@ if(USE_TIRTOS)
         ${SYSBIOS_PATH}/runtime/Memory.c
         ${SYSBIOS_PATH}/runtime/Startup.c
         ${SYSBIOS_PATH}/runtime/SysCallback.c
-        ${SYSBIOS_PATH}/runtime/SysMin.c
+        # SysMin.c excluded — SysCallback.c provides SystemSupport functions
         ${SYSBIOS_PATH}/runtime/System.c
         ${SYSBIOS_PATH}/runtime/Timestamp.c
         # Gates
@@ -219,6 +219,7 @@ if(USE_TIRTOS)
         syscfg/ti_sysbios_config.c
     )
 
+    set(RTOS_STUBS src/rtos_stubs.c)
     set(MAIN_SOURCE src/main_rtos.c)
 
     set(ALL_SOURCES
@@ -227,7 +228,8 @@ if(USE_TIRTOS)
         ${RTOS_KERNEL_SOURCES}
         ${RTOS_ASM_SOURCES}
         ${DPL_SOURCES}
-        ${POSIX_SOURCES}
+        # POSIX_SOURCES omitted for Phase M1 — added in M2 with BLE stack
+        ${RTOS_STUBS}
         ${SYSCFG_SOURCES}
         ${MAIN_SOURCE}
     )
@@ -278,10 +280,16 @@ if(USE_TIRTOS)
     target_compile_definitions(${CMAKE_PROJECT_NAME}.elf PRIVATE
         xdc_runtime_Log_DISABLE_ALL=1
     )
-    # Force-include the RTOS config header for all kernel sources
-    target_compile_options(${CMAKE_PROJECT_NAME}.elf PRIVATE
+    # Force-include RTOS config for C files only (not ASM)
+    set_property(SOURCE ${APP_SOURCES} ${DRIVER_SOURCES} ${RTOS_KERNEL_SOURCES}
+        ${DPL_SOURCES} ${POSIX_SOURCES} ${SYSCFG_SOURCES} ${MAIN_SOURCE}
+        APPEND PROPERTY COMPILE_OPTIONS
         -include ${CMAKE_CURRENT_SOURCE_DIR}/syscfg/ti_sysbios_config.h
     )
+    # POSIX GCC headers added in Phase M2 when BLE stack needs them
+    # target_compile_options(${CMAKE_PROJECT_NAME}.elf PRIVATE
+    #     -isystem ${TI_SDK_PATH}/source/ti/posix/gcc
+    # )
 endif()
 
 target_link_libraries(${CMAKE_PROJECT_NAME}.elf PRIVATE

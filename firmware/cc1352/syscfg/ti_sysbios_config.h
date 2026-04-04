@@ -233,6 +233,48 @@ extern void System_exitSpin(int);
 #define GateTask_A_badContext NULL
 #define GateSwi_A_badContext NULL
 
+/* Enable long names for all RTOS modules (fully-qualified symbol names) */
+#define ti_sysbios_runtime_Startup_long_names
+#define ti_sysbios_runtime_Memory_long_names
+#define ti_sysbios_runtime_System_long_names
+#define ti_sysbios_runtime_Error_long_names
+#define ti_sysbios_runtime_Timestamp_long_names
+#define ti_sysbios_runtime_SysCallback_long_names
+#define ti_sysbios_knl_Clock_long_names
+#define ti_sysbios_knl_Task_long_names
+#define ti_sysbios_knl_Swi_long_names
+#define ti_sysbios_knl_Semaphore_long_names
+#define ti_sysbios_knl_Event_long_names
+#define ti_sysbios_knl_Queue_long_names
+#define ti_sysbios_knl_Idle_long_names
+#define ti_sysbios_knl_Mailbox_long_names
+#define ti_sysbios_heaps_HeapCallback_long_names
+#define ti_sysbios_heaps_HeapMem_long_names
+#define ti_sysbios_family_arm_m3_Hwi_long_names
+#define ti_sysbios_family_arm_cc26xx_Timer_long_names
+#define ti_sysbios_family_arm_cc26xx_TimestampProvider_long_names
+
+/* Include _defs.h for name mangling (fully-qualified symbol names) */
+#include <ti/sysbios/runtime/Startup_defs.h>
+#include <ti/sysbios/runtime/Memory_defs.h>
+#include <ti/sysbios/runtime/System_defs.h>
+#include <ti/sysbios/runtime/Error_defs.h>
+#include <ti/sysbios/runtime/Timestamp_defs.h>
+#include <ti/sysbios/runtime/SysCallback_defs.h>
+#include <ti/sysbios/knl/Clock_defs.h>
+#include <ti/sysbios/knl/Task_defs.h>
+#include <ti/sysbios/knl/Swi_defs.h>
+#include <ti/sysbios/knl/Semaphore_defs.h>
+#include <ti/sysbios/knl/Event_defs.h>
+#include <ti/sysbios/knl/Queue_defs.h>
+#include <ti/sysbios/knl/Idle_defs.h>
+#include <ti/sysbios/knl/Mailbox_defs.h>
+#include <ti/sysbios/heaps/HeapCallback_defs.h>
+#include <ti/sysbios/heaps/HeapMem_defs.h>
+#include <ti/sysbios/family/arm/m3/Hwi_defs.h>
+#include <ti/sysbios/family/arm/cc26xx/Timer_defs.h>
+#include <ti/sysbios/family/arm/cc26xx/TimestampProvider_defs.h>
+
 /* Extern declarations for const variables defined in BIOS.c.
  * TI-RTOS kernel files reference these without extern declarations. */
 extern const bool BIOS_runtimeCreatesEnabled;

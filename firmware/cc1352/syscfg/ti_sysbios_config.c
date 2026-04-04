@@ -97,20 +97,4 @@ void BIOS_init(void)
 		&BIOS_heapCallbackObject, NULL);
 }
 
-/* All kernel, DPL, and POSIX sources are compiled separately
- * via CMakeLists.txt for GCC compatibility. */
-#include <ti/sysbios/knl/Clock.c>
-#include <ti/sysbios/knl/Event.c>
-#include <ti/sysbios/knl/Idle.c>
-#include <ti/sysbios/knl/Mailbox.c>
-#include <ti/sysbios/knl/Queue.c>
-#include <ti/sysbios/knl/Semaphore.c>
-#include <ti/sysbios/knl/Swi.c>
-#include <ti/sysbios/knl/Task.c>
-#include <ti/sysbios/rts/MemAlloc.c>
-#include <ti/sysbios/runtime/Error.c>
-#include <ti/sysbios/runtime/Memory.c>
-#include <ti/sysbios/runtime/System.c>
-#include <ti/sysbios/runtime/SysCallback.c>
-#include <ti/sysbios/runtime/Timestamp.c>
-#include <ti/sysbios/runtime/Startup.c>
+/* Kernel sources compiled individually via CMakeLists.txt */

@@ -1,0 +1,23 @@
+/*
+ * FeralRF — Stubs for TI-RTOS symbols not needed in Phase M1.
+ * These will be replaced by real implementations when BLE5-Stack is added (M2).
+ */
+
+#include <stdint.h>
+#include <stddef.h>
+#include <stdbool.h>
+
+/* OSAL heap callbacks — needed by HeapCallback.c but we don't use OSAL heap */
+void *osalHeapAllocFxn(uint32_t size) { (void)size; return NULL; }
+void osalHeapFreeFxn(void *ptr) { (void)ptr; }
+void osalHeapGetStatsFxn(void *ptr, void *stats) { (void)ptr; (void)stats; }
+bool osalHeapIsBlockingFxn(void) { return false; }
+void osalHeapInitFxn(void) {}
+
+/* POSIX pthread cleanup — needed by Idle list but we don't use pthreads */
+void _pthread_cleanupFxn(void) {}
+
+/* ClockSupport timer struct — defined in ti_sysbios_config.c normally */
+/* This is a GPTimerCC26XX object used by the RTOS clock driver */
+#include <ti/sysbios/family/arm/cc26xx/Timer.h>
+Timer_Struct ClockSupport_timerStruct;

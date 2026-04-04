@@ -115,10 +115,12 @@ void DataTask_poll(void) {
 
     if (s_rx_active) {
         RadioIF_RxPacket pkt;
-        while (RadioIF_popRxPacket(&pkt)) {
+        uint8_t max_pkts = 8u; /* Limit per poll to prevent UART starvation */
+        while (max_pkts > 0u && RadioIF_popRxPacket(&pkt)) {
             if (LLManager_processRxPacket(&pkt)) {
                 DataTask_emitRxPacket(&pkt);
             }
+            max_pkts--;
         }
     }
 }

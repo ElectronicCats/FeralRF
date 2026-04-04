@@ -58,8 +58,8 @@ icall_userCfg_t user0Cfg = BLE_USER_CFG;
 
 /* ─── Task Configuration ─── */
 
-#define FERALRF_TASK_PRIORITY   1
-#define FERALRF_TASK_STACK_SIZE 2048
+#define FERALRF_TASK_PRIORITY   3  /* Higher than idle(0), lower than BLE stack(5) */
+#define FERALRF_TASK_STACK_SIZE 4096
 
 static Task_Struct s_feralrf_task;
 static uint8_t s_feralrf_task_stack[FERALRF_TASK_STACK_SIZE];
@@ -108,18 +108,20 @@ static void FeralRF_taskFxn(UArg a0, UArg a1) {
 
     /* Main loop — polling inside RTOS task */
     uint32_t led_counter = 0;
+    volatile uint32_t delay;
     while (1) {
         HostIFTask_poll();
         DataTask_poll();
 
-        /* LED blink via counter (non-blocking) */
+        /* LED blink */
         led_counter++;
         if (led_counter >= 50000u) {
             led_counter = 0;
             GPIO_toggleDio(LED_PIN);
         }
 
-        Task_yield();
+        /* Brief busy-wait to prevent CPU starvation */
+        for (delay = 0; delay < 100u; delay++) {}
     }
 }
 

@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 
 # SDK path (set before project)
-set(TI_SDK_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../sdk/simplelink_cc13xx_cc26xx_sdk_7_10_01_24"
+set(TI_SDK_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../sdk/simplelink_cc13xx_cc26xx_sdk_8_30_01_01"
     CACHE PATH "TI SimpleLink SDK path")
 
 if(NOT EXISTS ${TI_SDK_PATH})
@@ -89,9 +89,12 @@ endif()
 
 # ─── Libraries ───
 
-set(DRIVERLIB_LIB
-    ${TI_SDK_PATH}/source/ti/devices/${DEVICE_SUBFAMILY}/driverlib/bin/gcc/driverlib.lib
+# DriverLib — SDK 8.30 provides source, compile from source
+file(GLOB DRIVERLIB_SOURCES
+    ${TI_SDK_PATH}/source/ti/devices/${DEVICE_SUBFAMILY}/driverlib/*.c
 )
+
+# RF multiMode lib
 set(RF_MULTI_MODE_LIB
     ${TI_SDK_PATH}/source/ti/drivers/rf/lib/gcc/m4f/rf_multiMode_cc13x2.a
 )
@@ -274,12 +277,12 @@ if(USE_TIRTOS)
 
     set(ALL_SOURCES
         ${APP_SOURCES}
+        ${DRIVERLIB_SOURCES}
         ${DRIVER_SOURCES}
         ${RTOS_KERNEL_SOURCES}
         ${RTOS_ASM_SOURCES}
         ${DPL_SOURCES}
-        # POSIX_SOURCES omitted for Phase M1 — added in M2 with BLE stack
-        # ICALL_SOURCES compiled as separate object lib (icall_lib) without ICALL_JT
+        # ICALL compiled as separate object lib (icall_lib) without ICALL_JT
         ${RTOS_STUBS}
         ${SYSCFG_SOURCES}
         ${MAIN_SOURCE}
@@ -304,6 +307,7 @@ else()
 
     set(ALL_SOURCES
         ${APP_SOURCES}
+        ${DRIVERLIB_SOURCES}
         ${DRIVER_SOURCES}
         ${DPL_SOURCES}
         ${MAIN_SOURCE}
@@ -352,7 +356,6 @@ endif()
 
 if(USE_TIRTOS)
     target_link_libraries(${CMAKE_PROJECT_NAME}.elf PRIVATE
-        ${DRIVERLIB_LIB}
         ${RF_MULTI_MODE_LIB}
         icall_lib
         -Wl,--whole-archive

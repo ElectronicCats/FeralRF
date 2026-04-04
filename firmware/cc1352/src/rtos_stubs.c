@@ -7,15 +7,18 @@
 #include <stddef.h>
 #include <stdbool.h>
 
-/* OSAL heap callbacks — needed by HeapCallback.c but we don't use OSAL heap */
-void *osalHeapAllocFxn(uint32_t size) { (void)size; return NULL; }
-void osalHeapFreeFxn(void *ptr) { (void)ptr; }
-void osalHeapGetStatsFxn(void *ptr, void *stats) { (void)ptr; (void)stats; }
-bool osalHeapIsBlockingFxn(void) { return false; }
-void osalHeapInitFxn(void) {}
+/* OSAL heap stubs removed — SDK 8.30 provides them in rtos_heaposal.h */
 
 /* POSIX pthread cleanup — needed by Idle list but we don't use pthreads */
 void _pthread_cleanupFxn(void) {}
+
+/* ICall_getMaxMSecs — inline in non-JT, needs stub for JT mode */
+uint32_t ICall_getMaxMSecs(void) { return 0xFFFFFFFFu; }
+
+/* Newlib syscall stubs */
+void _exit(int status) { (void)status; while(1); }
+int _kill(int pid, int sig) { (void)pid; (void)sig; return -1; }
+int _getpid(void) { return 1; }
 
 /* ClockSupport timer struct */
 #include <ti/sysbios/family/arm/cc26xx/Timer.h>

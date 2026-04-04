@@ -19,7 +19,7 @@ class PHY(IntEnum):
 
 
 class Command(IntEnum):
-    """Command IDs"""
+    """Command IDs — only commands with firmware handlers"""
 
     # Configuration
     RADIO_INIT = 0x01
@@ -35,8 +35,6 @@ class Command(IntEnum):
     # RX Operations
     RX_START = 0x10
     RX_STOP = 0x11
-    RX_SET_FILTER = 0x12
-    RX_SET_PROMISCUOUS = 0x13
 
     # TX Operations
     TX_RAW = 0x20
@@ -47,23 +45,7 @@ class Command(IntEnum):
 
     # Jamming
     JAM_CONTINUOUS = 0x30
-    JAM_REACTIVE = 0x31
-    JAM_PATTERN = 0x32
     JAM_STOP = 0x33
-
-    # Spectrum Analysis
-    SPECTRUM_SCAN = 0x40
-    SPECTRUM_MONITOR = 0x41
-    SPECTRUM_STOP = 0x42
-
-    # Autonomous Policies
-    POLICY_SET = 0x50
-    POLICY_START = 0x51
-    POLICY_STOP = 0x52
-
-    # Bootloader
-    ENTER_BOOTLOADER = 0xF0
-    BOOTLOADER_VERSION = 0xF1
 
 
 class Response(IntEnum):
@@ -72,8 +54,5 @@ class Response(IntEnum):
     ACK = 0x80
     ERROR = 0x81
     RX_PACKET = 0x90
-    SPECTRUM_DATA = 0x91
-    STATUS = 0x92
     STATS = 0x93
     INFO = 0x94
-    JAM_EVENT = 0x95

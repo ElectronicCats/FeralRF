@@ -383,7 +383,8 @@ class Radio:
         """Set BLE advertising TX address from string format.
 
         Args:
-            addr_str: Address like "AA:BB:CC:DD:EE:FF" (MSB first, stored little-endian)
+            addr_str: Address like "AA:BB:CC:DD:EE:FF" (as shown in nRF Connect).
+                      Internally reversed to little-endian for the firmware.
         """
         parts = addr_str.split(":")
         if len(parts) != 6:

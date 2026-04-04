@@ -1,17 +1,15 @@
 """
-FeralRF - Python API for FeralRF/CatSniffer RF tools
+FeralRF - Python API for CatSniffer RF pentesting
 
-This package provides an interface to control the FeralRF firmware
-on CatSniffer hardware for RF operations including sniffing, TX/RX,
-jamming, and spectrum analysis.
+Supports: BLE, IEEE 802.15.4 (Zigbee/Thread), Sub-1GHz, OOK, GFSK/FSK
 """
 
 from feralrf.enums import PHY, Command, Response
-from feralrf.exceptions import ConnectionError, FeralRFError, ProtocolError
+from feralrf.exceptions import CommandError, ConnectionError, FeralRFError, ProtocolError
 from feralrf.presets import PROP_PRESETS
 from feralrf.radio import DeviceStats, Radio
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 __author__ = "Electronic Cats"
 
 __all__ = [
@@ -20,8 +18,9 @@ __all__ = [
     "PHY",
     "Command",
     "Response",
+    "PROP_PRESETS",
     "FeralRFError",
     "ConnectionError",
     "ProtocolError",
-    "PROP_PRESETS",
+    "CommandError",
 ]

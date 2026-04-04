@@ -3,6 +3,9 @@ FeralRF - Proprietary Radio Presets
 
 Pre-configured radio parameters for common protocols and frequencies.
 Use with radio.configure_prop(**PROP_PRESETS['name']).
+
+WARNING: OOK presets (mod_type=2) lock the radio to that frequency.
+Call radio.reset_device() after OOK to use other modes.
 """
 
 PROP_PRESETS = {
@@ -19,6 +22,7 @@ PROP_PRESETS = {
         frequency_hz=433920000, mod_type=0, symbol_rate=50000,
         deviation=100, rx_bw=0x52, sync_word=0x930B51DE,
     ),
+    # OOK presets — WARNING: locks radio, call reset_device() after use
     "ook_433_4k8": dict(
         frequency_hz=433920000, mod_type=2, symbol_rate=4800,
         deviation=0, rx_bw=76, sync_word=0x930B51DE,

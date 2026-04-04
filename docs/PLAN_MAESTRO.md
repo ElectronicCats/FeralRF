@@ -155,81 +155,95 @@ radio.set_phy(PHY.BLE_1M)  # funciona
 
 ---
 
-### FASE 3: Attack Commands — EN PROGRESO
+### FASE 3: BLE Security Testing — EN PROGRESO
 
-**Objetivo:** Metodos Python de alto nivel para ataques RF. Puro Python sobre TX/RX existente, cero firmware.
+#### 3a. BLE Attacks (Python) — COMPLETADO ✅
+| Ataque | Estado | Validado |
+|--------|--------|----------|
+| beacon_flood() | ✅ | Visible en nRF Connect |
+| apple_popup_spam() | ✅ | Payload sin Flags (fix aplicado) |
+| google_popup_spam() | ✅ | Payload sin Flags (fix aplicado) |
+| adv_spoof() | ✅ | MAC configurable via CMD_SET_BLE_ADDR |
+| capture_and_replay() | ✅ | Captura + retransmision |
+| Fast Pair popup | ✅ | Soundcore Boom 2 Model ID 0x8F95F8 validado en telefono real |
+| Device emulation | ✅ | Estable >60s en nRF Connect |
 
-```
-python/feralrf/attacks/
-    __init__.py
-    ble.py          # beacon_flood(), apple_popup_spam(), adv_spoof(), replay()
-    ieee154.py      # beacon_inject(), disassociate(), replay(), pan_conflict()
-    sub1ghz.py      # ook_replay(), ook_capture(), debruijn_brute(), encode_ev1527()
-    recon.py        # channel_survey(), ble_scan(), generic_replay()
-```
+#### 3b. BLE Analysis Tools — COMPLETADO ✅
+| Herramienta | Estado |
+|-------------|--------|
+| demo_ble_analyzer.py | ✅ Analisis completo + export JSON |
+| demo_ble_clone.py | ✅ 6 estrategias interactivas |
+| demo_emulate_soundcore.py | ✅ Popup Fast Pair funcional |
 
-#### 3a. BLE Attacks
-| Ataque | Descripcion | Dificultad | FW change |
-|--------|------------|------------|-----------|
-| beacon_flood | ADV_NONCONN_IND spam con nombres falsos | Facil | No |
-| apple_popup_spam | Manufacturer data Apple/Google Fast Pair | Facil | No |
-| adv_spoof | Clonar advertising de un dispositivo | Medio | MAC configurable (futuro) |
-| adv_channel_jam | Saturar ch 37/38/39 | Facil | No |
+#### 3c. BLE Scanner (firmware) — PENDIENTE
+- CMD_BLE5_SCANNER disponible en SDK pero no implementado
+- Habilitaria SCAN_REQ automatico → captura SCAN_RSP
+- Obtendria: nombre completo, UUIDs extra, mas manufacturer data
+- Esfuerzo: medio (1-2 dias firmware)
 
-#### 3b. IEEE 802.15.4 / Zigbee Attacks
-| Ataque | Descripcion | Dificultad | FW change |
-|--------|------------|------------|-----------|
-| disassociate | MAC disassociation notification (sin keys) | Facil | No |
-| beacon_inject | Beacon con PAN falso | Medio | No |
-| replay | Captura + retransmision | Facil | No |
-| pan_conflict | Beacons con mismo PAN ID del target | Medio | No |
-
-#### 3c. Sub-1GHz / OOK Attacks
-| Ataque | Descripcion | Dificultad | FW change |
-|--------|------------|------------|-----------|
-| ook_capture | Capturar senal OOK raw | Facil | No |
-| ook_replay | Retransmitir senal capturada | Facil | No |
-| debruijn_brute | Fuerza bruta De Bruijn para codigos fijos | Medio | No |
-| encode_ev1527 | Codificar paquetes EV1527/PT2262 | Medio | No |
-
-#### 3d. Reconocimiento
-| Ataque | Descripcion | Dificultad | FW change |
-|--------|------------|------------|-----------|
-| zigbee_channel_survey | Barrer ch 11-26 contando paquetes | Facil | No |
-| generic_replay | Captura+replay universal para cualquier PHY | Facil | No |
-
-#### Demos planeados
-| Demo | Target | Costo | Impacto |
-|------|--------|-------|---------|
-| Apple popup spam | iPhone cerca | $0 | MUY ALTO |
-| BLE beacon flood | Telefono con nRF Connect | $0 | ALTO |
-| OOK replay timbre | Timbre 433 MHz (~$5) | $5 | MUY ALTO |
-| Zigbee disassociation | SONOFF plug (~$10) | $10 | MEDIO |
-
-#### Orden de implementacion
-1. BLE beacon flood + Apple popup (validar API BLE TX)
-2. OOK capture + replay (validar OOK workflow)
-3. IEEE disassociation + replay (validar IEEE TX)
-4. Recon (channel survey)
-5. De Bruijn brute force
-
-#### Mejora firmware futura
-- `CMD_SET_BLE_ADDR` — MAC address configurable para randomizar en flood
-- PDU type seleccionable (ADV_IND, ADV_SCAN_IND)
+#### 3d. BLE GATT Discovery — FUTURO
+- CMD_BLE5_INITIATOR → conexion → GATT service discovery
+- Obtendria: servicios, characteristics, firmware version, battery
+- Esfuerzo: alto (necesita stack BLE LL + ATT + GATT)
 
 ---
 
-### FASE 4: Spectrum Analyzer — PENDIENTE
+### FASE 4: IEEE 802.15.4 Security Testing — PENDIENTE
 
-**Objetivo:** Detector de actividad RF por frecuencia. No es SA real, es RSSI scan.
+**Objetivo:** Ataques completos Zigbee/Thread a nivel MAC (sin encryption keys).
 
-- CMD_GET_RSSI simple en firmware + Python sweep loop
+#### 4a. Attack Module (`attacks/ieee154.py`) — Python puro
+| Ataque | Descripcion | Notas |
+|--------|------------|-------|
+| disassociate() | MAC disassociation notification | Funciona sin keys (MAC layer) |
+| beacon_inject() | Beacon con PAN falso | Atrae devices a red rogue |
+| replay() | Captura + retransmision | Para comandos sin encryption |
+| pan_conflict() | Beacons con mismo PAN ID | Fuerza PAN ID resolution |
+| channel_survey() | Barrer ch 11-26 con conteo | Reconocimiento |
+
+#### 4b. IEEE CRC Control — Firmware simple
+- Cambiar `txOpt.bIncludeCrc = 1` para enviar frames con CRC custom/invalido
+- Esfuerzo: 1 linea de firmware
+
+#### 4c. Tools
+- demo_ieee154_survey.py — survey interactivo de canales Zigbee
+- demo_ieee154_attack.py — disassociation interactivo
+
+---
+
+### FASE 5: Sub-1GHz / OOK Security Testing — PENDIENTE
+
+**Objetivo:** Ataques para dispositivos 433/868 MHz (garajes, sensores, timbres).
+
+#### 5a. Attack Module (`attacks/sub1ghz.py`) — Python puro
+| Ataque | Descripcion | Notas |
+|--------|------------|-------|
+| ook_capture() | Capturar senal OOK raw | Requiere reset_device() despues |
+| ook_replay() | Retransmitir senal capturada | Replay basico |
+| encode_ev1527() | Codificar paquete EV1527 | Fixed code encoder |
+| decode_ev1527() | Decodificar paquete EV1527 | Analisis de captura |
+| encode_pt2262() | Codificar paquete PT2262 | Tri-state encoder |
+| debruijn_brute() | Fuerza bruta De Bruijn | 2^12 codigos en ~2s |
+| freq_scan() | Barrer frecuencias con RSSI proxy | Reconocimiento |
+
+#### 5b. Tools
+- demo_ook_replay.py — captura interactiva → replay
+- demo_ook_bruteforce.py — De Bruijn interactivo
+
+---
+
+### FASE 6: Spectrum / Reconocimiento — PENDIENTE
+
+**Objetivo:** Detector de actividad RF por frecuencia.
+
+- Firmware: CMD_GET_RSSI (0x40) — mide RSSI en cualquier frecuencia
+- Python: radio.get_rssi(freq) + radio.frequency_scan(start, end, step)
+- demo_spectrum.py — visualizacion de actividad
 - Cubre: 433, 868, 915 MHz y 2.4 GHz
-- Complementa SX1262 spectrum (que solo hace LoRa)
 
 ---
 
-### FASE 5: Emulacion de Targets — PENDIENTE
+### FASE 7: Emulacion de Targets — PENDIENTE
 
 **Objetivo:** CatSniffer como dispositivo victima para validar ataques.
 

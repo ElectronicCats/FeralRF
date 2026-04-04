@@ -58,9 +58,11 @@ GOOGLE_DEVICES = {
 
 
 def build_apple_proximity_payload(model: tuple = (0x02, 0x20)) -> bytes:
-    """Build Apple Proximity Pairing payload (triggers iOS popup)."""
+    """Build Apple Proximity Pairing payload (triggers iOS popup).
+
+    NOTE: No Flags AD included — adding Flags breaks popup on some devices.
+    """
     payload = bytearray()
-    payload += bytes([0x02, 0x01, 0x06])  # Flags: LE General Discoverable
     payload += bytes([
         0x1A, 0xFF,             # Manufacturer Specific (26 bytes)
         0x4C, 0x00,             # Apple Company ID
@@ -76,12 +78,15 @@ def build_apple_proximity_payload(model: tuple = (0x02, 0x20)) -> bytes:
 
 
 def build_google_fastpair_payload(model_id: int = 0x2C01A2) -> bytes:
-    """Build Google Fast Pair payload (triggers Android popup)."""
+    """Build Google Fast Pair discoverable payload (triggers Android popup).
+
+    NOTE: No Flags AD included — proven that Flags break the popup trigger.
+    Format matches real device captures: [TX_Power][ServiceData(UUID+ModelID)]
+    """
     payload = bytearray()
-    payload += bytes([0x02, 0x01, 0x06])            # Flags
-    payload += bytes([0x03, 0x03, 0x2C, 0xFE])     # UUID: Fast Pair (0xFE2C)
+    payload += bytes([0x02, 0x0A, 0xF6])            # TX Power: -10 dBm
     model_bytes = model_id.to_bytes(3, "big")
-    payload += bytes([0x06, 0x16, 0x2C, 0xFE])     # Service Data header
+    payload += bytes([len(model_bytes) + 3, 0x16, 0x2C, 0xFE])  # Service Data header
     payload += model_bytes
     return bytes(payload)
 

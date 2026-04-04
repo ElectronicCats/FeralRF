@@ -208,6 +208,13 @@ if(USE_TIRTOS)
         ${TIRTOS7_PATH}/packages/ti/dpl/TaskP_tirtos.c
     )
 
+    # ICall sources (BLE stack messaging)
+    set(ICALL_SOURCES
+        ${TI_SDK_PATH}/source/ti/ble5stack/icall/src/icall.c
+        ${TI_SDK_PATH}/source/ti/ble5stack/icall/src/icall_cc2650.c
+        ${TI_SDK_PATH}/source/ti/ble5stack/icall/app/icall_hci_tl.c
+    )
+
     # POSIX layer
     set(POSIX_SOURCES
         ${TI_SDK_PATH}/source/ti/posix/tirtos/clock.c
@@ -245,6 +252,7 @@ if(USE_TIRTOS)
         ${RTOS_ASM_SOURCES}
         ${DPL_SOURCES}
         # POSIX_SOURCES omitted for Phase M1 — added in M2 with BLE stack
+        ${ICALL_SOURCES}
         ${RTOS_STUBS}
         ${SYSCFG_SOURCES}
         ${MAIN_SOURCE}
@@ -310,6 +318,7 @@ if(USE_TIRTOS)
         -I${TI_SDK_PATH}/source/ti/ble5stack/icall/inc
         -I${TI_SDK_PATH}/source/ti/common/nv
         -I${TI_SDK_PATH}/source/ti/ble5stack/controller/cc26xx/inc
+        -I${TI_SDK_PATH}/source/ti/ble5stack/heapmgr
     )
 endif()
 

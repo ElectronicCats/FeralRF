@@ -35,6 +35,14 @@
 #define SYSCFG
 #endif
 
+/* Fix SDK DeviceFamily.h space-in-path bug for GCC */
+#ifdef DeviceFamily_constructPath
+#undef DeviceFamily_constructPath
+#endif
+#define DeviceFamily_PARENT ti/devices/cc13x2x7_cc26x2x7
+#define DeviceFamily_constructPath_(parent, x) <parent/x>
+#define DeviceFamily_constructPath(x) DeviceFamily_constructPath_(DeviceFamily_PARENT, x)
+
 /* BLE_USER_CFG for ICALL_JT mode */
 #ifndef BLE_USER_CFG
 #define BLE_USER_CFG { &bleStackConfig, &driverTable, &boardConfig, &bleAppServiceInfoTable }

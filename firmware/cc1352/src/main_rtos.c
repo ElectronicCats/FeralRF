@@ -151,15 +151,15 @@ int main(void) {
     /* GPIO init */
     board_gpio_init();
 
-    /* BLE5-Stack timer config */
+    /* BLE5-Stack ICall — disabled until real BLE config is provided (Phase M3).
+     * Enabling with NULL config stubs crashes.
+     */
+#if 0  /* Enable in M3 when ti_ble_config.c compiles */
     user0Cfg.appServiceInfo->timerTickPeriod = Clock_tickPeriod;
     user0Cfg.appServiceInfo->timerMaxMillisecond = ICall_getMaxMSecs();
-
-    /* Initialize ICall — BLE stack message framework */
     ICall_init();
-
-    /* Start BLE stack tasks — Priority 5 */
     ICall_createRemoteTasks();
+#endif
 
     /* Create FeralRF application task — Priority 1 */
     FeralRF_createTask();

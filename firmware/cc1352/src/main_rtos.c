@@ -1,0 +1,138 @@
+/*
+ * FeralRF CC1352 — TI-RTOS Main Entry Point
+ *
+ * Phase M1: TI-RTOS kernel with FeralRF app as RTOS task.
+ * BLE5-Stack will be added in Phase M2.
+ */
+
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+
+/* TI-RTOS */
+#include <ti/sysbios/BIOS.h>
+#include <ti/sysbios/knl/Task.h>
+#include <ti/sysbios/knl/Clock.h>
+#include <ti/sysbios/knl/Event.h>
+
+/* TI Drivers */
+#include <ti/drivers/Power.h>
+#include <ti/drivers/power/PowerCC26XX.h>
+
+/* Device */
+#include <ti/devices/DeviceFamily.h>
+/* clang-format off */
+#include DeviceFamily_constructPath(driverlib/gpio.h)
+#include DeviceFamily_constructPath(driverlib/ioc.h)
+#include DeviceFamily_constructPath(driverlib/prcm.h)
+#include DeviceFamily_constructPath(driverlib/sys_ctrl.h)
+#include DeviceFamily_constructPath(driverlib/vims.h)
+/* clang-format on */
+
+/* FeralRF app */
+#include "command_processor.h"
+#include "config.h"
+#include "control_task.h"
+#include "data_task.h"
+#include "host_if.h"
+#include "host_if_task.h"
+#include "task_event.h"
+
+/* ─── Task Configuration ─── */
+
+#define FERALRF_TASK_PRIORITY   1
+#define FERALRF_TASK_STACK_SIZE 2048
+
+static Task_Struct s_feralrf_task;
+static uint8_t s_feralrf_task_stack[FERALRF_TASK_STACK_SIZE];
+
+/* ─── Board Init ─── */
+
+static void board_power_init(void) {
+    PRCMPowerDomainOn(PRCM_DOMAIN_PERIPH | PRCM_DOMAIN_SERIAL);
+    while (PRCMPowerDomainsAllOn(PRCM_DOMAIN_PERIPH | PRCM_DOMAIN_SERIAL) !=
+           PRCM_DOMAIN_POWER_ON) {
+    }
+    PRCMPeripheralRunEnable(PRCM_PERIPH_GPIO);
+    PRCMPeripheralRunEnable(PRCM_PERIPH_UART0);
+    PRCMLoadSet();
+    while (!PRCMLoadGet()) {
+    }
+}
+
+static void board_gpio_init(void) {
+    IOCPortConfigureSet(LED_PIN, IOC_PORT_GPIO,
+                        IOC_CURRENT_8MA | IOC_STRENGTH_MAX | IOC_NO_IOPULL |
+                            IOC_SLEW_DISABLE | IOC_HYST_DISABLE | IOC_NO_EDGE |
+                            IOC_INT_DISABLE | IOC_IOMODE_NORMAL |
+                            IOC_NO_WAKE_UP | IOC_INPUT_DISABLE);
+    GPIO_setOutputEnableDio(LED_PIN, GPIO_OUTPUT_ENABLE);
+#if LED_ACTIVE_LOW
+    GPIO_setDio(LED_PIN);
+#else
+    GPIO_clearDio(LED_PIN);
+#endif
+}
+
+/* ─── FeralRF App Task ─── */
+
+static void FeralRF_taskFxn(UArg a0, UArg a1) {
+    (void)a0;
+    (void)a1;
+
+    /* Initialize subsystems (same as NoRTOS main) */
+    HostIF_init();
+    TaskEvent_init();
+    ControlTask_init();
+    CommandProcessor_init();
+    DataTask_init();
+    HostIFTask_init();
+
+    /* Main loop — same polling as before, but inside RTOS task.
+     * In Phase M2 this will become Event_pend based. */
+    while (1) {
+        HostIFTask_poll();
+        DataTask_poll();
+
+        /* LED blink via RTOS Clock instead of SysTick (added in M2) */
+        GPIO_toggleDio(LED_PIN);
+        Task_sleep(LED_BLINK_MS * (1000 / Clock_tickPeriod));
+    }
+}
+
+static void FeralRF_createTask(void) {
+    Task_Params taskParams;
+    Task_Params_init(&taskParams);
+    taskParams.stack = s_feralrf_task_stack;
+    taskParams.stackSize = FERALRF_TASK_STACK_SIZE;
+    taskParams.priority = FERALRF_TASK_PRIORITY;
+    Task_construct(&s_feralrf_task, FeralRF_taskFxn, &taskParams, NULL);
+}
+
+/* ─── Main ─── */
+
+int main(void) {
+    /* Board init */
+    board_power_init();
+    Power_init();
+
+    /* Enable instruction cache */
+    VIMSConfigure(VIMS_BASE, TRUE, TRUE);
+    VIMSModeSet(VIMS_BASE, VIMS_MODE_ENABLED);
+
+#if !defined(POWER_SAVING)
+    Power_setConstraint(PowerCC26XX_SB_DISALLOW);
+    Power_setConstraint(PowerCC26XX_IDLE_PD_DISALLOW);
+#endif
+
+    /* GPIO init */
+    board_gpio_init();
+
+    /* Create FeralRF application task */
+    FeralRF_createTask();
+
+    /* Start TI-RTOS kernel — never returns */
+    BIOS_start();
+
+    return 0;
+}

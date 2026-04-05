@@ -67,17 +67,7 @@ if(USE_TIRTOS)
         ${TIRTOS7_PATH}/packages
         ${TI_SDK_PATH}/kernel/tirtos7/packages/ti/dpl
         ${TI_SDK_PATH}/source/ti/posix/tirtos
-        # BLE5-Stack includes
-        ${TI_SDK_PATH}/source/ti/ble5stack/inc
-        ${TI_SDK_PATH}/source/ti/ble5stack/common/cc26xx
-        ${TI_SDK_PATH}/source/ti/ble5stack/icall/inc
-        ${TI_SDK_PATH}/source/ti/ble5stack/icall/src/inc
-        ${TI_SDK_PATH}/source/ti/ble5stack/osal/src/inc
-        ${TI_SDK_PATH}/source/ti/ble5stack/hal/src/inc
-        ${TI_SDK_PATH}/source/ti/ble5stack/hal/src/target/_common
-        ${TI_SDK_PATH}/source/ti/ble5stack/common/cc26xx/npi/stack
-        ${TI_SDK_PATH}/source/ti/common/nv
-        ${TI_SDK_PATH}/source/ti/ble5stack/rom
+        # BLE5-Stack includes — added back in Fase 0.6 (GATT)
     )
 else()
     list(APPEND SDK_INCLUDE_DIRS
@@ -94,51 +84,31 @@ file(GLOB DRIVERLIB_SOURCES
     ${TI_SDK_PATH}/source/ti/devices/${DEVICE_SUBFAMILY}/driverlib/*.c
 )
 
-# RF driver — precompiled lib (source compilation has RF_runCmd hang issue)
+# RF driver — needed from Fase 0.1 onwards
 set(RF_DRIVER_LIB
     ${TI_SDK_PATH}/source/ti/drivers/rf/lib/gcc/m4f/rf_multiMode_cc13x2.a
 )
 
-# BLE5-Stack libraries (Phase M2)
-set(BLE5_LIBS_DIR ${TI_SDK_PATH}/source/ti/ble5stack/libraries/cc1352p)
-set(BLE5_ROM_LIB ${TI_SDK_PATH}/source/ti/ble5stack/rom/enc_lib/cc26xx_ecc_rom_api.a)
-
-# ─── Application sources (common to both RTOS modes) ───
+# ─── Application sources ───
+# Fase 0.0: skeleton — no radio, no control_task, no data_task
 
 set(APP_SOURCES
     ccfg.c
     src/command_processor.c
-    src/control_task.c
-    src/data_task.c
     src/host_if.c
     src/host_if_task.c
-    src/ll_manager.c
     src/output_if.c
     src/packet_queue.c
-    src/phy_manager.c
     src/protocol.c
-    src/radio_if.c
-    src/smartrf_ble5_0.c
-    src/smartrf_ieee_15_4_0.c
-    src/smartrf_prop_0.c
-    src/ti_rf_config_min.c
     src/task_event.c
 )
 
 # ─── TI Driver sources (common) ───
 
-# RF patches needed by SmartRF configs
-set(RF_PATCH_SOURCES
-    ${TI_SDK_PATH}/source/ti/devices/${DEVICE_SUBFAMILY}/rf_patches/rf_patch_cpe_bt5.c
-    ${TI_SDK_PATH}/source/ti/devices/${DEVICE_SUBFAMILY}/rf_patches/rf_patch_mce_bt5.c
-    ${TI_SDK_PATH}/source/ti/devices/${DEVICE_SUBFAMILY}/rf_patches/rf_patch_cpe_multi_protocol.c
-    ${TI_SDK_PATH}/source/ti/devices/${DEVICE_SUBFAMILY}/rf_patches/rf_patch_cpe_prop.c
-    ${TI_SDK_PATH}/source/ti/devices/${DEVICE_SUBFAMILY}/rf_patches/rf_patch_mce_genook.c
-    ${TI_SDK_PATH}/source/ti/devices/${DEVICE_SUBFAMILY}/rf_patches/rf_patch_rfe_genook.c
-)
+# RF patches — added back in Fase 0.1
+set(RF_PATCH_SOURCES "")
 
 set(DRIVER_SOURCES
-    ${RF_PATCH_SOURCES}
     ${TI_SDK_PATH}/source/ti/drivers/ITM.c
     ${TI_SDK_PATH}/source/ti/drivers/Temperature.c
     ${TI_SDK_PATH}/source/ti/drivers/utils/List.c
@@ -222,39 +192,7 @@ if(USE_TIRTOS)
         ${TIRTOS7_PATH}/packages/ti/dpl/TaskP_tirtos.c
     )
 
-    # ICall: compiled from SDK source but WITHOUT ICALL_JT
-    # These files are compiled as a separate static lib to avoid ICALL_JT conflict
-    add_library(icall_lib OBJECT
-        ${TI_SDK_PATH}/source/ti/ble5stack/icall/src/icall.c
-        ${TI_SDK_PATH}/source/ti/ble5stack/icall/src/icall_cc2650.c
-    )
-    target_include_directories(icall_lib PRIVATE
-        ${SDK_INCLUDE_DIRS}
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
-        ${CMAKE_CURRENT_SOURCE_DIR}/syscfg
-    )
-    target_compile_definitions(icall_lib PRIVATE
-        ${DEVICE_FAMILY_DEFINE}
-        xdc_runtime_Log_DISABLE_ALL=1
-        CC13XX
-        CC13X2P
-        SYSCFG
-        # NO ICALL_JT here — icall.c implements the non-JT functions
-    )
-    target_compile_options(icall_lib PRIVATE
-        -mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16
-        -Wall -std=c11 -ffunction-sections -fdata-sections -g -O0
-        -include ${CMAKE_CURRENT_SOURCE_DIR}/syscfg/ti_sysbios_config.h
-        -isystem ${TI_SDK_PATH}/source/ti/posix/gcc
-        -I${TI_SDK_PATH}/source/ti/ble5stack/hal/src/inc
-        -I${TI_SDK_PATH}/source/ti/ble5stack/hal/src/target/_common
-        -I${TI_SDK_PATH}/source/ti/ble5stack/icall/src/inc
-        -I${TI_SDK_PATH}/source/ti/ble5stack/icall/inc
-        -I${TI_SDK_PATH}/source/ti/common/nv
-        -I${TI_SDK_PATH}/source/ti/ble5stack/controller/cc26xx/inc
-        -I${TI_SDK_PATH}/source/ti/ble5stack/heapmgr
-    )
-    set(ICALL_SOURCES "")
+    # ICall + BLE5-Stack — added back in Fase 0.6 (GATT)
 
     # POSIX layer
     set(POSIX_SOURCES
@@ -280,7 +218,6 @@ if(USE_TIRTOS)
     # SysConfig generated files
     set(SYSCFG_SOURCES
         syscfg/ti_sysbios_config.c
-        syscfg/ti_ble_config.c
     )
 
     set(RTOS_STUBS src/rtos_stubs.c)
@@ -293,7 +230,6 @@ if(USE_TIRTOS)
         ${RTOS_KERNEL_SOURCES}
         ${RTOS_ASM_SOURCES}
         ${DPL_SOURCES}
-        # ICALL compiled as separate object lib (icall_lib) without ICALL_JT
         ${RTOS_STUBS}
         ${SYSCFG_SOURCES}
         ${MAIN_SOURCE}
@@ -345,35 +281,17 @@ target_compile_definitions(${CMAKE_PROJECT_NAME}.elf PRIVATE
 if(USE_TIRTOS)
     target_compile_definitions(${CMAKE_PROJECT_NAME}.elf PRIVATE
         xdc_runtime_Log_DISABLE_ALL=1
-        ICALL_JT
-        ICALL_LITE
-        CC13XX
-        CC13X2P
-        SYSCFG
     )
-    # Force-include RTOS config + BLE include paths
+    # Force-include RTOS config
     target_compile_options(${CMAKE_PROJECT_NAME}.elf PRIVATE
         $<$<COMPILE_LANGUAGE:C>:-include${CMAKE_CURRENT_SOURCE_DIR}/syscfg/ti_sysbios_config.h>
-        -I${TI_SDK_PATH}/source/ti/ble5stack/hal/src/inc
-        -I${TI_SDK_PATH}/source/ti/ble5stack/hal/src/target/_common
-        -I${TI_SDK_PATH}/source/ti/ble5stack/icall/src/inc
-        -I${TI_SDK_PATH}/source/ti/ble5stack/icall/inc
-        -I${TI_SDK_PATH}/source/ti/common/nv
-        -I${TI_SDK_PATH}/source/ti/ble5stack/controller/cc26xx/inc
-        -I${TI_SDK_PATH}/source/ti/ble5stack/heapmgr
         -isystem ${TI_SDK_PATH}/source/ti/posix/gcc
     )
 endif()
 
 if(USE_TIRTOS)
+    # Fase 0.0: no RF driver, no BLE5 libs — just TI-RTOS kernel
     target_link_libraries(${CMAKE_PROJECT_NAME}.elf PRIVATE
-        ${RF_DRIVER_LIB}
-        icall_lib
-        -Wl,--whole-archive
-        ${BLE5_LIBS_DIR}/OneLib.a
-        ${BLE5_LIBS_DIR}/StackWrapper.a
-        -Wl,--no-whole-archive
-        ${BLE5_ROM_LIB}
     )
 else()
     target_link_libraries(${CMAKE_PROJECT_NAME}.elf PRIVATE

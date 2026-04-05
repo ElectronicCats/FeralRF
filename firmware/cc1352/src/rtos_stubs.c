@@ -1,41 +1,68 @@
 /*
- * FeralRF — Stubs for TI-RTOS symbols not needed in Phase M1.
- * These will be replaced by real implementations when BLE5-Stack is added (M2).
+ * FeralRF — Stubs for TI-RTOS symbols
+ *
+ * Fase 0.0: minimal stubs for kernel + power driver
  */
 
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
 
-/* OSAL heap stubs removed — SDK 8.30 provides them in rtos_heaposal.h */
+/* ─── Power driver config (required by PowerCC26X2.c) ─── */
 
-/* POSIX pthread cleanup — needed by Idle list but we don't use pthreads */
+#include <ti/drivers/Power.h>
+#include <ti/drivers/power/PowerCC26X2.h>
+#include <ti/drivers/temperature/TemperatureCC26X2.h>
+
+const PowerCC26X2_Config PowerCC26X2_config = {
+    .policyInitFxn = NULL,
+    .policyFxn = NULL,
+    .calibrateFxn = &PowerCC26XX_calibrate,
+    .enablePolicy = false,
+    .calibrateRCOSC_LF = true,
+    .calibrateRCOSC_HF = true,
+    .enableTCXOFxn = NULL,
+};
+
+const TemperatureCC26X2_Config TemperatureCC26X2_config = {
+    .intPriority = (uint8_t)~0,
+};
+
+/* ─── OSAL heap stubs (required by HeapCallback.c) ─── */
+
+void *osalHeapAllocFxn(void *heap, size_t size, size_t alignment) {
+    (void)heap; (void)size; (void)alignment;
+    return NULL;
+}
+
+void osalHeapFreeFxn(void *heap, void *ptr, size_t size) {
+    (void)heap; (void)ptr; (void)size;
+}
+
+void osalHeapGetStatsFxn(void *heap, void *stats) {
+    (void)heap; (void)stats;
+}
+
+bool osalHeapIsBlockingFxn(void *heap) {
+    (void)heap;
+    return false;
+}
+
+void osalHeapInitFxn(void *heap, void *buf, size_t size) {
+    (void)heap; (void)buf; (void)size;
+}
+
+/* ─── POSIX pthread cleanup ─── */
+
 void _pthread_cleanupFxn(void) {}
 
-/* ICall_getMaxMSecs — inline in non-JT, needs stub for JT mode */
-uint32_t ICall_getMaxMSecs(void) { return 0xFFFFFFFFu; }
+/* ─── Newlib syscall stubs ─── */
 
-/* Newlib syscall stubs */
 void _exit(int status) { (void)status; while(1); }
 int _kill(int pid, int sig) { (void)pid; (void)sig; return -1; }
 int _getpid(void) { return 1; }
 
-/* ClockSupport timer struct */
+/* ─── ClockSupport timer struct ─── */
+
 #include <ti/sysbios/family/arm/cc26xx/Timer.h>
 Timer_Struct ClockSupport_timerStruct;
-
-/* BLE user config stubs — replaced when ti_ble_config.c compiles
- * (currently blocked by SDK header space-in-path bug) */
-const void *bleStackConfig = NULL;
-const void *driverTable = NULL;
-const void *boardConfig = NULL;
-
-typedef struct {
-    uint32_t timerTickPeriod;
-    uint32_t timerMaxMillisecond;
-    const void *assertCback;
-    const void *icallServiceTbl;
-} applicationService_stub_t;
-
-static applicationService_stub_t s_bleAppServiceInfo = {0, 0, NULL, NULL};
-void *bleAppServiceInfoTable = &s_bleAppServiceInfo;

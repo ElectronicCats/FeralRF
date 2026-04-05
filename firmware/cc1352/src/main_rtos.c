@@ -1,12 +1,8 @@
 /*
  * FeralRF CC1352 — TI-RTOS Main Entry Point
  *
- * Sniffle-style architecture:
- * - Single RF task that blocks on RF_runCmd(RX) with callback
- * - UART polling happens between RF_runCmd calls
- * - When a command arrives, RF_cancelCmd stops RX, command is processed,
- *   then RX restarts
- * - RF_open happens ONCE at boot and the handle stays open forever
+ * Fase 0.0: Skeleton — LED blink + UART COBS
+ * Single task, no radio. Validates TI-RTOS kernel + UART path.
  */
 
 #include <stdbool.h>
@@ -15,8 +11,6 @@
 
 /* TI-RTOS */
 #include <ti/sysbios/BIOS.h>
-#include <ti/sysbios/knl/Clock.h>
-#include <ti/sysbios/knl/Semaphore.h>
 #include <ti/sysbios/knl/Task.h>
 
 /* TI Drivers */
@@ -29,31 +23,15 @@
 #include DeviceFamily_constructPath(driverlib/gpio.h)
 #include DeviceFamily_constructPath(driverlib/ioc.h)
 #include DeviceFamily_constructPath(driverlib/prcm.h)
-#include DeviceFamily_constructPath(driverlib/sys_ctrl.h)
 #include DeviceFamily_constructPath(driverlib/vims.h)
 /* clang-format on */
-
-/* BLE5-Stack (Phase M3) */
-#define ICALL_JT
-#define ICALL_LITE
-#define CC13XX
-#define CC13X2P
-#define SYSCFG
-#include "ble_user_config.h"
 
 /* FeralRF app */
 #include "command_processor.h"
 #include "config.h"
-#include "control_task.h"
-#include "data_task.h"
 #include "host_if.h"
 #include "host_if_task.h"
 #include "task_event.h"
-
-/* ─── BLE User Config ─── */
-#ifndef USE_DEFAULT_USER_CFG
-icall_userCfg_t user0Cfg = BLE_USER_CFG;
-#endif
 
 /* ─── Task Configuration ─── */
 
@@ -62,14 +40,6 @@ icall_userCfg_t user0Cfg = BLE_USER_CFG;
 
 static Task_Struct s_main_task;
 static uint8_t s_main_task_stack[MAIN_TASK_STACK_SIZE];
-
-/* Semaphore for RF callback → main task notification */
-Semaphore_Struct s_rf_sem_struct;
-Semaphore_Handle g_rf_semaphore = NULL;
-
-/* Unused but kept for compatibility (tx-done semaphore) */
-Semaphore_Struct s_tx_done_sem_struct;
-Semaphore_Handle g_tx_done_semaphore = NULL;
 
 /* ─── Board Init ─── */
 
@@ -99,33 +69,25 @@ static void board_gpio_init(void) {
 #endif
 }
 
-/* ─── Main Task: everything in one task (Sniffle pattern) ─── */
+/* ─── Main Task ─── */
 
 static void MainTask_taskFxn(UArg a0, UArg a1) {
     (void)a0;
     (void)a1;
 
-    /* Initialize ALL subsystems */
+    /* Initialize subsystems */
     HostIF_init();
     TaskEvent_init();
-    ControlTask_init();
     CommandProcessor_init();
     HostIFTask_init();
-    DataTask_init();
 
-    /* Main loop: UART polling + RF event processing.
-     * Like Sniffle, everything happens in one task context.
-     * RF_runCmd/RF_postCmd/RF_pendCmd all work here because
-     * RF SWIs run at higher priority and can preempt. */
+    /* Main loop: UART polling + LED blink */
     uint32_t led_counter = 0;
     while (1) {
-        /* 1. Poll UART — read bytes, parse commands, send responses */
+        /* Poll UART — read bytes, parse commands, send responses */
         HostIFTask_poll();
 
-        /* 2. Process RF events — drain RX packets, handle deferred ops */
-        DataTask_poll();
-
-        /* 3. LED blink */
+        /* LED blink */
         led_counter++;
         if (led_counter >= 50000u) {
             led_counter = 0;
@@ -152,25 +114,6 @@ int main(void) {
 #endif
 
     board_gpio_init();
-
-    /* Create RF semaphore */
-    Semaphore_Params semParams;
-    Semaphore_Params_init(&semParams);
-    semParams.mode = Semaphore_Mode_COUNTING;
-    g_rf_semaphore = Semaphore_construct(&s_rf_sem_struct, 0, &semParams);
-
-    /* TX-done semaphore (unused for now but kept for forward compat) */
-    Semaphore_Params_init(&semParams);
-    semParams.mode = Semaphore_Mode_BINARY;
-    g_tx_done_semaphore = Semaphore_construct(&s_tx_done_sem_struct, 0, &semParams);
-
-    /* BLE5-Stack ICall — disabled until Phase M3 */
-#if 0
-    user0Cfg.appServiceInfo->timerTickPeriod = Clock_tickPeriod;
-    user0Cfg.appServiceInfo->timerMaxMillisecond = ICall_getMaxMSecs();
-    ICall_init();
-    ICall_createRemoteTasks();
-#endif
 
     /* Create single main task (Sniffle uses priority 3) */
     Task_Params_init(&taskParams);

@@ -70,12 +70,28 @@ static void send_info(uint8_t seq) {
     send_response(RSP_INFO, seq, payload, sizeof(payload));
 }
 
+static void write_u32_le(uint8_t *p, uint32_t v) {
+    p[0] = (uint8_t)(v & 0xFFu);
+    p[1] = (uint8_t)((v >> 8) & 0xFFu);
+    p[2] = (uint8_t)((v >> 16) & 0xFFu);
+    p[3] = (uint8_t)((v >> 24) & 0xFFu);
+}
+
 static void send_stats(uint8_t seq) {
-    /* Fase 0.0: no radio, return all zeros */
+    /* BLE RX test: report debug counters */
+    extern volatile uint32_t g_ble_rx_callback_count;
+    extern volatile uint32_t g_ble_rx_entry_done;
+    extern volatile uint32_t g_ble_rx_cmd_status;
+    extern volatile uint32_t g_rf_open_result;
+
     uint8_t payload[36];
     for (uint16_t i = 0; i < sizeof(payload); i++) {
         payload[i] = 0;
     }
+    write_u32_le(&payload[0], g_ble_rx_entry_done);       /* rx_ok = packets received */
+    write_u32_le(&payload[4], g_ble_rx_callback_count);    /* rx_crc_err = total callbacks */
+    write_u32_le(&payload[8], g_ble_rx_cmd_status);        /* rx_drop = cmd status */
+    write_u32_le(&payload[12], g_rf_open_result);          /* rx_overflow = RF_open result */
     send_response(RSP_STATS, seq, payload, sizeof(payload));
 }
 

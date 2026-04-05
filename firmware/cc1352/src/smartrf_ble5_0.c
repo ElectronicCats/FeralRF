@@ -1,7 +1,7 @@
 /*
- * BLE5 SmartRF settings for CC1352P7 — SDK 8.30.01.01 compatible.
- * Based on wero's justworks_scanner SysConfig output (SmartRF Studio 2.32.0).
- * Uses rf_patch_cpe_bt5 + rf_patch_mce_bt5 (not multi_protocol).
+ * BLE5 SmartRF settings for CC1352P7 — SDK 8.30.01.01
+ * Overrides from SysConfig (SmartRF Studio 2.32.0) for LP_CC1352P7_1 HPA.
+ * RF_Mode from Sniffle SysConfig output: bt5 CPE patch, no MCE/RFE.
  */
 
 #include "smartrf_ble5_0.h"
@@ -9,74 +9,75 @@
 #include <ti/devices/DeviceFamily.h>
 /* clang-format off */
 #include DeviceFamily_constructPath(rf_patches/rf_patch_cpe_bt5.h)
-#include DeviceFamily_constructPath(rf_patches/rf_patch_mce_bt5.h)
 #include DeviceFamily_constructPath(rf_patches/rf_patch_cpe_multi_protocol.h)
 /* clang-format on */
 
-/* BLE stack overrides — only if BLE stack is linked */
-#ifdef ICALL_JT
-#include <ti/ble5stack/icall/inc/ble_overrides.h>
-#endif
-
+/* Sniffle + SysConfig: bt5 CPE patch, no MCE/RFE */
 RF_Mode Ble5_0_mode = {
     .rfMode = RF_MODE_AUTO,
-    .cpePatchFxn = &rf_patch_cpe_multi_protocol,
+    .cpePatchFxn = &rf_patch_cpe_bt5,
     .mcePatchFxn = 0,
     .rfePatchFxn = 0,
 };
 
-/* Overrides — CatSniffer reference (proven working for GENERIC_RX) */
+/* === Overrides from SysConfig LP_CC1352P7_1 HPA (SDK 8.30) === */
+
 uint32_t Ble5_0_pOverridesCommon[] = {
-    /* Reconfigure pilot tone length */
-    HW_REG_OVERRIDE(0x6024, 0x4C20),
-    /* Compensate for modified pilot tone length */
-    (uint32_t)0x01500263,
-    /* Default to no CTE */
-    HW_REG_OVERRIDE(0x5328, 0x0000),
-    /* Support for BLE 4.2 Data Length Extension */
-    (uint32_t)0x00FF8A53,
+    (uint32_t)0x00F388D3,                /* IPEAK=3, DCDC dither off */
+    (uint32_t)0x00058683,                /* Synth mid code cal 5us */
+    HW32_ARRAY_OVERRIDE(0x4004, 0x0001),
+    (uint32_t)0x38183C30,
+    HW_REG_OVERRIDE(0x5328, 0x0000),     /* No CTE */
+    HW_REG_OVERRIDE(0x4064, 0x003C),     /* Fine code = 60 */
+    (uint32_t)0x00950803,                /* DTX threshold 1M */
+    (uint32_t)0x012A0823,                /* DTX threshold 2M */
+    (uint32_t)0x00E787E3,                /* DTX gain -5% 1M */
+    (uint32_t)0x00F487F3,                /* DTX gain -2.5% 2M */
+    HW32_ARRAY_OVERRIDE(0x4020, 0x0001),
+    (uint32_t)0x41005F00,
+    (uint32_t)0xC0040141,
+    (uint32_t)0x0007DD44,
+    HW_REG_OVERRIDE(0x6024, 0x5B20),     /* Pilot tone 35us */
+    (uint32_t)0x01640263,                /* Compensate pilot */
+    (uint32_t)0x000188A3,                /* RSSI offset -1dB */
+    (uint32_t)0x00FF8A53,                /* Max RX len=255 (Sniffle) */
     (uint32_t)0xFFFFFFFF,
 };
 
 uint32_t Ble5_0_pOverrides1Mbps[] = {
-    /* Reconfigure pilot tone length */
-    HW_REG_OVERRIDE(0x5320, 0x05A0),
-    /* Compensate for modified pilot tone length */
-    (uint32_t)0x017B02A3,
-    /* AGC tuning */
-    HW_REG_OVERRIDE(0x6098, 0x25F8),
-    HW_REG_OVERRIDE(0x60A0, 0x0026),
+    HW_REG_OVERRIDE(0x5320, 0x0690),     /* Pilot tone 35us */
+    (uint32_t)0x018F02A3,                /* Compensate pilot */
+    HW_REG_OVERRIDE(0x50D4, 0x00F9),     /* Symbol tracking */
+    HW_REG_OVERRIDE(0x50E0, 0x0087),
+    HW_REG_OVERRIDE(0x50F8, 0x0014),
     (uint32_t)0xFFFFFFFF,
 };
 
 uint32_t Ble5_0_pOverrides2Mbps[] = {
-    HW_REG_OVERRIDE(0x5320, 0x05A0),
-    (uint32_t)0x011902A3,
+    HW_REG_OVERRIDE(0x60A4, 0x7D00),     /* AGC delay 2M */
+    HW_REG_OVERRIDE(0x5320, 0x0690),
+    (uint32_t)0x012D02A3,
+    HW_REG_OVERRIDE(0x50D4, 0x00F9),
+    HW_REG_OVERRIDE(0x50E0, 0x0087),
+    HW_REG_OVERRIDE(0x50F8, 0x0014),
     (uint32_t)0xFFFFFFFF,
 };
 
 uint32_t Ble5_0_pOverridesCoded[] = {
-    HW_REG_OVERRIDE(0x5320, 0x05A0),
-    (uint32_t)0x07D102A3,
+    HW_REG_OVERRIDE(0x5320, 0x0690),
+    (uint32_t)0x07E502A3,
+    HW_REG_OVERRIDE(0x609C, 0x0021),
     (uint32_t)0xFFFFFFFF,
 };
 
-/* TX power table — 2400 MHz, 5 dBm PA (from wero's SysConfig) */
+/* TX power table — 2400 MHz, 5 dBm PA */
 static RF_TxPowerTable_Entry s_txPowerTable_2400[] = {
     {-20, RF_TxPowerTable_DEFAULT_PA_ENTRY(8, 3, 0, 2)},
-    {-18, RF_TxPowerTable_DEFAULT_PA_ENTRY(10, 3, 0, 2)},
     {-15, RF_TxPowerTable_DEFAULT_PA_ENTRY(13, 3, 0, 3)},
-    {-12, RF_TxPowerTable_DEFAULT_PA_ENTRY(16, 3, 0, 5)},
     {-10, RF_TxPowerTable_DEFAULT_PA_ENTRY(19, 3, 0, 5)},
-    {-9, RF_TxPowerTable_DEFAULT_PA_ENTRY(20, 3, 0, 6)},
-    {-6, RF_TxPowerTable_DEFAULT_PA_ENTRY(19, 2, 0, 11)},
     {-5, RF_TxPowerTable_DEFAULT_PA_ENTRY(21, 2, 0, 11)},
-    {-3, RF_TxPowerTable_DEFAULT_PA_ENTRY(25, 2, 0, 12)},
     {0, RF_TxPowerTable_DEFAULT_PA_ENTRY(29, 1, 0, 22)},
-    {1, RF_TxPowerTable_DEFAULT_PA_ENTRY(33, 1, 0, 25)},
-    {2, RF_TxPowerTable_DEFAULT_PA_ENTRY(38, 1, 0, 31)},
     {3, RF_TxPowerTable_DEFAULT_PA_ENTRY(47, 1, 0, 36)},
-    {4, RF_TxPowerTable_DEFAULT_PA_ENTRY(32, 0, 0, 65)},
     {5, RF_TxPowerTable_DEFAULT_PA_ENTRY(46, 0, 0, 59)},
     RF_TxPowerTable_TERMINATION_ENTRY,
 };
@@ -99,11 +100,14 @@ rfc_CMD_BLE5_RADIO_SETUP_PA_t Ble5_0_cmdBle5RadioSetup = {
     .config.biasMode = 0x1,
     .config.analogCfgMode = 0x0,
     .config.bNoFsPowerUp = 0x0,
+    .config.bSynthNarrowBand = 0x0,
     .txPower = 0x762E,
     .pRegOverrideCommon = Ble5_0_pOverridesCommon,
     .pRegOverride1Mbps = Ble5_0_pOverrides1Mbps,
     .pRegOverride2Mbps = Ble5_0_pOverrides2Mbps,
     .pRegOverrideCoded = Ble5_0_pOverridesCoded,
+    .pRegOverrideTxStd = 0,
+    .pRegOverrideTx20 = 0,
 };
 
 rfc_CMD_FS_t Ble5_0_cmdFs = {
@@ -117,9 +121,9 @@ rfc_CMD_FS_t Ble5_0_cmdFs = {
     .startTrigger.pastTrig = 0x0,
     .condition.rule = 0x1,
     .condition.nSkip = 0x0,
-    .frequency = 0x0962,
+    .frequency = 0x0962,    /* 2402 MHz (ch37) */
     .fractFreq = 0x0000,
-    .synthConf.bTxMode = 0x1,
+    .synthConf.bTxMode = 0x0, /* RX mode (Sniffle uses 0x0) */
     .synthConf.refFreq = 0x0,
     .__dummy0 = 0x00,
     .__dummy1 = 0x00,
@@ -127,11 +131,14 @@ rfc_CMD_FS_t Ble5_0_cmdFs = {
     .__dummy3 = 0x0000,
 };
 
+/* RX output structure — rfDiagnostics requires non-NULL pOutput */
+static rfc_ble5ScanInitOutput_t s_bleRxOutput;
+
 static rfc_bleGenericRxPar_t s_bleGenericRxPar = {
     .pRxQ = 0,
     .rxConfig.bAutoFlushIgnored = 0x1,
     .rxConfig.bAutoFlushCrcErr = 0x1,
-    .rxConfig.bAutoFlushEmpty = 0x0,
+    .rxConfig.bAutoFlushEmpty = 0x1,
     .rxConfig.bIncludeLenByte = 0x1,
     .rxConfig.bIncludeCrc = 0x0,
     .rxConfig.bAppendRssi = 0x1,
@@ -169,11 +176,12 @@ rfc_CMD_BLE5_GENERIC_RX_t Ble5_0_cmdBle5GenericRx = {
     .rangeDelay = 0x00,
     .txPower = 0x0000,
     .pParams = &s_bleGenericRxPar,
-    .pOutput = 0,
+    .pOutput = &s_bleRxOutput,    /* non-NULL (rfDiagnostics pattern) */
     .tx20Power = 0x00000000,
 };
 
-/* BLE5 Scanner */
+/* === Scanner, ADV commands (for later phases) === */
+
 static uint16_t s_bleScannerDevAddr[3] = {0xDDEE, 0xBBCC, 0xC0AA};
 
 static rfc_ble5ScannerPar_t s_bleScannerPar = {
@@ -247,7 +255,6 @@ rfc_CMD_BLE5_SCANNER_t Ble5_0_cmdBle5Scanner = {
     .tx20Power = 0x00000000,
 };
 
-/* ADV commands */
 static rfc_bleAdvPar_t s_bleAdvPar = {
     .pRxQ = 0,
     .rxConfig.bAutoFlushIgnored = 0x0,
@@ -278,10 +285,8 @@ static rfc_bleAdvPar_t s_bleAdvPar = {
     .endTrigger.bEnaCmd = 0x0,
     .endTrigger.triggerNo = 0x0,
     .endTrigger.pastTrig = 0x0,
-    .endTime = 40000u, /* 10ms at 4MHz RAT — enough for one ADV packet */
+    .endTime = 40000u,
 };
-
-static rfc_bleAdvOutput_t s_bleAdvOutput;
 
 rfc_CMD_BLE_ADV_NC_t Ble5_0_cmdBleAdvNc = {
     .commandNo = CMD_BLE_ADV_NC,

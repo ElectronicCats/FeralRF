@@ -8,25 +8,7 @@
 #include <stddef.h>
 #include <stdbool.h>
 
-/* ─── Power driver config (required by PowerCC26X2.c) ─── */
-
-#include <ti/drivers/Power.h>
-#include <ti/drivers/power/PowerCC26X2.h>
-#include <ti/drivers/temperature/TemperatureCC26X2.h>
-
-const PowerCC26X2_Config PowerCC26X2_config = {
-    .policyInitFxn = NULL,
-    .policyFxn = NULL,
-    .calibrateFxn = &PowerCC26XX_calibrate,
-    .enablePolicy = false,
-    .calibrateRCOSC_LF = true,
-    .calibrateRCOSC_HF = true,
-    .enableTCXOFxn = NULL,
-};
-
-const TemperatureCC26X2_Config TemperatureCC26X2_config = {
-    .intPriority = (uint8_t)~0,
-};
+/* PowerCC26X2_config and TemperatureCC26X2_config now live in ti_rf_config_min.c */
 
 /* ─── OSAL heap stubs (required by HeapCallback.c) ─── */
 

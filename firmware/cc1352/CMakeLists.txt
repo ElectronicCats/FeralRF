@@ -90,7 +90,6 @@ set(RF_DRIVER_LIB
 )
 
 # ─── Application sources ───
-# Fase 0.0: skeleton — no radio, no control_task, no data_task
 
 set(APP_SOURCES
     ccfg.c
@@ -101,12 +100,16 @@ set(APP_SOURCES
     src/packet_queue.c
     src/protocol.c
     src/task_event.c
+    src/smartrf_ble5_0.c
+    src/ti_rf_config_min.c
 )
 
 # ─── TI Driver sources (common) ───
 
-# RF patches — added back in Fase 0.1
-set(RF_PATCH_SOURCES "")
+set(RF_PATCH_SOURCES
+    ${TI_SDK_PATH}/source/ti/devices/${DEVICE_SUBFAMILY}/rf_patches/rf_patch_cpe_bt5.c
+    ${TI_SDK_PATH}/source/ti/devices/${DEVICE_SUBFAMILY}/rf_patches/rf_patch_cpe_multi_protocol.c
+)
 
 set(DRIVER_SOURCES
     ${TI_SDK_PATH}/source/ti/drivers/ITM.c
@@ -285,13 +288,12 @@ if(USE_TIRTOS)
     # Force-include RTOS config
     target_compile_options(${CMAKE_PROJECT_NAME}.elf PRIVATE
         $<$<COMPILE_LANGUAGE:C>:-include${CMAKE_CURRENT_SOURCE_DIR}/syscfg/ti_sysbios_config.h>
-        -isystem ${TI_SDK_PATH}/source/ti/posix/gcc
     )
 endif()
 
 if(USE_TIRTOS)
-    # Fase 0.0: no RF driver, no BLE5 libs — just TI-RTOS kernel
     target_link_libraries(${CMAKE_PROJECT_NAME}.elf PRIVATE
+        ${RF_DRIVER_LIB}
     )
 else()
     target_link_libraries(${CMAKE_PROJECT_NAME}.elf PRIVATE

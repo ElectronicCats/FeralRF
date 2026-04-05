@@ -155,40 +155,46 @@ radio.set_phy(PHY.BLE_1M)  # funciona
 
 ---
 
-### FASE 0-RTOS: Reinicio Firmware TI-RTOS — EN PROGRESO
+### FASE 0-RTOS: Reinicio Firmware TI-RTOS — 5/6 PHYs FUNCIONANDO
 
-**Objetivo**: Reconstruir el firmware CC1352 desde cero con TI-RTOS para habilitar GATT discovery.
+**Objetivo**: Reconstruir el firmware CC1352 con TI-RTOS para habilitar GATT discovery.
 
-**Por que**: BLE5-Stack (GATT) requiere TI-RTOS + ICall. La migracion directa NoRTOS→TI-RTOS fallo por incompatibilidades del RF driver (RF_runCmd/RF_close cuelgan con semaforos internos). Empezamos limpio siguiendo el patron de Sniffle.
+**Rama**: `feature/ti-rtos-migration` | **SDK**: 8.30.01.01 (install completo en ~/ti/)
 
-**Rama**: `feature/ti-rtos-migration` (se descarta codigo anterior de migracion)
+**Arquitectura actual (commit f961d4a)**:
+- Single RF_Object, RF_yield+RF_close+RF_open para PHY switch (patron rfDiagnostics)
+- Two tasks: UART (prio 3) + RF (prio 3) con Task_yield cooperativo
+- Precompiled SDK libs (driverlib.lib, sysbios.a, drivers_cc13x2x7.a)
+- SysConfig-generated configs (ti_sysbios_config, ti_drivers_config)
+- All RF_Modes usan rf_patch_cpe_multi_protocol
+- 72KB firmware
 
-**SDK**: 8.30.01.01 (submodulo en firmware/sdk/)
-
-**Lecciones aprendidas de la migracion fallida**:
-| Regla | Razon |
-|-------|-------|
-| UN solo RF_Object | N_MAX_CLIENTS=2 en RF driver, multiples objetos causan conflictos |
-| RF_open UNA vez, nunca RF_close | RF_close+RF_open crea deadlocks con semaforos TI-RTOS |
-| RF_postCmd para CMD_FS | RF_runCmd para FS cuelga (SemaphoreP_pend forever) |
-| NO CMD_FS para BLE | BLE commands manejan frecuencia internamente (patron Sniffle) |
-| endTrigger=TRIG_NEVER para RX | TRIG_NOW terminaba RX inmediatamente |
-| endTrigger=TRIG_REL_START para TX ADV | TRIG_NEVER en ADV causa RF_runCmd hang |
-| 1 task priority 3 | Patron simple, RF SWIs preemptean al task |
-| RF driver lib precompilada | gcc/m4f/rf_multiMode_cc13x2.a del SDK |
+**Reglas RF (actualizadas 2026-04-05)**:
+| Regla | Patron |
+|-------|--------|
+| Single RF_Object + single RF_Handle | rfDiagnostics pattern |
+| PHY switch: RF_flush + RF_yield + RF_close + RF_open | Funciona con precompiled libs |
+| RF_runCmd para CMD_FS | OK en TI-RTOS con precompiled libs |
+| RF_postCmd para RX continuo | Con callback, event_mask = RxEntryDone |
+| Precompiled SDK libs OBLIGATORIAS | Source-compiled libs causan RF_postCmd IDLE |
+| GPIO_init() requerido | Para antenna switching via SysConfig callback |
+| endTrigger=TRIG_NEVER para RX | TRIG_NOW termina inmediatamente |
+| TRIG_REL_START+10ms para TX ADV | TRIG_NEVER en ADV cuelga |
 
 **Sub-fases**:
-| Fase | Objetivo | Test |
-|------|----------|------|
-| 0.0 | LED + UART (skeleton TI-RTOS) | radio.init() OK, LED parpadea |
-| 0.1 | BLE RX | rx_ok > 0 (BLE ambiental 5s) |
-| 0.2 | BLE TX | TX 20/20, markers OTA recibidos |
-| 0.3 | IEEE 802.15.4 | TX/RX OTA markers |
-| 0.4 | Sub-1GHz + PHY switching | todos los PHYs OTA |
-| 0.5 | Re-integrar attacks + scanner | beacon_flood + scanner funcionales |
-| 0.6 | GATT discovery | servicios de Soundcore Boom 2 leidos |
+| Fase | Objetivo | Estado |
+|------|----------|--------|
+| 0.0 | LED + UART (skeleton TI-RTOS) | ✅ PASS |
+| 0.1 | BLE RX | ✅ PASS (17+ pkts ambiental) |
+| 0.2 | BLE TX/RX OTA | ✅ PASS (20/20 sent, 36 rx) |
+| 0.3 | IEEE 802.15.4 TX/RX OTA | ✅ PASS (5/5) |
+| 0.4 | Sub-1GHz 868 TX/RX OTA | ✅ PASS (5/5) |
+| 0.4b | PHY switching completo | ⚠️ 5/6 (868→BLE falla) |
+| 0.5 | Re-integrar attacks + scanner | PENDIENTE |
+| 0.6 | GATT discovery | PENDIENTE |
 
-**Plan detallado**: ver `/home/sabas/.claude/plans/encapsulated-hatching-otter.md`
+**Issue pendiente**: 868→BLE switch falla (rx=0). Todas las demas transiciones funcionan.
+BLE→IEEE→868→IEEE→868 = todo PASS. Solo la vuelta a BLE desde 868 falla.
 
 ---
 

@@ -18,7 +18,8 @@
 #include <ti/ble5stack/icall/inc/ble_overrides.h>
 #endif
 
-/* Multi-protocol patch: supports BLE + IEEE + Prop mode switching */
+/* Use multi_protocol patch for ALL modes (including BLE).
+ * bt5 patch causes 868→BLE switch failure. multi_protocol works for BLE too. */
 RF_Mode Ble5_0_mode = {
     .rfMode = RF_MODE_AUTO,
     .cpePatchFxn = &rf_patch_cpe_multi_protocol,

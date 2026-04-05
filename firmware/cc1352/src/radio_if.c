@@ -869,6 +869,7 @@ static bool RadioIF_switchRfMode(RF_Mode *mode, RF_RadioSetup *setup) {
     if (s_rf_handle != NULL) {
         RF_flushCmd(s_rf_handle, RF_CMDHANDLE_FLUSH_ALL, 0);
         RF_yield(s_rf_handle);
+        ClockP_usleep(1000); /* 1ms settle after yield */
         RF_close(s_rf_handle);
         s_rf_handle = NULL;
     }

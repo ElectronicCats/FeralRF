@@ -308,8 +308,7 @@ static bool RadioIF_executeTxCommand(RF_Mode *mode, RF_RadioSetup *setup_cmd, RF
 
     /* Close stale session if PHY changed */
     if (s_tx_session_handle != NULL) {
-        RF_close(s_tx_session_handle);
-        s_tx_session_handle = NULL;
+        /* RF_close removed — TI-RTOS */
         s_tx_session_mode = NULL;
     }
 
@@ -327,8 +326,7 @@ static bool RadioIF_executeTxCommand(RF_Mode *mode, RF_RadioSetup *setup_cmd, RF
     result = RF_runCmd(s_tx_session_handle, fs_cmd, RF_PriorityNormal, NULL,
                        RADIO_IF_TX_TERM_EVENTS);
     if ((result & RADIO_IF_TX_SUCCESS_EVENTS) == 0u) {
-        RF_close(s_tx_session_handle);
-        s_tx_session_handle = NULL;
+        /* RF_close removed — TI-RTOS */
         s_tx_session_mode = NULL;
         return false;
     }
@@ -884,6 +882,11 @@ static bool RadioIF_startBleRfBackend(void) {
     RadioIF_applyBlePhyMode(s_selected_phy);
     RadioIF_applyBleChannelConfig((uint8_t)s_channel);
 
+    /* Re-run BLE RadioSetup (needed after IEEE/Prop mode switch) */
+    RF_yield(s_rf_handle);
+    Ble5_0_cmdBle5RadioSetup.status = 0x0000;
+    RF_runCmd(s_rf_handle, (RF_Op *)&Ble5_0_cmdBle5RadioSetup, RF_PriorityNormal, NULL, 0);
+
     if (s_ble_active_scan) {
         /* Active scan: use CMD_BLE5_SCANNER (sends SCAN_REQ, captures SCAN_RSP) */
         Ble5_0_cmdBle5Scanner.pParams->pRxQ = &s_rf_data_queue;
@@ -927,8 +930,7 @@ static bool RadioIF_startBleRfBackend(void) {
     }
 
     if (!RadioIF_runFsAndPostRx()) {
-        RF_close(s_rf_handle);
-        s_rf_handle = NULL;
+        /* RF_close removed — TI-RTOS */
         s_rf_rx_cmd = RF_SCHEDULE_CMD_ERROR;
         s_rf_mode = RADIO_IF_RF_MODE_NONE;
         return false;
@@ -955,7 +957,9 @@ void RadioIF_getScannerStats(uint16_t *tx_req, uint16_t *rx_adv_ok, uint16_t *rx
 }
 
 static bool RadioIF_startIeee154RfBackend(void) {
-    RF_Params rf_params;
+    if (s_rf_handle == NULL) {
+        return false;
+    }
 
     if (!RadioIF_createRfDataQueue(&s_rf_data_queue, s_rf_rx_data_buffer,
                                    (uint16_t)sizeof(s_rf_rx_data_buffer), RF_QUEUE_NUM_DATA_ENTRIES,
@@ -976,18 +980,17 @@ static bool RadioIF_startIeee154RfBackend(void) {
     Ieee154_0_cmdIeeeRx.rxConfig.bAppendSrcInd = 0u;
     Ieee154_0_cmdIeeeRx.rxConfig.bAppendTimestamp = 1u;
 
-    RF_Params_init(&rf_params);
-    s_rf_handle = RF_open(&s_rf_object, &Ieee154_0_mode, (RF_RadioSetup *)&Ieee154_0_cmdRadioSetup,
-                          &rf_params);
-
-    if (s_rf_handle == NULL) {
+    /* Switch to IEEE mode: yield RF Core, then re-run RadioSetup */
+    RF_yield(s_rf_handle);
+    Ieee154_0_cmdRadioSetup.status = 0x0000;
+    RF_EventMask setupResult = RF_runCmd(s_rf_handle, (RF_Op *)&Ieee154_0_cmdRadioSetup,
+                                          RF_PriorityNormal, NULL, 0);
+    if (!(setupResult & RF_EventLastCmdDone)) {
         s_rf_mode = RADIO_IF_RF_MODE_NONE;
         return false;
     }
 
     if (!RadioIF_runFsAndPostRx()) {
-        RF_close(s_rf_handle);
-        s_rf_handle = NULL;
         s_rf_rx_cmd = RF_SCHEDULE_CMD_ERROR;
         s_rf_mode = RADIO_IF_RF_MODE_NONE;
         return false;
@@ -1005,17 +1008,11 @@ static void RadioIF_stopRfBackend(void) {
             RF_cancelCmd(s_rf_handle, s_rf_rx_cmd, 0);
         }
         RF_flushCmd(s_rf_handle, RF_CMDHANDLE_FLUSH_ALL, 0);
+        /* NO RF_close — handle stays open forever in TI-RTOS */
         if (s_prop_ook_active) {
-            /* OOK genook patches corrupt RF Core state on normal close.
-             * Force full power-down: cancel → yield → long delay → close. */
             RF_yield(s_rf_handle);
-            ClockP_usleep(50000); /* 50ms for RF Core full power-down */
+            ClockP_usleep(50000);
         }
-        RF_close(s_rf_handle);
-        if (s_prop_ook_active) {
-            ClockP_usleep(20000); /* 20ms post-close for RF domain reset */
-        }
-        s_rf_handle = NULL;
     }
 
     s_rf_rx_cmd = RF_SCHEDULE_CMD_ERROR;
@@ -1221,7 +1218,9 @@ static void RadioIF_applySub1ghzChannelConfig(uint16_t channel, uint32_t frequen
 }
 
 static bool RadioIF_startSub1ghzRfBackend(void) {
-    RF_Params rf_params;
+    if (s_rf_handle == NULL) {
+        return false;
+    }
 
     if (!RadioIF_createRfDataQueue(&s_rf_data_queue, s_rf_rx_data_buffer,
                                    (uint16_t)sizeof(s_rf_rx_data_buffer), RF_QUEUE_NUM_DATA_ENTRIES,
@@ -1245,18 +1244,17 @@ static bool RadioIF_startSub1ghzRfBackend(void) {
     Prop0_cmdPropRx.rxConf.bAppendStatus = 1u;
     Prop0_cmdPropRx.maxPktLen = 0xFF;
 
-    RF_Params_init(&rf_params);
-    s_rf_handle = RF_open(&s_rf_object, RadioIF_getPropMode(),
-                          (RF_RadioSetup *)&Prop0_cmdPropRadioDivSetup, &rf_params);
-
-    if (s_rf_handle == NULL) {
+    /* Switch to Prop mode: yield RF Core, then re-run RadioSetup */
+    RF_yield(s_rf_handle);
+    Prop0_cmdPropRadioDivSetup.status = 0x0000;
+    RF_EventMask setupResult = RF_runCmd(s_rf_handle, (RF_Op *)&Prop0_cmdPropRadioDivSetup,
+                                          RF_PriorityNormal, NULL, 0);
+    if (!(setupResult & RF_EventLastCmdDone)) {
         s_rf_mode = RADIO_IF_RF_MODE_NONE;
         return false;
     }
 
     if (!RadioIF_runFsAndPostRx()) {
-        RF_close(s_rf_handle);
-        s_rf_handle = NULL;
         s_rf_rx_cmd = RF_SCHEDULE_CMD_ERROR;
         s_rf_mode = RADIO_IF_RF_MODE_NONE;
         return false;
@@ -1382,7 +1380,7 @@ void RadioIF_init(void) {
     RadioIF_resetRxQueue();
     RadioIF_initSyntheticCadence();
 
-    s_rf_handle = NULL;
+    /* Don't NULL the handle — RF_open only once, reuse forever */
     s_rf_rx_cmd = RF_SCHEDULE_CMD_ERROR;
     s_rf_event_flags = 0u;
     s_rf_mode = RADIO_IF_RF_MODE_NONE;
@@ -1400,11 +1398,10 @@ static void RadioIF_closeTxSession(void) {
             RF_yield(s_tx_session_handle);
             ClockP_usleep(50000); /* 50ms for RF Core full power-down */
         }
-        RF_close(s_tx_session_handle);
+        /* RF_close removed — TI-RTOS */
         if (s_prop_ook_active) {
             ClockP_usleep(20000); /* 20ms post-close */
         }
-        s_tx_session_handle = NULL;
         s_tx_session_mode = NULL;
     }
 }
@@ -1918,8 +1915,7 @@ bool RadioIF_startJamSession(uint8_t phy, uint8_t channel, int8_t power_dbm) {
                                            RF_PriorityNormal, NULL,
                                            RADIO_IF_TX_TERM_EVENTS);
         if ((fs_result & RADIO_IF_TX_SUCCESS_EVENTS) == 0u) {
-            RF_close(s_jam_rf_handle);
-            s_jam_rf_handle = NULL;
+            /* RF_close removed — TI-RTOS */
             return false;
         }
     }
@@ -1927,8 +1923,7 @@ bool RadioIF_startJamSession(uint8_t phy, uint8_t channel, int8_t power_dbm) {
     /* Execute first TX to start the jam session */
     tx_ok = RadioIF_executeJamTx(s_jam_rf_handle, phy, channel, power_dbm);
     if (!tx_ok) {
-        RF_close(s_jam_rf_handle);
-        s_jam_rf_handle = NULL;
+        /* RF_close removed — TI-RTOS */
         return false;
     }
 
@@ -1959,8 +1954,7 @@ void RadioIF_stopJamSession(void) {
 
     /* Close RF handle */
     if (s_jam_rf_handle != NULL) {
-        RF_close(s_jam_rf_handle);
-        s_jam_rf_handle = NULL;
+        /* RF_close removed — TI-RTOS */
     }
 
     s_jam_session_active = false;

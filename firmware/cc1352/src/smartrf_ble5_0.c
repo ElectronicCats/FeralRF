@@ -10,6 +10,7 @@
 /* clang-format off */
 #include DeviceFamily_constructPath(rf_patches/rf_patch_cpe_bt5.h)
 #include DeviceFamily_constructPath(rf_patches/rf_patch_mce_bt5.h)
+#include DeviceFamily_constructPath(rf_patches/rf_patch_cpe_multi_protocol.h)
 /* clang-format on */
 
 /* BLE stack overrides — only if BLE stack is linked */
@@ -17,10 +18,11 @@
 #include <ti/ble5stack/icall/inc/ble_overrides.h>
 #endif
 
+/* Multi-protocol patch: supports BLE + IEEE + Prop mode switching */
 RF_Mode Ble5_0_mode = {
     .rfMode = RF_MODE_AUTO,
-    .cpePatchFxn = &rf_patch_cpe_bt5,
-    .mcePatchFxn = &rf_patch_mce_bt5,
+    .cpePatchFxn = &rf_patch_cpe_multi_protocol,
+    .mcePatchFxn = 0,
     .rfePatchFxn = 0,
 };
 

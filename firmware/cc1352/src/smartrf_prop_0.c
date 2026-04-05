@@ -29,43 +29,26 @@ RF_Mode Prop0_modeOok = {
     .rfePatchFxn = &rf_patch_rfe_genook,
 };
 
-/* Overrides for 868 MHz Sub-1GHz prop mode — SDK 8.30 (from fsk_ti_radio_config.c) */
+/* Overrides for 868 MHz Sub-1GHz prop mode */
 uint32_t Prop0_pOverrides[] = {
-    /* Tx: Configure PA ramp time, PACTL2.RC=0x3 */
     ADI_2HALFREG_OVERRIDE(0, 16, 0x8, 0x8, 17, 0x1, 0x1),
-    /* Rx: Set AGC reference level to 0x1A */
     HW_REG_OVERRIDE(0x609C, 0x001A),
-    /* Rx: Set RSSI offset to adjust reported RSSI by -1 dB */
-    (uint32_t)0x000188A3,
-    /* Rx: Set anti-aliasing filter bandwidth to 0xD */
+    (uint32_t)0x000288A3,
     ADI_HALFREG_OVERRIDE(0, 61, 0xF, 0xD),
-    /* Set RF_FSCA.ANADIV.DIV_SEL_BIAS = 1 */
-    (uint32_t)0x4001405D,
-    (uint32_t)0x08141131,
-    /* DC/DC regulator: DITHER_EN=1 and IPEAK=7 */
-    (uint32_t)0x00F788D3,
     (uint32_t)0xFFFFFFFF,
 };
 
 uint32_t Prop0_pOverridesTxStd[] = {
     TX_STD_POWER_OVERRIDE(0x013F),
-    /* ANADIV radio parameter based on LO divider and front end settings */
     (uint32_t)0x11310703,
-    /* Tx: Configure PA ramping wait time */
     HW_REG_OVERRIDE(0x6028, 0x001A),
-    /* Set TXRX pin to 0 in RX and high impedance in idle/TX */
-    HW_REG_OVERRIDE(0x60A8, 0x0401),
     (uint32_t)0xFFFFFFFF,
 };
 
 uint32_t Prop0_pOverridesTx20[] = {
-    TX20_POWER_OVERRIDE(0x001B8ED2),
-    /* ANADIV radio parameter based on LO divider and front end settings */
+    TX20_POWER_OVERRIDE(0x0020AA1B),
     (uint32_t)0x11C10703,
-    /* Tx: Configure PA ramping wait time (high power) */
     HW_REG_OVERRIDE(0x6028, 0x001F),
-    /* Set TXRX pin to 0 in RX/TX and high impedance in idle */
-    HW_REG_OVERRIDE(0x60A8, 0x0001),
     (uint32_t)0xFFFFFFFF,
 };
 

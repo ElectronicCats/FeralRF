@@ -1,48 +1,40 @@
 /*
- * FeralRF — Stubs for TI-RTOS symbols
- *
- * Fase 0.0: minimal stubs for kernel + power driver
+ * FeralRF — Stubs for TI-RTOS symbols not needed in Phase M1.
+ * These will be replaced by real implementations when BLE5-Stack is added (M2).
  */
 
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
 
-/* PowerCC26X2_config and TemperatureCC26X2_config now live in ti_rf_config_min.c */
+/* OSAL heap stubs removed — SDK 8.30 provides them in rtos_heaposal.h */
 
-/* ─── OSAL heap stubs (required by HeapCallback.c) ─── */
+/* _pthread_cleanupFxn now in POSIX unity build (ti_sysbios_config.c) */
 
-void *osalHeapAllocFxn(void *heap, size_t size, size_t alignment) {
-    (void)heap; (void)size; (void)alignment;
-    return NULL;
-}
+/* ICall_getMaxMSecs — inline in non-JT, needs stub for JT mode */
+uint32_t ICall_getMaxMSecs(void) { return 0xFFFFFFFFu; }
 
-void osalHeapFreeFxn(void *heap, void *ptr, size_t size) {
-    (void)heap; (void)ptr; (void)size;
-}
-
-void osalHeapGetStatsFxn(void *heap, void *stats) {
-    (void)heap; (void)stats;
-}
-
-bool osalHeapIsBlockingFxn(void *heap) {
-    (void)heap;
-    return false;
-}
-
-void osalHeapInitFxn(void *heap, void *buf, size_t size) {
-    (void)heap; (void)buf; (void)size;
-}
-
-/* _pthread_cleanupFxn now comes from POSIX unity build in ti_sysbios_config.c */
-
-/* ─── Newlib syscall stubs ─── */
-
+/* Newlib syscall stubs */
 void _exit(int status) { (void)status; while(1); }
 int _kill(int pid, int sig) { (void)pid; (void)sig; return -1; }
 int _getpid(void) { return 1; }
 
-/* ─── ClockSupport timer struct ─── */
-
+/* ClockSupport timer struct */
 #include <ti/sysbios/family/arm/cc26xx/Timer.h>
 Timer_Struct ClockSupport_timerStruct;
+
+/* BLE user config stubs — replaced when ti_ble_config.c compiles
+ * (currently blocked by SDK header space-in-path bug) */
+const void *bleStackConfig = NULL;
+const void *driverTable = NULL;
+const void *boardConfig = NULL;
+
+typedef struct {
+    uint32_t timerTickPeriod;
+    uint32_t timerMaxMillisecond;
+    const void *assertCback;
+    const void *icallServiceTbl;
+} applicationService_stub_t;
+
+static applicationService_stub_t s_bleAppServiceInfo = {0, 0, NULL, NULL};
+void *bleAppServiceInfoTable = &s_bleAppServiceInfo;

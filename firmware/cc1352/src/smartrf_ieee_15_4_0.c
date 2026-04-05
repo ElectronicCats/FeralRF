@@ -1,6 +1,5 @@
 /*
- * IEEE 802.15.4 SmartRF settings for CC1352P7 — SDK 8.30.01.01 compatible.
- * Overrides from cc1352p7_ieee_15_4_pg10/setting_ieee_802_15_4.json.
+ * Minimal IEEE 802.15.4 SmartRF settings adapted from CatSniffer reference.
  */
 
 #include "smartrf_ieee_15_4_0.h"
@@ -18,40 +17,20 @@ RF_Mode Ieee154_0_mode = {
 };
 
 uint32_t Ieee154_0_pOverrides[] = {
-    /* Rx: Set LNA bias current offset to +15 to saturate trim to max */
+    /* Rx: set LNA bias current offset to +15 (reference SmartRF override) */
     (uint32_t)0x000F8883,
-    /* Tx: Set DCDC settings IPEAK=3, dither off */
-    (uint32_t)0x00F388D3,
     (uint32_t)0xFFFFFFFF,
 };
 
 static uint32_t Ieee154_0_pOverridesTxStd[] = {
-    /* TX Standard power override (placeholder, set by RF_TxPowerTable) */
     TX_STD_POWER_OVERRIDE(0x941E),
-    /* ANADIV radio parameter based on LO divider and front end settings */
     (uint32_t)0x05320703,
-    /* IEEE 15.4: Set IPEAK=3 and DCDC dither off for TX */
-    (uint32_t)0x00F388D3,
-    /* Set RTIM offset to default for standard PA */
-    (uint32_t)0x00008783,
-    /* Set synth mux to default value for standard PA */
-    (uint32_t)0x050206C3,
-    /* Set TXRX pin to 0 in RX and high impedance in idle/TX */
-    HW_REG_OVERRIDE(0x60A8, 0x0401),
     (uint32_t)0xFFFFFFFF,
 };
 
 static uint32_t Ieee154_0_pOverridesTx20[] = {
-    /* TX HighPA power override (placeholder, set by RF_TxPowerTable) */
     TX20_POWER_OVERRIDE(0x003F5BB8),
-    /* ANADIV radio parameter based on LO divider and front end settings */
     (uint32_t)0x01C20703,
-    /* IEEE 15.4: Set RTIM offset to 3 for high power PA */
-    (uint32_t)0x00030783,
-    /* IEEE 15.4: Set synth mux for high power PA */
-    (uint32_t)0x010206C3,
-    /* IEEE 15.4: Set TXRX pin to 0 in RX/TX and high impedance in idle */
-    HW_REG_OVERRIDE(0x60A8, 0x0001),
     (uint32_t)0xFFFFFFFF,
 };
 
@@ -69,7 +48,7 @@ rfc_CMD_RADIO_SETUP_PA_t Ieee154_0_cmdRadioSetup = {
     .mode = 0x01,
     .loDivider = 0x00,
     .config.frontEndMode = 0x0,
-    .config.biasMode = 0x1,
+    .config.biasMode = 0x0,
     .config.analogCfgMode = 0x0,
     .config.bNoFsPowerUp = 0x0,
     .txPower = 0x941E,

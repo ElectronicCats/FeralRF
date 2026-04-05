@@ -99,20 +99,31 @@ set(SYSBIOS_LIB ${TI_SDK_FULL}/kernel/tirtos7/packages/ti/sysbios/lib/gcc/m4f/sy
 set(APP_SOURCES
     ccfg.c
     src/command_processor.c
+    src/control_task.c
+    src/data_task.c
     src/host_if.c
     src/host_if_task.c
+    src/ll_manager.c
     src/output_if.c
     src/packet_queue.c
+    src/phy_manager.c
     src/protocol.c
-    src/task_event.c
+    src/radio_if.c
     src/smartrf_ble5_0.c
+    src/smartrf_ieee_15_4_0.c
+    src/smartrf_prop_0.c
+    src/task_event.c
 )
 
 # ─── TI Driver sources (common) ───
 
 set(RF_PATCH_SOURCES
     ${TI_SDK_PATH}/source/ti/devices/${DEVICE_SUBFAMILY}/rf_patches/rf_patch_cpe_bt5.c
+    ${TI_SDK_PATH}/source/ti/devices/${DEVICE_SUBFAMILY}/rf_patches/rf_patch_mce_bt5.c
     ${TI_SDK_PATH}/source/ti/devices/${DEVICE_SUBFAMILY}/rf_patches/rf_patch_cpe_multi_protocol.c
+    ${TI_SDK_PATH}/source/ti/devices/${DEVICE_SUBFAMILY}/rf_patches/rf_patch_cpe_prop.c
+    ${TI_SDK_PATH}/source/ti/devices/${DEVICE_SUBFAMILY}/rf_patches/rf_patch_mce_genook.c
+    ${TI_SDK_PATH}/source/ti/devices/${DEVICE_SUBFAMILY}/rf_patches/rf_patch_rfe_genook.c
 )
 
 # Driver sources — now using precompiled libs instead

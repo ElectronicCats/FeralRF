@@ -1,7 +1,5 @@
 /*
  * FeralRF CC1352 - Task Event flags implementation
- *
- * Fase 0.0: simple event flags, no semaphore (single task)
  */
 
 #include "task_event.h"
@@ -26,8 +24,4 @@ bool TaskEvent_isSet(uint32_t event_mask) {
 
 uint32_t TaskEvent_get(void) {
     return s_task_events;
-}
-
-bool TaskEvent_hasWork(void) {
-    return s_task_events != 0u;
 }

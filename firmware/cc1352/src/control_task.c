@@ -86,7 +86,7 @@ static bool ControlTask_isAnyTxPending(void) {
 
 static bool ControlTask_canStartTx(const uint8_t *payload, uint8_t payload_len) {
     return payload != NULL && payload_len > 0u && payload_len <= CONTROL_TASK_TX_RAW_MAX_LEN &&
-           !s_rx_enabled;
+           !s_rx_enabled && !ControlTask_isAnyTxPending();
 }
 
 static void ControlTask_clearJamWindow(void) {
@@ -250,9 +250,6 @@ bool ControlTask_onTxRaw(const uint8_t *payload, uint8_t payload_len, int8_t pow
         return false;
     }
 
-    memcpy(s_tx_raw_payload, payload, payload_len);
-    s_tx_raw_len = payload_len;
-    s_tx_raw_power_dbm = power_dbm;
     memcpy(s_tx_raw_payload, payload, payload_len);
     s_tx_raw_len = payload_len;
     s_tx_raw_power_dbm = power_dbm;
@@ -426,8 +423,7 @@ bool ControlTask_isJamActive(void) {
 
 void ControlTask_onRxStart(void) {
     s_rx_enabled = true;
-    /* Single-task: start RX synchronously */
-    (void)RadioIF_startRx();
+    TaskEvent_set(TASK_EVENT_CONTROL_RX_START);
 }
 
 void ControlTask_onRxStop(void) {

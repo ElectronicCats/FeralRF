@@ -58,12 +58,13 @@ uint32_t Prop0_pOverridesTx20[] = {
     (uint32_t)0xFFFFFFFF,
 };
 
-/* 433 MHz band overrides (SDK 8.30 LP_CC1352P7_4 + CatSniffer AGC) */
+/* 433 MHz band overrides (CatSniffer-specific + SDK 8.30 FSCA/DC) */
 uint32_t Prop0_pOverrides433[] = {
     ADI_2HALFREG_OVERRIDE(0, 16, 0x8, 0x8, 17, 0x1, 0x1),
-    HW_REG_OVERRIDE(0x609C, 0x001C),                    /* AGC ref level (SDK 8.30 for 433) */
-    (uint32_t)0x000688A3,                                /* RSSI offset -6 dB (SDK 8.30) */
+    HW_REG_OVERRIDE(0x609C, 0x0020),                    /* AGC ref level (CatSniffer 433) */
+    (uint32_t)0x000888A3,                                /* RSSI offset -8 dB (CatSniffer) */
     ADI_HALFREG_OVERRIDE(0, 61, 0xF, 0xD),              /* Anti-aliasing filter BW */
+    ADI_REG_OVERRIDE(0, 12, 0xF8),                       /* PA trim max (CatSniffer) */
     HW32_ARRAY_OVERRIDE(0x405C, 0x0001),                 /* FSCA divider bias (SDK 8.30) */
     (uint32_t)0x08141131,                                /* FSCA divider bias */
     (uint32_t)0x00F788D3,                                /* DC/DC IPEAK=7 (SDK 8.30) */

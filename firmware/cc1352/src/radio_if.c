@@ -299,8 +299,15 @@ static bool RadioIF_executeTxCommand(RF_Mode *mode, RF_RadioSetup *setup_cmd, RF
 
     /* Reuse persistent TX session if same PHY, otherwise open new one */
     if (s_tx_session_handle != NULL && s_tx_session_mode == mode) {
-        /* Session already open for this PHY — just update power and run TX */
+        /* Session already open for this PHY — re-run FS + TX */
         RadioIF_applyRfTxPower(s_tx_session_handle, tx_power);
+
+        /* Always re-run FS before TX to ensure synth is tuned */
+        result = RF_runCmd(s_tx_session_handle, fs_cmd, RF_PriorityNormal, NULL,
+                           RADIO_IF_TX_TERM_EVENTS);
+        if ((result & RADIO_IF_TX_SUCCESS_EVENTS) == 0u) {
+            return false;
+        }
 
         result = RF_runCmd(s_tx_session_handle, tx_cmd, RF_PriorityNormal, NULL,
                            RADIO_IF_TX_TERM_EVENTS);
@@ -876,6 +883,9 @@ static bool RadioIF_switchRfMode(RF_Mode *mode, RF_RadioSetup *setup) {
     RF_Params rf_params;
     RF_Params_init(&rf_params);
     s_rf_handle = RF_open(&s_rf_object, mode, setup, &rf_params);
+    /* Invalidate TX session — old handle is dead */
+    s_tx_session_handle = s_rf_handle;
+    s_tx_session_mode = NULL;
     return s_rf_handle != NULL;
 }
 

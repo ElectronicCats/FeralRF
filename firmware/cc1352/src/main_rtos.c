@@ -16,6 +16,7 @@
 #include <ti/sysbios/knl/Semaphore.h>
 
 /* TI Drivers */
+#include <ti/drivers/GPIO.h>
 #include <ti/drivers/Power.h>
 #include <ti/drivers/power/PowerCC26XX.h>
 
@@ -144,6 +145,7 @@ int main(void) {
     /* Board init */
     board_power_init();
     Power_init();
+    GPIO_init(); /* Required for antenna switching (SysConfig callback) */
 
     VIMSConfigure(VIMS_BASE, TRUE, TRUE);
     VIMSModeSet(VIMS_BASE, VIMS_MODE_ENABLED);

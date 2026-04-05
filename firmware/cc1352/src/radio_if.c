@@ -115,8 +115,14 @@ static RadioIF_Metrics s_metrics = {0u, 0u, 0u, 0u};
 static RadioIF_Backend s_backend = RADIO_IF_BACKEND_SYNTH;
 static RadioIF_RfMode s_rf_mode = RADIO_IF_RF_MODE_NONE;
 
-/* RF backend state — single handle, RF_close/RF_open for mode switch */
-static RF_Object s_rf_object;
+/* RF backend state — dual handles for BLE (2.4GHz) and Prop (Sub-1GHz) */
+static RF_Object s_rf_ble_object;
+static RF_Handle s_rf_ble_handle = NULL;
+
+static RF_Object s_rf_prop_object;
+static RF_Handle s_rf_prop_handle = NULL;
+
+/* Active handle for current mode */
 static RF_Handle s_rf_handle = NULL;
 static RF_CmdHandle s_rf_rx_cmd = RF_SCHEDULE_CMD_ERROR;
 
@@ -306,16 +312,11 @@ static bool RadioIF_executeTxCommand(RF_Mode *mode, RF_RadioSetup *setup_cmd, RF
         return (result & RADIO_IF_TX_SUCCESS_EVENTS) != 0u;
     }
 
-    /* RF_close + RF_open for TX mode switch */
-    if (s_tx_session_handle != NULL) {
-        RF_close(s_tx_session_handle);
-        s_tx_session_mode = NULL;
-    }
-    RF_Params rf_params;
-    RF_Params_init(&rf_params);
-    s_tx_session_handle = RF_open(&s_rf_tx_session_object, mode, setup_cmd, &rf_params);
-    if (s_tx_session_handle == NULL) {
-        return false;
+    /* Use appropriate handle for TX */
+    if (mode == &Ble5_0_mode) {
+        s_tx_session_handle = s_rf_ble_handle;
+    } else {
+        s_tx_session_handle = s_rf_prop_handle;
     }
     s_tx_session_mode = mode;
     RadioIF_applyRfTxPower(s_tx_session_handle, tx_power);
@@ -790,13 +791,17 @@ static bool RadioIF_runFsAndPostRx(void) {
         return false;
     }
 
-    /* CMD_FS + post RX */
+    /* CMD_FS + schedule RX (RF_MODE_MULTIPLE requires schedule API) */
+    RF_ScheduleCmdParams schParams;
+    RF_ScheduleCmdParams_init(&schParams);
+    schParams.allowDelay = RF_AllowDelayAny;
+
     fs_cmd->status = 0x0000;
-    (void)RF_runCmd(s_rf_handle, fs_cmd, RF_PriorityNormal, NULL, 0);
+    (void)RF_runScheduleCmd(s_rf_handle, fs_cmd, &schParams, NULL, 0);
 
     rx_cmd->status = 0x0000;
     s_rf_rx_cmd =
-        RF_postCmd(s_rf_handle, rx_cmd, RF_PriorityNormal, &RadioIF_rfCallback, event_mask);
+        RF_scheduleCmd(s_rf_handle, rx_cmd, &schParams, &RadioIF_rfCallback, event_mask);
     return s_rf_rx_cmd >= 0;
 }
 
@@ -880,17 +885,8 @@ static bool RadioIF_startBleRfBackend(void) {
     RadioIF_applyBlePhyMode(s_selected_phy);
     RadioIF_applyBleChannelConfig((uint8_t)s_channel);
 
-    /* RF_close current + RF_open BLE if needed */
-    if (s_rf_handle != NULL) {
-        RF_close(s_rf_handle);
-        s_rf_handle = NULL;
-    }
-    {
-        RF_Params rf_params;
-        RF_Params_init(&rf_params);
-        s_rf_handle = RF_open(&s_rf_object, &Ble5_0_mode,
-                               (RF_RadioSetup *)&Ble5_0_cmdBle5RadioSetup, &rf_params);
-    }
+    /* Use BLE handle */
+    s_rf_handle = s_rf_ble_handle;
 
     if (s_ble_active_scan) {
         /* Active scan: use CMD_BLE5_SCANNER (sends SCAN_REQ, captures SCAN_RSP) */
@@ -982,17 +978,18 @@ static bool RadioIF_startIeee154RfBackend(void) {
     Ieee154_0_cmdIeeeRx.rxConfig.bAppendSrcInd = 0u;
     Ieee154_0_cmdIeeeRx.rxConfig.bAppendTimestamp = 1u;
 
-    /* RF_close current + RF_open IEEE */
-    if (s_rf_handle != NULL) {
-        RF_close(s_rf_handle);
-        s_rf_handle = NULL;
+    /* IEEE — RF_close prop handle + RF_open with IEEE setup */
+    if (s_rf_prop_handle != NULL) {
+        RF_close(s_rf_prop_handle);
     }
     {
         RF_Params rf_params;
         RF_Params_init(&rf_params);
-        s_rf_handle = RF_open(&s_rf_object, &Ieee154_0_mode,
-                               (RF_RadioSetup *)&Ieee154_0_cmdRadioSetup, &rf_params);
+        Ieee154_0_mode.rfMode = RF_MODE_MULTIPLE;
+        s_rf_prop_handle = RF_open(&s_rf_prop_object, &Ieee154_0_mode,
+                                    (RF_RadioSetup *)&Ieee154_0_cmdRadioSetup, &rf_params);
     }
+    s_rf_handle = s_rf_prop_handle;
 
     if (!RadioIF_runFsAndPostRx()) {
         s_rf_rx_cmd = RF_SCHEDULE_CMD_ERROR;
@@ -1016,8 +1013,7 @@ static void RadioIF_stopRfBackend(void) {
             RF_yield(s_rf_handle);
             ClockP_usleep(50000);
         }
-        RF_close(s_rf_handle);
-        s_rf_handle = NULL;
+        /* No RF_close — single handle stays open */
     }
 
     s_rf_rx_cmd = RF_SCHEDULE_CMD_ERROR;
@@ -1249,17 +1245,18 @@ static bool RadioIF_startSub1ghzRfBackend(void) {
     Prop0_cmdPropRx.rxConf.bAppendStatus = 1u;
     Prop0_cmdPropRx.maxPktLen = 0xFF;
 
-    /* RF_close current + RF_open Prop */
-    if (s_rf_handle != NULL) {
-        RF_close(s_rf_handle);
-        s_rf_handle = NULL;
+    /* Sub-1GHz — RF_close prop handle + RF_open with Prop setup */
+    if (s_rf_prop_handle != NULL) {
+        RF_close(s_rf_prop_handle);
     }
     {
         RF_Params rf_params;
         RF_Params_init(&rf_params);
-        s_rf_handle = RF_open(&s_rf_object, RadioIF_getPropMode(),
-                               (RF_RadioSetup *)&Prop0_cmdPropRadioDivSetup, &rf_params);
+        Prop0_mode.rfMode = RF_MODE_MULTIPLE;
+        s_rf_prop_handle = RF_open(&s_rf_prop_object, &Prop0_mode,
+                                    (RF_RadioSetup *)&Prop0_cmdPropRadioDivSetup, &rf_params);
     }
+    s_rf_handle = s_rf_prop_handle;
 
     if (!RadioIF_runFsAndPostRx()) {
         s_rf_rx_cmd = RF_SCHEDULE_CMD_ERROR;
@@ -1396,13 +1393,24 @@ void RadioIF_init(void) {
     s_ble_adv_hop_index = 0u;
     RadioIF_initBleHopCadence();
 
-    /* Open RF with BLE mode initially. RF_close + RF_open for mode switch. */
-    if (s_rf_handle == NULL) {
+    /* Set RF_MODE_MULTIPLE for dual-client operation (rfDualModeRx pattern) */
+    Ble5_0_mode.rfMode = RF_MODE_MULTIPLE;
+    Prop0_mode.rfMode = RF_MODE_MULTIPLE;
+    Ieee154_0_mode.rfMode = RF_MODE_MULTIPLE;
+
+    /* Dual-handle: BLE handle for 2.4GHz (BLE+IEEE), Prop handle for Sub-1GHz */
+    Ble5_0_mode.rfMode = RF_MODE_MULTIPLE;
+    Prop0_mode.rfMode = RF_MODE_MULTIPLE;
+
+    if (s_rf_ble_handle == NULL) {
         RF_Params rf_params;
         RF_Params_init(&rf_params);
-        s_rf_handle = RF_open(&s_rf_object, &Ble5_0_mode,
-                               (RF_RadioSetup *)&Ble5_0_cmdBle5RadioSetup, &rf_params);
+        s_rf_ble_handle = RF_open(&s_rf_ble_object, &Ble5_0_mode,
+                                   (RF_RadioSetup *)&Ble5_0_cmdBle5RadioSetup, &rf_params);
     }
+    /* Prop/IEEE handle opened on demand in startIeee154/startSub1ghz */
+    s_rf_prop_handle = NULL;
+    s_rf_handle = s_rf_ble_handle; /* Default to BLE */
     s_tx_session_handle = s_rf_handle;
 }
 

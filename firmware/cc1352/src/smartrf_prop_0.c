@@ -31,24 +31,30 @@ RF_Mode Prop0_modeOok = {
 
 /* Overrides for 868 MHz Sub-1GHz prop mode */
 uint32_t Prop0_pOverrides[] = {
+    /* SDK 8.30 SysConfig overrides for LP_CC1352P7_1 868 MHz */
     ADI_2HALFREG_OVERRIDE(0, 16, 0x8, 0x8, 17, 0x1, 0x1),
-    HW_REG_OVERRIDE(0x609C, 0x001A),
-    (uint32_t)0x000288A3,
-    ADI_HALFREG_OVERRIDE(0, 61, 0xF, 0xD),
+    HW_REG_OVERRIDE(0x609C, 0x001A),       /* AGC ref level */
+    (uint32_t)0x000188A3,                   /* RSSI offset -1dB */
+    ADI_HALFREG_OVERRIDE(0, 61, 0xF, 0xD), /* Anti-aliasing BW */
+    HW32_ARRAY_OVERRIDE(0x405C, 0x0001),    /* FSCA divider bias */
+    (uint32_t)0x08141131,                   /* FSCA divider bias */
+    (uint32_t)0x00F788D3,                   /* DC/DC IPEAK=7 */
     (uint32_t)0xFFFFFFFF,
 };
 
 uint32_t Prop0_pOverridesTxStd[] = {
     TX_STD_POWER_OVERRIDE(0x013F),
-    (uint32_t)0x11310703,
-    HW_REG_OVERRIDE(0x6028, 0x001A),
+    (uint32_t)0x11310703,                /* ANADIV */
+    HW_REG_OVERRIDE(0x6028, 0x001A),     /* PA ramp */
+    HW_REG_OVERRIDE(0x60A8, 0x0401),     /* TXRX pin (SDK 8.30) */
     (uint32_t)0xFFFFFFFF,
 };
 
 uint32_t Prop0_pOverridesTx20[] = {
-    TX20_POWER_OVERRIDE(0x0020AA1B),
-    (uint32_t)0x11C10703,
-    HW_REG_OVERRIDE(0x6028, 0x001F),
+    TX20_POWER_OVERRIDE(0x001B8ED2),      /* SDK 8.30 value */
+    (uint32_t)0x11C10703,                /* ANADIV */
+    HW_REG_OVERRIDE(0x6028, 0x001F),     /* PA ramp */
+    HW_REG_OVERRIDE(0x60A8, 0x0001),     /* TXRX pin (SDK 8.30) */
     (uint32_t)0xFFFFFFFF,
 };
 
@@ -160,6 +166,7 @@ rfc_CMD_PROP_RADIO_DIV_SETUP_PA_t Prop0_cmdPropRadioDivSetup = {
     .config.biasMode = 0x1,
     .config.analogCfgMode = 0x0,
     .config.bNoFsPowerUp = 0x0,
+    .config.bSynthNarrowBand = 0x0,
     .txPower = 0xFFFF,
     .pRegOverride = Prop0_pOverrides,
     .centerFreq = 0x0364,

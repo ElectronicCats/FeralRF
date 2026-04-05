@@ -58,28 +58,31 @@ uint32_t Prop0_pOverridesTx20[] = {
     (uint32_t)0xFFFFFFFF,
 };
 
-/* 433 MHz band overrides (from CatSniffer smartrf_settings_rf_prop_1.c) */
+/* 433 MHz band overrides (SDK 8.30 LP_CC1352P7_4 + CatSniffer AGC) */
 uint32_t Prop0_pOverrides433[] = {
     ADI_2HALFREG_OVERRIDE(0, 16, 0x8, 0x8, 17, 0x1, 0x1),
-    HW_REG_OVERRIDE(0x609C, 0x0020),                    /* AGC ref level (higher for 433) */
-    (uint32_t)0x000888A3,                                /* RSSI offset -8 dB */
+    HW_REG_OVERRIDE(0x609C, 0x001C),                    /* AGC ref level (SDK 8.30 for 433) */
+    (uint32_t)0x000688A3,                                /* RSSI offset -6 dB (SDK 8.30) */
     ADI_HALFREG_OVERRIDE(0, 61, 0xF, 0xD),              /* Anti-aliasing filter BW */
-    (uint32_t)0x00FF88D3,                                /* DC/DC regulator config */
-    ADI_REG_OVERRIDE(0, 12, 0xF8),                       /* PA trim max */
+    HW32_ARRAY_OVERRIDE(0x405C, 0x0001),                 /* FSCA divider bias (SDK 8.30) */
+    (uint32_t)0x08141131,                                /* FSCA divider bias */
+    (uint32_t)0x00F788D3,                                /* DC/DC IPEAK=7 (SDK 8.30) */
     (uint32_t)0xFFFFFFFF,
 };
 
 uint32_t Prop0_pOverrides433TxStd[] = {
     TX_STD_POWER_OVERRIDE(0x003F),
-    (uint32_t)0x11310703,
-    HW_REG_OVERRIDE(0x6028, 0x001A),
+    (uint32_t)0x11310703,                /* ANADIV */
+    HW_REG_OVERRIDE(0x6028, 0x001A),     /* PA ramp */
+    HW_REG_OVERRIDE(0x60A8, 0x0401),     /* TXRX pin (SDK 8.30) */
     (uint32_t)0xFFFFFFFF,
 };
 
 uint32_t Prop0_pOverrides433Tx20[] = {
     TX20_POWER_OVERRIDE(0x003F00FF),
-    (uint32_t)0x11C10703,
-    HW_REG_OVERRIDE(0x6028, 0x001F),
+    (uint32_t)0x11C10703,                /* ANADIV */
+    HW_REG_OVERRIDE(0x6028, 0x001F),     /* PA ramp */
+    HW_REG_OVERRIDE(0x60A8, 0x0001),     /* TXRX pin (SDK 8.30) */
     (uint32_t)0xFFFFFFFF,
 };
 

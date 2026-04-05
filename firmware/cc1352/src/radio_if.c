@@ -1630,7 +1630,7 @@ void RadioIF_setPower(int8_t power_dbm) {
 bool RadioIF_transmitRaw(const uint8_t *data, uint8_t data_len, int8_t power_dbm) {
     s_tx_power_dbm = power_dbm;
 
-    if (s_rx_running || (s_rf_handle != NULL)) {
+    if (s_rx_running || (s_rf_handle == NULL)) {
         return false;
     }
 

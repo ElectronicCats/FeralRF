@@ -157,7 +157,14 @@ static RF_Mode *RadioIF_getPropMode(void) {
      * patches cannot be unloaded safely (TI SDK bug: RFCCpePatchReset is a
      * no-op). Switching to another mode after OOK will hang the RF Core.
      * The user must power-cycle/reflash to use other modes after OOK. */
-    return s_prop_ook_active ? &Prop0_modeOok : &Prop0_mode;
+    if (s_prop_ook_active) {
+        return &Prop0_modeOok;
+    }
+    /* cpe_prop for 433 MHz — multi_protocol has loDivider bug */
+    if (s_frequency_hz > 0u && (s_frequency_hz / 1000000u) < 861u) {
+        return &Prop0_modeSub1g;
+    }
+    return &Prop0_mode;
 }
 #if defined(__GNUC__)
 static uint8_t s_ieee154_tx_buffer[IEEE_15_4_TX_MAX_PAYLOAD_LEN] __attribute__((aligned(4)));

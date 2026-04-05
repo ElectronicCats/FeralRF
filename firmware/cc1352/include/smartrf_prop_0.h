@@ -10,6 +10,7 @@
 #include <ti/drivers/rf/RF.h>
 
 extern RF_Mode Prop0_mode;
+extern RF_Mode Prop0_modeSub1g;
 
 extern rfc_CMD_PROP_RADIO_DIV_SETUP_PA_t Prop0_cmdPropRadioDivSetup;
 extern rfc_CMD_FS_t Prop0_cmdFs;

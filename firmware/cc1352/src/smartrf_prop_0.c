@@ -21,6 +21,14 @@ RF_Mode Prop0_mode = {
     .rfePatchFxn = 0,
 };
 
+/* Prop mode with cpe_prop patch — works at 433 MHz (multi_protocol fails there) */
+RF_Mode Prop0_modeSub1g = {
+    .rfMode = RF_MODE_AUTO,
+    .cpePatchFxn = &rf_patch_cpe_prop,
+    .mcePatchFxn = 0,
+    .rfePatchFxn = 0,
+};
+
 /* OOK mode — requires dedicated MCE+RFE patches for amplitude demodulation */
 RF_Mode Prop0_modeOok = {
     .rfMode = RF_MODE_AUTO,

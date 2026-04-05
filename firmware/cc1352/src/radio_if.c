@@ -86,6 +86,7 @@ typedef enum {
 static void RadioIF_applyBlePhyMode(uint8_t phy);
 static bool RadioIF_isSub1ghzPhySelected(void);
 static bool RadioIF_switchRfMode(RF_Mode *mode, RF_RadioSetup *setup);
+static rfc_CMD_PROP_RADIO_DIV_SETUP_PA_t s_prop_setup_copy;
 static void RadioIF_applySub1ghzChannelConfig(uint16_t channel, uint32_t frequency_hz);
 
 typedef enum {
@@ -314,8 +315,13 @@ static bool RadioIF_executeTxCommand(RF_Mode *mode, RF_RadioSetup *setup_cmd, RF
         return (result & RADIO_IF_TX_SUCCESS_EVENTS) != 0u;
     }
 
-    /* Switch RF mode for TX */
-    if (!RadioIF_switchRfMode(mode, setup_cmd)) {
+    /* Switch RF mode for TX — use copy for Prop to avoid loDivider corruption */
+    RF_RadioSetup *actual_setup = setup_cmd;
+    if (mode == &Prop0_mode || mode == &Prop0_modeOok) {
+        memcpy(&s_prop_setup_copy, setup_cmd, sizeof(s_prop_setup_copy));
+        actual_setup = (RF_RadioSetup *)&s_prop_setup_copy;
+    }
+    if (!RadioIF_switchRfMode(mode, actual_setup)) {
         return false;
     }
     s_tx_session_handle = s_rf_handle;
@@ -1256,9 +1262,11 @@ static bool RadioIF_startSub1ghzRfBackend(void) {
     Prop0_cmdPropRx.rxConf.bAppendStatus = 1u;
     Prop0_cmdPropRx.maxPktLen = 0xFF;
 
-    /* Switch to Prop mode */
+    /* Switch to Prop mode — use fresh copy to avoid RF driver corruption
+     * when loDivider changes between sessions */
+    memcpy(&s_prop_setup_copy, &Prop0_cmdPropRadioDivSetup, sizeof(s_prop_setup_copy));
     if (!RadioIF_switchRfMode(RadioIF_getPropMode(),
-                               (RF_RadioSetup *)&Prop0_cmdPropRadioDivSetup)) {
+                               (RF_RadioSetup *)&s_prop_setup_copy)) {
         s_rf_mode = RADIO_IF_RF_MODE_NONE;
         return false;
     }

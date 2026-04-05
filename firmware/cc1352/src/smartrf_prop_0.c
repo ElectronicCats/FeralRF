@@ -66,24 +66,26 @@ uint32_t Prop0_pOverridesTx20[] = {
     (uint32_t)0xFFFFFFFF,
 };
 
-/* 433 MHz band overrides (CatSniffer-specific + SDK 8.30 FSCA/DC) */
+/* 433 MHz GFSK overrides — SDK 8.30 tc112 exact values */
 uint32_t Prop0_pOverrides433[] = {
     ADI_2HALFREG_OVERRIDE(0, 16, 0x8, 0x8, 17, 0x1, 0x1),
-    HW_REG_OVERRIDE(0x609C, 0x0020),                    /* AGC ref level (CatSniffer 433) */
-    (uint32_t)0x000888A3,                                /* RSSI offset -8 dB (CatSniffer) */
-    ADI_HALFREG_OVERRIDE(0, 61, 0xF, 0xD),              /* Anti-aliasing filter BW */
-    ADI_REG_OVERRIDE(0, 12, 0xF8),                       /* PA trim max (CatSniffer) */
-    HW32_ARRAY_OVERRIDE(0x405C, 0x0001),                 /* FSCA divider bias (SDK 8.30) */
-    (uint32_t)0x08141131,                                /* FSCA divider bias */
-    (uint32_t)0x00F788D3,                                /* DC/DC IPEAK=7 (SDK 8.30) */
+    HW_REG_OVERRIDE(0x609C, 0x001C),                    /* AGC ref (SDK tc112) */
+    (uint32_t)0x000688A3,                                /* RSSI offset -6 dB (SDK tc112) */
+    ADI_HALFREG_OVERRIDE(0, 61, 0xF, 0xD),              /* Anti-aliasing BW */
+    HW_REG_OVERRIDE(0x6028, 0x001A),                     /* TX ramp (SDK tc112) */
+    ADI_REG_OVERRIDE(0, 12, 0xF8),                       /* PA trim max */
+    HW32_ARRAY_OVERRIDE(0x405C, 0x0001),                 /* FSCA divider */
+    (uint32_t)0x08141131,                                /* FSCA divider */
+    (uint32_t)0x00F788D3,                                /* DC/DC IPEAK=7 */
     (uint32_t)0xFFFFFFFF,
 };
 
 uint32_t Prop0_pOverrides433TxStd[] = {
-    TX_STD_POWER_OVERRIDE(0x003F),
-    (uint32_t)0x11310703,                /* ANADIV */
-    HW_REG_OVERRIDE(0x6028, 0x001A),     /* PA ramp */
-    HW_REG_OVERRIDE(0x60A8, 0x0401),     /* TXRX pin (SDK 8.30) */
+    TX_STD_POWER_OVERRIDE(0x003F),           /* 13 dBm max for 433 */
+    (uint32_t)0x11310703,                    /* ANADIV */
+    HW_REG_OVERRIDE(0x6028, 0x001A),         /* PA ramp */
+    HW_REG_OVERRIDE(0x60A8, 0x0401),         /* TXRX pin */
+    ADI_REG_OVERRIDE(0, 12, 0xF8),           /* PA trim max (was missing!) */
     (uint32_t)0xFFFFFFFF,
 };
 

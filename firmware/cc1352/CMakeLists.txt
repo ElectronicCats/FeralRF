@@ -84,10 +84,15 @@ file(GLOB DRIVERLIB_SOURCES
     ${TI_SDK_PATH}/source/ti/devices/${DEVICE_SUBFAMILY}/driverlib/*.c
 )
 
-# RF driver — needed from Fase 0.1 onwards
-set(RF_DRIVER_LIB
-    ${TI_SDK_PATH}/source/ti/drivers/rf/lib/gcc/m4f/rf_multiMode_cc13x2.a
-)
+# Full SDK install path (has precompiled libs)
+set(TI_SDK_FULL "$ENV{HOME}/ti/simplelink_cc13xx_cc26xx_sdk_8_30_01_01/simplelink_cc13xx_cc26xx_sdk_8_30_01_01"
+    CACHE PATH "Full TI SDK install with precompiled libs")
+
+# Precompiled libraries from full SDK
+set(RF_DRIVER_LIB ${TI_SDK_FULL}/source/ti/drivers/rf/lib/gcc/m4f/rf_multiMode_cc13x2.a)
+set(DRIVERS_LIB ${TI_SDK_FULL}/source/ti/drivers/lib/gcc/m4f/drivers_cc13x2x7.a)
+set(DRIVERLIB_PREBUILT ${TI_SDK_FULL}/source/ti/devices/cc13x2x7_cc26x2x7/driverlib/bin/gcc/driverlib.lib)
+set(SYSBIOS_LIB ${TI_SDK_FULL}/kernel/tirtos7/packages/ti/sysbios/lib/gcc/m4f/sysbios.a)
 
 # ─── Application sources ───
 
@@ -101,7 +106,6 @@ set(APP_SOURCES
     src/protocol.c
     src/task_event.c
     src/smartrf_ble5_0.c
-    src/ti_rf_config_min.c
 )
 
 # ─── TI Driver sources (common) ───
@@ -111,128 +115,25 @@ set(RF_PATCH_SOURCES
     ${TI_SDK_PATH}/source/ti/devices/${DEVICE_SUBFAMILY}/rf_patches/rf_patch_cpe_multi_protocol.c
 )
 
-set(DRIVER_SOURCES
-    ${TI_SDK_PATH}/source/ti/drivers/ITM.c
-    ${TI_SDK_PATH}/source/ti/drivers/Temperature.c
-    ${TI_SDK_PATH}/source/ti/drivers/utils/List.c
-    ${TI_SDK_PATH}/source/ti/drivers/power/PowerCC26X2.c
-    ${TI_SDK_PATH}/source/ti/drivers/power/PowerCC26X2_helpers.c
-    ${TI_SDK_PATH}/source/ti/drivers/power/PowerCC26X2_calibrateRCOSC.c
-    ${TI_SDK_PATH}/source/ti/drivers/power/PowerCC26X2_calibrateRCOSC_helpers.c
-    ${TI_SDK_PATH}/source/ti/drivers/temperature/TemperatureCC26X2.c
-)
+# Driver sources — now using precompiled libs instead
+set(DRIVER_SOURCES "")
 
 if(USE_TIRTOS)
-    # ─── TI-RTOS7 Kernel sources ───
-    set(RTOS_KERNEL_SOURCES
-        # Core
-        ${SYSBIOS_PATH}/BIOS.c
-        # Knl (scheduler)
-        ${SYSBIOS_PATH}/knl/Clock.c
-        ${SYSBIOS_PATH}/knl/Event.c
-        ${SYSBIOS_PATH}/knl/Idle.c
-        ${SYSBIOS_PATH}/knl/Mailbox.c
-        ${SYSBIOS_PATH}/knl/Queue.c
-        ${SYSBIOS_PATH}/knl/Semaphore.c
-        ${SYSBIOS_PATH}/knl/Swi.c
-        ${SYSBIOS_PATH}/knl/Task.c
-        # Family ARM M3/M4F (CC1352 = Cortex-M4F)
-        ${SYSBIOS_PATH}/family/arm/m3/Hwi.c
-        ${SYSBIOS_PATH}/family/arm/m3/TaskSupport.c
-        # Family CC26xx (timer, clock, boot)
-        ${SYSBIOS_PATH}/family/arm/cc26xx/Boot.c
-        ${SYSBIOS_PATH}/family/arm/cc26xx/ClockSupport.c
-        ${SYSBIOS_PATH}/family/arm/cc26xx/Seconds.c
-        ${SYSBIOS_PATH}/family/arm/cc26xx/Timer.c
-        ${SYSBIOS_PATH}/family/arm/cc26xx/TimestampProvider.c
-        # Runtime
-        ${SYSBIOS_PATH}/runtime/Assert.c
-        ${SYSBIOS_PATH}/runtime/Error.c
-        ${SYSBIOS_PATH}/runtime/Memory.c
-        ${SYSBIOS_PATH}/runtime/Startup.c
-        ${SYSBIOS_PATH}/runtime/SysCallback.c
-        # SysMin.c excluded — SysCallback.c provides SystemSupport functions
-        ${SYSBIOS_PATH}/runtime/System.c
-        ${SYSBIOS_PATH}/runtime/Timestamp.c
-        # Gates
-        ${SYSBIOS_PATH}/gates/GateHwi.c
-        ${SYSBIOS_PATH}/gates/GateMutex.c
-        ${SYSBIOS_PATH}/gates/GateMutexPri.c
-        ${SYSBIOS_PATH}/gates/GateSwi.c
-        ${SYSBIOS_PATH}/gates/GateTask.c
-        # Heaps
-        ${SYSBIOS_PATH}/heaps/HeapMem.c
-        ${SYSBIOS_PATH}/heaps/HeapCallback.c
-        # HAL
-        ${SYSBIOS_PATH}/hal/time.c
-        # RTS
-        ${SYSBIOS_PATH}/rts/MemAlloc.c
-        # Utils
-        ${SYSBIOS_PATH}/utils/Load.c
-    )
-
-    # Assembly files (GCC specific)
-    set(RTOS_ASM_SOURCES
-        ${SYSBIOS_PATH}/family/arm/m3/Hwi_asm_gcc.s
-        ${SYSBIOS_PATH}/family/arm/m3/Hwi_asm_switch_gcc.s
-        ${SYSBIOS_PATH}/family/arm/m3/TaskSupport_asm_gcc.s
-        ${SYSBIOS_PATH}/family/arm/vxm/boot/boot_gcc.s
-        ${SYSBIOS_PATH}/family/arm/vxm/boot/startup_gcc.c
-    )
-
-    # DPL for TI-RTOS
-    set(DPL_SOURCES
-        ${TIRTOS7_PATH}/packages/ti/dpl/ClockP_tirtos.c
-        ${TIRTOS7_PATH}/packages/ti/dpl/DebugP_tirtos.c
-        ${TIRTOS7_PATH}/packages/ti/dpl/HwiP_tirtos.c
-        ${TIRTOS7_PATH}/packages/ti/dpl/MutexP_tirtos.c
-        ${TIRTOS7_PATH}/packages/ti/dpl/SemaphoreP_tirtos.c
-        ${TIRTOS7_PATH}/packages/ti/dpl/SwiP_tirtos.c
-        ${TIRTOS7_PATH}/packages/ti/dpl/SystemP_tirtos.c
-        ${TIRTOS7_PATH}/packages/ti/dpl/PowerCC26X2_tirtos.c
-        ${TIRTOS7_PATH}/packages/ti/dpl/TimestampPCC26XX_tirtos.c
-        # Additional DPL not in base list
-        ${TIRTOS7_PATH}/packages/ti/dpl/TaskP_tirtos.c
-    )
-
-    # ICall + BLE5-Stack — added back in Fase 0.6 (GATT)
-
-    # POSIX layer
-    set(POSIX_SOURCES
-        ${TI_SDK_PATH}/source/ti/posix/tirtos/clock.c
-        ${TI_SDK_PATH}/source/ti/posix/tirtos/pthread.c
-        ${TI_SDK_PATH}/source/ti/posix/tirtos/pthread_barrier.c
-        ${TI_SDK_PATH}/source/ti/posix/tirtos/pthread_cond.c
-        ${TI_SDK_PATH}/source/ti/posix/tirtos/pthread_key.c
-        ${TI_SDK_PATH}/source/ti/posix/tirtos/pthread_mutex.c
-        ${TI_SDK_PATH}/source/ti/posix/tirtos/pthread_rwlock.c
-        ${TI_SDK_PATH}/source/ti/posix/tirtos/pthread_util.c
-        ${TI_SDK_PATH}/source/ti/posix/tirtos/sched.c
-        ${TI_SDK_PATH}/source/ti/posix/tirtos/semaphore.c
-        ${TI_SDK_PATH}/source/ti/posix/tirtos/sleep.c
-        ${TI_SDK_PATH}/source/ti/posix/tirtos/timer.c
-    )
-
-    # Additional kernel sources from unity build
-    list(APPEND RTOS_KERNEL_SOURCES
-        ${SYSBIOS_PATH}/heaps/HeapCallback.c
-    )
-
-    # SysConfig generated files
-    set(SYSCFG_SOURCES
-        syscfg/ti_sysbios_config.c
-    )
+    # ─── Using precompiled libs from full SDK install ───
+    # No more source compilation of driverlib, sysbios, DPL, POSIX, drivers.
+    # Only compile: RF patches + SysConfig config + app sources + stubs.
 
     set(RTOS_STUBS src/rtos_stubs.c)
     set(MAIN_SOURCE src/main_rtos.c)
 
+    set(SYSCFG_SOURCES
+        syscfg/ti_sysbios_config.c
+        syscfg/ti_drivers_config.c
+    )
+
     set(ALL_SOURCES
         ${APP_SOURCES}
-        ${DRIVERLIB_SOURCES}
-        ${DRIVER_SOURCES}
-        ${RTOS_KERNEL_SOURCES}
-        ${RTOS_ASM_SOURCES}
-        ${DPL_SOURCES}
+        ${RF_PATCH_SOURCES}
         ${RTOS_STUBS}
         ${SYSCFG_SOURCES}
         ${MAIN_SOURCE}
@@ -288,12 +189,18 @@ if(USE_TIRTOS)
     # Force-include RTOS config
     target_compile_options(${CMAKE_PROJECT_NAME}.elf PRIVATE
         $<$<COMPILE_LANGUAGE:C>:-include${CMAKE_CURRENT_SOURCE_DIR}/syscfg/ti_sysbios_config.h>
+        -I${TI_SDK_PATH}/source/ti/posix/gcc
     )
 endif()
 
 if(USE_TIRTOS)
     target_link_libraries(${CMAKE_PROJECT_NAME}.elf PRIVATE
         ${RF_DRIVER_LIB}
+        ${DRIVERS_LIB}
+        -Wl,--whole-archive
+        ${SYSBIOS_LIB}
+        -Wl,--no-whole-archive
+        ${DRIVERLIB_PREBUILT}
     )
 else()
     target_link_libraries(${CMAKE_PROJECT_NAME}.elf PRIVATE

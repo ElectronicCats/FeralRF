@@ -2,7 +2,7 @@
  *  ======== ti_drivers_config.c ========
  *  Configured TI-Drivers module definitions
  *
- *  DO NOT EDIT - This file is generated for the LP_CC1352P7_4
+ *  DO NOT EDIT - This file is generated for the LP_CC1352P7_1
  *  by the SysConfig tool.
  */
 
@@ -16,140 +16,6 @@
 #include <ti/devices/DeviceFamily.h>
 
 #include "ti_drivers_config.h"
-
-/*
- *  ============================= Display =============================
- */
-
-#include <ti/display/Display.h>
-#include <ti/display/DisplayUart2.h>
-
-#define CONFIG_Display_COUNT 1
-
-
-#define Display_UART2BUFFERSIZE 128
-static char displayUART2Buffer[Display_UART2BUFFERSIZE];
-
-DisplayUart2_Object displayUart2Object;
-
-const DisplayUart2_HWAttrs displayUart2HWAttrs = {
-    .uartIdx      = CONFIG_DISPLAY_UART,
-    .baudRate     = 115200,
-    .mutexTimeout = (unsigned int)(-1),
-    .strBuf       = displayUART2Buffer,
-    .strBufLen    = Display_UART2BUFFERSIZE
-};
-
-const Display_Config Display_config[CONFIG_Display_COUNT] = {
-    /* CONFIG_Display_0 */
-    /* XDS110 UART */
-    {
-        .fxnTablePtr = &DisplayUart2Ansi_fxnTable,
-        .object      = &displayUart2Object,
-        .hwAttrs     = &displayUart2HWAttrs
-    },
-};
-
-const uint_least8_t Display_count = CONFIG_Display_COUNT;
-
-/*
- *  =============================== AESCCM ===============================
- */
-
-#include <ti/drivers/AESCCM.h>
-#include <ti/drivers/aesccm/AESCCMCC26XX.h>
-
-#define CONFIG_AESCCM_COUNT 1
-AESCCMCC26XX_Object aesccmCC26XXObjects[CONFIG_AESCCM_COUNT];
-
-/*
- *  ======== aesccmCC26XXHWAttrs ========
- */
-const AESCCMCC26XX_HWAttrs aesccmCC26XXHWAttrs[CONFIG_AESCCM_COUNT] = {
-    {
-        .intPriority = (~0),
-    },
-};
-
-const AESCCM_Config AESCCM_config[CONFIG_AESCCM_COUNT] = {
-    {   /* Board_AESCCM0 */
-        .object  = &aesccmCC26XXObjects[Board_AESCCM0],
-        .hwAttrs = &aesccmCC26XXHWAttrs[Board_AESCCM0]
-    },
-};
-
-const uint_least8_t Board_AESCCM0_CONST = Board_AESCCM0;
-const uint_least8_t AESCCM_count = CONFIG_AESCCM_COUNT;
-
-/*
- *  =============================== AESCTRDRBG ===============================
- */
-
-#include <ti/drivers/AESCTRDRBG.h>
-#include <ti/drivers/aesctrdrbg/AESCTRDRBGXX.h>
-
-#define CONFIG_AESCTRDRBG_COUNT 1
-
-/*
- *  ======== aesctrdrbgXXObjects ========
- */
-AESCTRDRBGXX_Object aesctrdrbgXXObjects[CONFIG_AESCTRDRBG_COUNT];
-
-/*
- *  ======== aesctrdrbgXXHWAttrs ========
- */
-const AESCTRDRBGXX_HWAttrs aesctrdrbgXXHWAttrs[CONFIG_AESCTRDRBG_COUNT] = {
-    /* CONFIG_AESCTRDRBG_0 */
-    {
-        .aesctrHWAttrs.intPriority = (~0)
-    },
-};
-
-/*
- *  ======== AESCTRDRBG_config ========
- */
-const AESCTRDRBG_Config AESCTRDRBG_config[CONFIG_AESCTRDRBG_COUNT] = {
-    /* CONFIG_AESCTRDRBG_0 */
-    {
-        .object = &aesctrdrbgXXObjects[CONFIG_AESCTRDRBG_0],
-        .hwAttrs = &aesctrdrbgXXHWAttrs[CONFIG_AESCTRDRBG_0]
-    },
-};
-
-const uint_least8_t CONFIG_AESCTRDRBG_0_CONST = CONFIG_AESCTRDRBG_0;
-const uint_least8_t AESCTRDRBG_count = CONFIG_AESCTRDRBG_COUNT;
-
-/*
- *  =============================== AESECB ===============================
- */
-
-#include <ti/drivers/AESECB.h>
-#include <ti/drivers/aesecb/AESECBCC26XX.h>
-
-#define CONFIG_AESECB_COUNT 1
-
-
-AESECBCC26XX_Object aesecbCC26XXObjects[CONFIG_AESECB_COUNT];
-
-/*
- *  ======== aesecbCC26XXHWAttrs ========
- */
-const AESECBCC26XX_HWAttrs aesecbCC26XXHWAttrs[CONFIG_AESECB_COUNT] = {
-    {
-        .intPriority = (~0),
-    },
-};
-
-const AESECB_Config AESECB_config[CONFIG_AESECB_COUNT] = {
-    {   /* CONFIG_AESECB0 */
-        .object  = &aesecbCC26XXObjects[CONFIG_AESECB0],
-        .hwAttrs = &aesecbCC26XXHWAttrs[CONFIG_AESECB0]
-    },
-};
-
-
-const uint_least8_t CONFIG_AESECB0_CONST = CONFIG_AESECB0;
-const uint_least8_t AESECB_count = CONFIG_AESECB_COUNT;
 
 /*
  *  =============================== DMA ===============================
@@ -176,37 +42,6 @@ const UDMACC26XX_Config UDMACC26XX_config[1] = {
 };
 
 /*
- *  =============================== ECDH ===============================
- */
-
-#include <ti/drivers/ECDH.h>
-#include <ti/drivers/ecdh/ECDHCC26X2.h>
-
-#define CONFIG_ECDH_COUNT 1
-
-
-ECDHCC26X2_Object ecdhCC26X2Objects[CONFIG_ECDH_COUNT];
-
-/*
- *  ======== ecdhCC26X2HWAttrs ========
- */
-const ECDHCC26X2_HWAttrs ecdhCC26X2HWAttrs[CONFIG_ECDH_COUNT] = {
-    {
-        .intPriority = (~0),
-    },
-};
-
-const ECDH_Config ECDH_config[CONFIG_ECDH_COUNT] = {
-    {   /* CONFIG_ECDH0 */
-        .object         = &ecdhCC26X2Objects[CONFIG_ECDH0],
-        .hwAttrs        = &ecdhCC26X2HWAttrs[CONFIG_ECDH0]
-    },
-};
-
-const uint_least8_t CONFIG_ECDH0_CONST = CONFIG_ECDH0;
-const uint_least8_t ECDH_count = CONFIG_ECDH_COUNT;
-
-/*
  *  =============================== GPIO ===============================
  */
 
@@ -228,18 +63,20 @@ GPIO_PinConfig gpioPinConfigs[31] = {
     0, /* Pin is not available on this device */
     0, /* Pin is not available on this device */
     GPIO_CFG_NO_DIR, /* DIO_5 */
-    GPIO_CFG_NO_DIR, /* DIO_6 */
-    GPIO_CFG_NO_DIR, /* DIO_7 */
+    /* Owned by CONFIG_LED_0 as LED GPIO */
+    GPIO_CFG_OUTPUT_INTERNAL | GPIO_CFG_OUT_STR_MED | GPIO_CFG_OUT_LOW, /* CONFIG_LED_0_GPIO */
+    /* Owned by CONFIG_LED_1 as LED GPIO */
+    GPIO_CFG_OUTPUT_INTERNAL | GPIO_CFG_OUT_STR_MED | GPIO_CFG_OUT_LOW, /* CONFIG_LED_1_GPIO */
     GPIO_CFG_NO_DIR, /* DIO_8 */
     GPIO_CFG_NO_DIR, /* DIO_9 */
     GPIO_CFG_NO_DIR, /* DIO_10 */
     GPIO_CFG_NO_DIR, /* DIO_11 */
-    /* Owned by CONFIG_DISPLAY_UART as RX */
-    GPIO_CFG_INPUT_INTERNAL | GPIO_CFG_IN_INT_NONE | GPIO_CFG_PULL_DOWN_INTERNAL, /* CONFIG_GPIO_UART_RX */
-    /* Owned by CONFIG_DISPLAY_UART as TX */
-    GPIO_CFG_OUTPUT_INTERNAL | GPIO_CFG_OUT_STR_MED | GPIO_CFG_OUT_HIGH, /* CONFIG_GPIO_UART_TX */
-    GPIO_CFG_INPUT_INTERNAL | GPIO_CFG_IN_INT_NONE | GPIO_CFG_PULL_NONE_INTERNAL, /* CONFIG_GPIO_BTN2 */
-    GPIO_CFG_INPUT_INTERNAL | GPIO_CFG_IN_INT_NONE | GPIO_CFG_PULL_NONE_INTERNAL, /* CONFIG_GPIO_BTN1 */
+    /* Owned by CONFIG_UART2_0 as RX */
+    GPIO_CFG_INPUT_INTERNAL | GPIO_CFG_IN_INT_NONE | GPIO_CFG_PULL_DOWN_INTERNAL, /* CONFIG_GPIO_UART2_0_RX */
+    /* Owned by CONFIG_UART2_0 as TX */
+    GPIO_CFG_OUTPUT_INTERNAL | GPIO_CFG_OUT_STR_MED | GPIO_CFG_OUT_HIGH, /* CONFIG_GPIO_UART2_0_TX */
+    GPIO_CFG_NO_DIR, /* DIO_14 */
+    GPIO_CFG_NO_DIR, /* DIO_15 */
     GPIO_CFG_NO_DIR, /* DIO_16 */
     GPIO_CFG_NO_DIR, /* DIO_17 */
     GPIO_CFG_NO_DIR, /* DIO_18 */
@@ -275,13 +112,13 @@ GPIO_CallbackFxn gpioCallbackFunctions[31];
  */
 void* gpioUserArgs[31];
 
-const uint_least8_t CONFIG_GPIO_UART_TX_CONST = CONFIG_GPIO_UART_TX;
-const uint_least8_t CONFIG_GPIO_UART_RX_CONST = CONFIG_GPIO_UART_RX;
-const uint_least8_t CONFIG_GPIO_BTN1_CONST = CONFIG_GPIO_BTN1;
-const uint_least8_t CONFIG_GPIO_BTN2_CONST = CONFIG_GPIO_BTN2;
 const uint_least8_t CONFIG_RF_24GHZ_CONST = CONFIG_RF_24GHZ;
 const uint_least8_t CONFIG_RF_HIGH_PA_CONST = CONFIG_RF_HIGH_PA;
 const uint_least8_t CONFIG_RF_SUB1GHZ_CONST = CONFIG_RF_SUB1GHZ;
+const uint_least8_t CONFIG_LED_0_GPIO_CONST = CONFIG_LED_0_GPIO;
+const uint_least8_t CONFIG_LED_1_GPIO_CONST = CONFIG_LED_1_GPIO;
+const uint_least8_t CONFIG_GPIO_UART2_0_TX_CONST = CONFIG_GPIO_UART2_0_TX;
+const uint_least8_t CONFIG_GPIO_UART2_0_RX_CONST = CONFIG_GPIO_UART2_0_RX;
 
 /*
  *  ======== GPIO_config ========
@@ -294,81 +131,19 @@ const GPIO_Config GPIO_config = {
 };
 
 /*
- *  =============================== NVS ===============================
- */
-
-#include <ti/drivers/NVS.h>
-#include <ti/drivers/nvs/NVSCC26XX.h>
-
-/*
- *  NVSCC26XX Internal NVS flash region definitions
- *
- * Place uninitialized char arrays at addresses
- * corresponding to the 'regionBase' addresses defined in
- * the configured NVS regions. These arrays are used as
- * place holders so that the linker will not place other
- * content there.
- *
- * For GCC targets, the char arrays are each placed into
- * the shared ".nvs" section. The user must add content to
- * their GCC linker command file to place the .nvs section
- * at the lowest 'regionBase' address specified in their NVS
- * regions.
- */
-
-#if defined(__TI_COMPILER_VERSION__) || defined(__clang__)
-
-static char flashBuf0[0x4000] __attribute__ ((retain, noinit, location(0x48000)));
-
-#elif defined(__IAR_SYSTEMS_ICC__)
-
-__no_init static char flashBuf0[0x4000] @ 0x48000;
-
-#elif defined(__GNUC__)
-
-__attribute__ ((section (".nvs")))
-static char flashBuf0[0x4000];
-
-#endif
-
-NVSCC26XX_Object nvsCC26XXObjects[1];
-
-static const NVSCC26XX_HWAttrs nvsCC26XXHWAttrs[1] = {
-    /* CONFIG_NVSINTERNAL */
-    {
-        .regionBase = (void *) flashBuf0,
-        .regionSize = 0x4000
-    },
-};
-
-#define CONFIG_NVS_COUNT 1
-
-const NVS_Config NVS_config[CONFIG_NVS_COUNT] = {
-    /* CONFIG_NVSINTERNAL */
-    {
-        .fxnTablePtr = &NVSCC26XX_fxnTable,
-        .object = &nvsCC26XXObjects[0],
-        .hwAttrs = &nvsCC26XXHWAttrs[0],
-    },
-};
-
-const uint_least8_t CONFIG_NVSINTERNAL_CONST = CONFIG_NVSINTERNAL;
-const uint_least8_t NVS_count = CONFIG_NVS_COUNT;
-
-/*
  *  =============================== Power ===============================
  */
 #include <ti/drivers/Power.h>
 #include <ti/drivers/power/PowerCC26X2.h>
 #include "ti_drivers_config.h"
 
-extern void PowerCC26XX_standbyPolicy(void);
+extern void PowerCC26XX_doWFI(void);
 extern bool PowerCC26XX_calibrate(unsigned int);
 
 const PowerCC26X2_Config PowerCC26X2_config = {
     .enablePolicy             = true,
     .policyInitFxn            = NULL,
-    .policyFxn                = PowerCC26XX_standbyPolicy,
+    .policyFxn                = PowerCC26XX_doWFI,
     .calibrateFxn             = PowerCC26XX_calibrate,
     .calibrateRCOSC_LF        = true,
     .calibrateRCOSC_HF        = true,
@@ -568,39 +343,6 @@ void __attribute__((weak)) rfDriverCallbackAntennaSwitching(RF_Handle client, RF
 }
 
 /*
- *  =============================== TRNG ===============================
- */
-
-#include <ti/drivers/TRNG.h>
-#include <ti/drivers/trng/TRNGCC26XX.h>
-
-#define CONFIG_TRNG_COUNT 1
-
-
-TRNGCC26XX_Object trngCC26XXObjects[CONFIG_TRNG_COUNT];
-
-/*
- *  ======== trngCC26XXHWAttrs ========
- */
-static const TRNGCC26XX_HWAttrs trngCC26XXHWAttrs[CONFIG_TRNG_COUNT] = {
-    {
-        .intPriority = (~0),
-        .swiPriority = 0,
-        .samplesPerCycle = 240000
-    },
-};
-
-const TRNG_Config TRNG_config[CONFIG_TRNG_COUNT] = {
-    {   /* CONFIG_TRNG_0 */
-        .object         = &trngCC26XXObjects[CONFIG_TRNG_0],
-        .hwAttrs        = &trngCC26XXHWAttrs[CONFIG_TRNG_0]
-    },
-};
-
-const uint_least8_t CONFIG_TRNG_0_CONST = CONFIG_TRNG_0;
-const uint_least8_t TRNG_count = CONFIG_TRNG_COUNT;
-
-/*
  *  =============================== UART2 ===============================
  */
 
@@ -618,7 +360,7 @@ const uint_least8_t TRNG_count = CONFIG_TRNG_COUNT;
 
 UART2CC26X2_Object uart2CC26X2Objects[CONFIG_UART2_COUNT];
 
-static unsigned char uart2RxRingBuffer0[32];
+static unsigned char uart2RxRingBuffer0[512];
 /* TX ring buffer allocated to be used for nonblocking mode */
 static unsigned char uart2TxRingBuffer0[32];
 
@@ -630,8 +372,8 @@ static const UART2CC26X2_HWAttrs uart2CC26X2HWAttrs[CONFIG_UART2_COUNT] = {
     .baseAddr           = UART0_BASE,
     .intNum             = INT_UART0_COMB,
     .intPriority        = (~0),
-    .rxPin              = CONFIG_GPIO_UART_RX,
-    .txPin              = CONFIG_GPIO_UART_TX,
+    .rxPin              = CONFIG_GPIO_UART2_0_RX,
+    .txPin              = CONFIG_GPIO_UART2_0_TX,
     .ctsPin             = GPIO_INVALID_INDEX,
     .rtsPin             = GPIO_INVALID_INDEX,
     .flowControl        = UART2_FLOWCTRL_NONE,
@@ -654,15 +396,57 @@ static const UART2CC26X2_HWAttrs uart2CC26X2HWAttrs[CONFIG_UART2_COUNT] = {
 };
 
 const UART2_Config UART2_config[CONFIG_UART2_COUNT] = {
-    {   /* CONFIG_DISPLAY_UART */
-        .object      = &uart2CC26X2Objects[CONFIG_DISPLAY_UART],
-        .hwAttrs     = &uart2CC26X2HWAttrs[CONFIG_DISPLAY_UART]
+    {   /* CONFIG_UART2_0 */
+        .object      = &uart2CC26X2Objects[CONFIG_UART2_0],
+        .hwAttrs     = &uart2CC26X2HWAttrs[CONFIG_UART2_0]
     },
 };
 
-const uint_least8_t CONFIG_DISPLAY_UART_CONST = CONFIG_DISPLAY_UART;
+const uint_least8_t CONFIG_UART2_0_CONST = CONFIG_UART2_0;
 const uint_least8_t UART2_count = CONFIG_UART2_COUNT;
 
+
+/*
+ *  =============================== LED ===============================
+ */
+#include <ti/drivers/apps/LED.h>
+
+#define CONFIG_LED_COUNT 2
+LED_Object LEDObjects[CONFIG_LED_COUNT];
+
+static const LED_HWAttrs LEDHWAttrs[CONFIG_LED_COUNT] = {
+    /* CONFIG_LED_0 */
+    /* LaunchPad LED Red */
+    {
+        .type = LED_GPIO_CONTROLLED,
+        .index = CONFIG_LED_0_GPIO,
+    },
+    /* CONFIG_LED_1 */
+    /* LaunchPad LED Green */
+    {
+        .type = LED_GPIO_CONTROLLED,
+        .index = CONFIG_LED_1_GPIO,
+    },
+};
+
+const LED_Config LED_config[CONFIG_LED_COUNT] = {
+    /* CONFIG_LED_0 */
+    /* LaunchPad LED Red */
+    {
+        .object = &LEDObjects[CONFIG_LED_0],
+        .hwAttrs = &LEDHWAttrs[CONFIG_LED_0]
+    },
+    /* CONFIG_LED_1 */
+    /* LaunchPad LED Green */
+    {
+        .object = &LEDObjects[CONFIG_LED_1],
+        .hwAttrs = &LEDHWAttrs[CONFIG_LED_1]
+    },
+};
+
+const uint_least8_t CONFIG_LED_0_CONST = CONFIG_LED_0;
+const uint_least8_t CONFIG_LED_1_CONST = CONFIG_LED_1;
+const uint_least8_t LED_count = CONFIG_LED_COUNT;
 
 #include <stdbool.h>
 

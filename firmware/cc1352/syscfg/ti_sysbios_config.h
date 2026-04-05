@@ -33,15 +33,15 @@ extern "C" {
 #define BIOS_taskEnabled_D true
 #define BIOS_swiEnabled_D true
 #define BIOS_clockEnabled_D true
-#define BIOS_heapSize_D 0x0
-#define BIOS_rtsLockType_D BIOS_GateMutexPri
+#define BIOS_heapSize_D 0x1000
+#define BIOS_rtsLockType_D BIOS_GateMutex
 #define BIOS_numStartUserFuncs_D 0
 
-#define BIOS_RTS_GATE_STRUCT GateMutexPri_Struct
-#define BIOS_RTS_GATE_HANDLE(x) GateMutexPri_handle(x)
-#define BIOS_RTS_GATE_ENTER(x) GateMutexPri_enter(x)
-#define BIOS_RTS_GATE_LEAVE(x,y) GateMutexPri_leave(x,y)
-#define BIOS_RTS_GATE_CONSTRUCT(x,y) GateMutexPri_construct(x,y)
+#define BIOS_RTS_GATE_STRUCT GateMutex_Struct
+#define BIOS_RTS_GATE_HANDLE(x) GateMutex_handle(x)
+#define BIOS_RTS_GATE_ENTER(x) GateMutex_enter(x)
+#define BIOS_RTS_GATE_LEAVE(x,y) GateMutex_leave(x,y)
+#define BIOS_RTS_GATE_CONSTRUCT(x,y) GateMutex_construct(x,y)
 
 /* ensure Error and Assert defines come before dependent modules */
 
@@ -114,15 +114,13 @@ extern "C" {
 #define HwiHooks_numHooks_D 0
 #define HwiHooks_array NULL
 
-/* HeapCallback module definitions */
+/* HeapMem module definitions */
 
-#define HeapCallback_alloc_D osalHeapAllocFxn
-#define HeapCallback_create_D HeapCallback_defaultCreate
-#define HeapCallback_delete_D HeapCallback_defaultDelete
-#define HeapCallback_free_D osalHeapFreeFxn
-#define HeapCallback_getStats_D osalHeapGetStatsFxn
-#define HeapCallback_init_D osalHeapInitFxn
-#define HeapCallback_isBlocking_D osalHeapIsBlockingFxn
+#define HeapMem_GateStruct GateMutex_Struct
+#define HeapMem_gateConstruct(params) GateMutex_construct(&HeapMem_gate, params)
+#define HeapMem_gateEnter() GateMutex_enter(&HeapMem_gate)
+#define HeapMem_gateLeave(key) GateMutex_leave(&HeapMem_gate, key)
+#define HeapMem_gateCanBlock() GateMutex_canBlock()
 
 /* Clock module definitions */
 
@@ -160,10 +158,10 @@ extern "C" {
 #define Task_allBlockedFunc_D NULL
 #define Task_numPriorities_D 6
 #define Task_defaultStackSize_D 512
-#define Task_idleTaskStackSize_D 768
+#define Task_idleTaskStackSize_D 512
 #define Task_idleTaskVitalTaskFlag_D true
 #define Task_initStackFlag_D true
-#define Task_checkStackFlag_D true
+#define Task_checkStackFlag_D false
 #define Task_deleteTerminatedTasks_D false
 #define Task_numVitalTasks_D 0
 #define Task_minimizeLatency_D false
@@ -207,62 +205,6 @@ extern void System_exitSpin(int);
 #define TimestampProvider_get64_D ti_sysbios_family_arm_cc26xx_TimestampProvider_get64
 #define TimestampProvider_getFreq_D ti_sysbios_family_arm_cc26xx_TimestampProvider_getFreq
 #define TimestampProvider_init_D ti_sysbios_family_arm_cc26xx_TimestampProvider_init
-
-/* ──── FeralRF additions (not in SysConfig output) ──── */
-
-/* Enable long names for RTOS modules */
-#define ti_sysbios_runtime_Startup_long_names
-#define ti_sysbios_runtime_Memory_long_names
-#define ti_sysbios_runtime_System_long_names
-#define ti_sysbios_runtime_Error_long_names
-#define ti_sysbios_runtime_Timestamp_long_names
-#define ti_sysbios_runtime_SysCallback_long_names
-#define ti_sysbios_knl_Clock_long_names
-#define ti_sysbios_knl_Task_long_names
-#define ti_sysbios_knl_Swi_long_names
-#define ti_sysbios_knl_Semaphore_long_names
-#define ti_sysbios_knl_Event_long_names
-#define ti_sysbios_knl_Queue_long_names
-#define ti_sysbios_knl_Idle_long_names
-#define ti_sysbios_knl_Mailbox_long_names
-#define ti_sysbios_heaps_HeapCallback_long_names
-#define ti_sysbios_heaps_HeapMem_long_names
-#define ti_sysbios_family_arm_m3_Hwi_long_names
-#define ti_sysbios_family_arm_cc26xx_Timer_long_names
-#define ti_sysbios_family_arm_cc26xx_TimestampProvider_long_names
-
-#include <ti/sysbios/runtime/Startup_defs.h>
-#include <ti/sysbios/runtime/Memory_defs.h>
-#include <ti/sysbios/knl/Clock_defs.h>
-
-/* Missing _D defines for non-unity build */
-#define Load_autoAddTasks_D true
-#define Load_enableCPULoadCalc_D false
-#define Load_hwiEnabled_D false
-#define Load_postUpdate_D NULL
-#define Load_swiEnabled_D false
-#define Load_taskEnabled_D true
-#define Load_updateInIdle_D true
-#define Load_windowInMs_D 500
-#define HeapMem_GateStruct GateMutexPri_Struct
-#define GateTask_A_badContext NULL
-#define GateSwi_A_badContext NULL
-
-/* SDK 8.30 typo fix */
-#define txPwrBackOffTbl_t txPwrBackoffTbl_t
-
-/* BLE_USER_CFG for ICALL_JT mode */
-#ifndef BLE_USER_CFG
-#define BLE_USER_CFG { &bleStackConfig, &driverTable, &boardConfig, &bleAppServiceInfoTable }
-#endif
-
-/* Extern declarations for BIOS const variables */
-extern const bool BIOS_runtimeCreatesEnabled;
-extern const bool BIOS_taskEnabled;
-extern const bool BIOS_swiEnabled;
-extern const bool BIOS_clockEnabled;
-
-#include <ti/sysbios/gates/GateMutexPri.h>
 
 #ifdef __cplusplus
 }

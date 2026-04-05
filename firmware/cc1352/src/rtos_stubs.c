@@ -34,9 +34,7 @@ void osalHeapInitFxn(void *heap, void *buf, size_t size) {
     (void)heap; (void)buf; (void)size;
 }
 
-/* ─── POSIX pthread cleanup ─── */
-
-void _pthread_cleanupFxn(void) {}
+/* _pthread_cleanupFxn now comes from POSIX unity build in ti_sysbios_config.c */
 
 /* ─── Newlib syscall stubs ─── */
 

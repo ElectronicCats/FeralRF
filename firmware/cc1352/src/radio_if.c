@@ -12,6 +12,7 @@
 #include "smartrf_ble5_0.h"
 #include "smartrf_ieee_15_4_0.h"
 #include "smartrf_prop_0.h"
+#include "ti_radio_config_433.h"
 
 #include <stddef.h>
 #include <string.h>
@@ -122,6 +123,14 @@ static RF_Object s_rf_object;
 static RF_Handle s_rf_handle = NULL;
 static RF_CmdHandle s_rf_rx_cmd = RF_SCHEDULE_CMD_ERROR;
 
+/* 433 MHz persistent handle — opened at boot, never closed */
+static RF_Object s_433_rf_object;
+static RF_Handle s_433_handle = NULL;
+
+RF_Object *RadioIF_get433Object(void) { return &s_433_rf_object; }
+void RadioIF_set433Handle(RF_Handle h) { s_433_handle = h; }
+RF_Handle RadioIF_get433Handle(void) { return s_433_handle; }
+
 
 /* RF event signaling — TI-RTOS Semaphore for ISR→task notification */
 static volatile uint32_t s_rf_event_flags = 0u;
@@ -151,6 +160,9 @@ static uint8_t s_jam_phy = 0u;
 static uint8_t s_jam_channel = 0u;
 static int8_t s_jam_power_dbm = 0;
 static bool s_prop_ook_active = false;
+static uint16_t s_last_tx_status = 0u;
+static uint8_t s_last_tx_result = 0u;
+static uint32_t s_last_tx_event = 0u;
 
 static RF_Mode *RadioIF_getPropMode(void) {
     /* OOK requires genook MCE/RFE patches for TX and RX. Once loaded, these
@@ -160,9 +172,9 @@ static RF_Mode *RadioIF_getPropMode(void) {
     if (s_prop_ook_active) {
         return &Prop0_modeOok;
     }
-    /* cpe_prop for 433 MHz — multi_protocol has loDivider bug */
+    /* SysConfig 433 mode for <861 MHz — pristine struct, never modified at runtime */
     if (s_frequency_hz > 0u && (s_frequency_hz / 1000000u) < 861u) {
-        return &Prop0_modeSub1g;
+        return &Prop0_mode433;
     }
     return &Prop0_mode;
 }
@@ -310,7 +322,7 @@ static bool RadioIF_executeTxCommand(RF_Mode *mode, RF_RadioSetup *setup_cmd, RF
         /* Session already open for this PHY — re-run FS + TX */
         RadioIF_applyRfTxPower(s_tx_session_handle, tx_power);
 
-        /* Always re-run FS before TX to ensure synth is tuned */
+        /* Always re-run FS before TX */
         result = RF_runCmd(s_tx_session_handle, fs_cmd, RF_PriorityNormal, NULL,
                            RADIO_IF_TX_TERM_EVENTS);
         if ((result & RADIO_IF_TX_SUCCESS_EVENTS) == 0u) {
@@ -322,32 +334,34 @@ static bool RadioIF_executeTxCommand(RF_Mode *mode, RF_RadioSetup *setup_cmd, RF
         return (result & RADIO_IF_TX_SUCCESS_EVENTS) != 0u;
     }
 
-    /* Switch RF mode for TX — use copy for Prop to avoid loDivider corruption */
-    RF_RadioSetup *actual_setup = setup_cmd;
-    if (mode == &Prop0_mode || mode == &Prop0_modeOok) {
-        memcpy(&s_prop_setup_copy, setup_cmd, sizeof(s_prop_setup_copy));
-        actual_setup = (RF_RadioSetup *)&s_prop_setup_copy;
-    }
-    if (!RadioIF_switchRfMode(mode, actual_setup)) {
-        return false;
-    }
-    s_tx_session_handle = s_rf_handle;
-    s_tx_session_mode = mode;
-    RadioIF_applyRfTxPower(s_tx_session_handle, tx_power);
+    /* For 433 MHz: use pristine SysConfig struct directly (no memcpy).
+     * For 868+: use copy to avoid loDivider corruption. */
+    {
+        RF_RadioSetup *actual_setup = setup_cmd;
+        if (mode == &Prop0_mode || mode == &Prop0_modeOok) {
+            memcpy(&s_prop_setup_copy, setup_cmd, sizeof(s_prop_setup_copy));
+            actual_setup = (RF_RadioSetup *)&s_prop_setup_copy;
+        }
+        /* Prop0_mode433 uses pristine SysConfig struct — no copy needed */
+        if (!RadioIF_switchRfMode(mode, actual_setup)) {
+            return false;
+        }
+        s_tx_session_handle = s_rf_handle;
+        s_tx_session_mode = mode;
+        RadioIF_applyRfTxPower(s_tx_session_handle, tx_power);
 
-    /* Run FS once for the new session */
-    result = RF_runCmd(s_tx_session_handle, fs_cmd, RF_PriorityNormal, NULL,
-                       RADIO_IF_TX_TERM_EVENTS);
-    if ((result & RADIO_IF_TX_SUCCESS_EVENTS) == 0u) {
-        /* RF_close removed — TI-RTOS */
-        s_tx_session_mode = NULL;
-        return false;
+        /* FS via RF_postCmd (RF_runCmd(FS) can hang with loDivider=0x0A) */
+        fs_cmd->status = 0x0000;
+        RF_postCmd(s_tx_session_handle, fs_cmd, RF_PriorityNormal, NULL, 0);
     }
 
     /* Run TX command */
     result = RF_runCmd(s_tx_session_handle, tx_cmd, RF_PriorityNormal, NULL,
                        RADIO_IF_TX_TERM_EVENTS);
-    return (result & RADIO_IF_TX_SUCCESS_EVENTS) != 0u;
+    s_last_tx_status = tx_cmd->status;
+    s_last_tx_event = (uint32_t)result;
+    s_last_tx_result = ((result & RADIO_IF_TX_SUCCESS_EVENTS) != 0u) ? 1u : 0u;
+    return s_last_tx_result;
 }
 
 static uint8_t RadioIF_convertToBleChannel(uint8_t channel) {
@@ -625,6 +639,29 @@ void RadioIF_resetMetrics(void) {
     s_metrics.rx_overflow = 0u;
 }
 
+void *RadioIF_getRfHandle(void) {
+    return (void *)s_rf_handle;
+}
+
+void RadioIF_getRfDebug(RadioIF_RfDebug *out) {
+    out->rf_handle_ok = (s_rf_handle != NULL) ? 1u : 0u;
+    out->rf_mode = (uint8_t)s_rf_mode;
+    out->setup_status = (uint16_t)Prop0_cmdPropRadioDivSetup.status;
+    out->fs_status = (uint16_t)Prop0_cmdFs.status;
+    out->rx_status = (uint16_t)Prop0_cmdPropRx.status;
+    out->tx_status = s_last_tx_status;
+    out->fs_freq = Prop0_cmdFs.frequency;
+    out->lo_divider = Prop0_cmdPropRadioDivSetup.loDivider;
+    out->freq_hz = s_frequency_hz;
+    out->tx_result_ok = s_last_tx_result;
+    out->tx_event_mask = s_last_tx_event;
+    out->fs_frac = Prop0_cmdFs.fractFreq;
+    out->setup_center = Prop0_cmdPropRadioDivSetup.centerFreq;
+    out->tx_session_ok = (s_tx_session_handle != NULL) ? 1u : 0u;
+    out->tx_session_match = (s_tx_session_mode == &Prop0_mode433) ? 1u : 0u;
+    out->tx_cmd_no = Prop0_cmdPropTx.commandNo;
+}
+
 static uint32_t RadioIF_getElapsedCycles(void) {
     uint32_t systick_now = SysTickValueGet();
     uint32_t elapsed_cycles = 0;
@@ -797,8 +834,6 @@ static bool RadioIF_runFsAndPostRx(void) {
         event_mask |= RF_EventLastFGCmdDone;
         break;
     case RADIO_IF_RF_MODE_SUB_1GHZ: {
-        extern rfc_CMD_FS_t Prop0_cmdFs433;
-        extern rfc_CMD_PROP_RX_t Prop0_cmdPropRx433;
         uint32_t fmhz = s_frequency_hz / 1000000u;
         if (fmhz > 0u && fmhz < 861u) {
             fs_cmd = (RF_Op *)&Prop0_cmdFs433;
@@ -814,9 +849,9 @@ static bool RadioIF_runFsAndPostRx(void) {
         return false;
     }
 
-    /* CMD_FS + post RX (single handle, no multi-client) */
+    /* CMD_FS via RF_postCmd (TI-RTOS: RF_runCmd(FS) can hang with loDivider=0x0A) */
     fs_cmd->status = 0x0000;
-    (void)RF_runCmd(s_rf_handle, fs_cmd, RF_PriorityNormal, NULL, 0);
+    (void)RF_postCmd(s_rf_handle, fs_cmd, RF_PriorityNormal, NULL, 0);
 
     rx_cmd->status = 0x0000;
     s_rf_rx_cmd =
@@ -893,25 +928,46 @@ static void RadioIF_applyBlePhyMode(uint8_t phy) {
     Ble5_0_cmdBle5AdvNc.phyMode.coding = coding;
 }
 
-/* Track current RF_Mode to avoid unnecessary close/open */
+/* rfDiagnostics pattern: RF_yield → RF_close → RF_open for PHY switch */
 static RF_Mode *s_current_rf_mode = NULL;
 
-/* rfDiagnostics pattern: RF_yield → RF_close → RF_open for PHY switch */
 static bool RadioIF_switchRfMode(RF_Mode *mode, RF_RadioSetup *setup) {
-    /* Skip close/open if same mode and handle already open */
+    /* 433 MHz uses a persistent boot handle — never RF_close/RF_open.
+     * Alias s_rf_handle so downstream code (runFsAndPostRx, etc.) works. */
+    if (mode == &Prop0_mode433) {
+        if (s_433_handle == NULL) {
+            return false;
+        }
+        /* Close any non-433 handle first to free the RF client slot */
+        if (s_rf_handle != NULL && s_rf_handle != s_433_handle) {
+            RF_flushCmd(s_rf_handle, RF_CMDHANDLE_FLUSH_ALL, 0);
+            RF_yield(s_rf_handle);
+            ClockP_usleep(1000);
+            RF_close(s_rf_handle);
+        }
+        s_rf_handle = s_433_handle;
+        s_current_rf_mode = &Prop0_mode433;
+        return true;
+    }
+    /* Skip close/open if already in the same RF mode */
     if (s_rf_handle != NULL && s_current_rf_mode == mode) {
-        /* Just flush pending commands */
         RF_flushCmd(s_rf_handle, RF_CMDHANDLE_FLUSH_ALL, 0);
         return true;
     }
-
     if (s_rf_handle != NULL) {
         RF_flushCmd(s_rf_handle, RF_CMDHANDLE_FLUSH_ALL, 0);
-        RF_yield(s_rf_handle);
-        ClockP_usleep(1000); /* 1ms settle after yield */
-        RF_close(s_rf_handle);
-        s_rf_handle = NULL;
-        s_current_rf_mode = NULL;
+        if (s_rf_handle == s_433_handle) {
+            /* s_rf_handle is aliased to the 433 boot handle — detach
+             * without RF_close to preserve the persistent handle. */
+            s_rf_handle = NULL;
+            s_current_rf_mode = NULL;
+        } else {
+            RF_yield(s_rf_handle);
+            ClockP_usleep(1000); /* 1ms settle after yield */
+            RF_close(s_rf_handle);
+            s_rf_handle = NULL;
+            s_current_rf_mode = NULL;
+        }
     }
     RF_Params rf_params;
     RF_Params_init(&rf_params);
@@ -1007,9 +1063,7 @@ void RadioIF_getScannerStats(uint16_t *tx_req, uint16_t *rx_adv_ok, uint16_t *rx
 }
 
 static bool RadioIF_startIeee154RfBackend(void) {
-    if (s_rf_handle == NULL) {
-        return false;
-    }
+    /* s_rf_handle may be NULL — switchRfMode will open */
 
     if (!RadioIF_createRfDataQueue(&s_rf_data_queue, s_rf_rx_data_buffer,
                                    (uint16_t)sizeof(s_rf_rx_data_buffer), RF_QUEUE_NUM_DATA_ENTRIES,
@@ -1064,6 +1118,8 @@ static void RadioIF_stopRfBackend(void) {
     s_rf_rx_cmd = RF_SCHEDULE_CMD_ERROR;
     s_rf_event_flags = 0u;
     s_rf_mode = RADIO_IF_RF_MODE_NONE;
+    /* Invalidate current mode — forces RF_close+RF_open on next switchRfMode */
+    s_current_rf_mode = NULL;
     RadioIF_resetRfDataQueue();
 }
 
@@ -1253,20 +1309,25 @@ static void RadioIF_applySub1ghzChannelConfig(uint16_t channel, uint32_t frequen
     Prop0_cmdFs.fractFreq = frac;
     Prop0_cmdPropRadioDivSetup.centerFreq = freq_mhz;
 
-    /* loDivider: 0x05 for 779-930 MHz, 0x0A for 431-527 MHz, 0x02 for 2.4 GHz */
+    /* loDivider: 0x05 for 779-930 MHz, 0x0A for 431-527 MHz */
+    uint8_t lo_div = 0x05;
     if (freq_mhz >= 2400u) {
-        Prop0_cmdPropRadioDivSetup.loDivider = 0x00;
+        lo_div = 0x00;
     } else if (freq_mhz >= 779u && freq_mhz <= 930u) {
-        Prop0_cmdPropRadioDivSetup.loDivider = 0x05;
+        lo_div = 0x05;
     } else if (freq_mhz >= 431u && freq_mhz <= 527u) {
-        Prop0_cmdPropRadioDivSetup.loDivider = 0x0A;
+        lo_div = 0x0A;
     }
+    Prop0_cmdPropRadioDivSetup.loDivider = lo_div;
+
+    /* 433 SysConfig structs are NEVER modified here — they are dedicated
+     * to the boot handle. TX/RX paths update Prop0_cmdFs433 directly
+     * before each operation. Modifying them here would corrupt the
+     * RF driver's cached pRadioSetup. */
 }
 
 static bool RadioIF_startSub1ghzRfBackend(void) {
-    if (s_rf_handle == NULL) {
-        return false;
-    }
+    /* s_rf_handle may be NULL if no RF_open at init — switchRfMode will open */
 
     if (!RadioIF_createRfDataQueue(&s_rf_data_queue, s_rf_rx_data_buffer,
                                    (uint16_t)sizeof(s_rf_rx_data_buffer), RF_QUEUE_NUM_DATA_ENTRIES,
@@ -1290,27 +1351,19 @@ static bool RadioIF_startSub1ghzRfBackend(void) {
     Prop0_cmdPropRx.rxConf.bAppendStatus = 1u;
     Prop0_cmdPropRx.maxPktLen = 0xFF;
 
-    /* For 433 MHz: use SysConfig-generated structs (exact TI example config).
-     * These have correct loDivider=0x0A baked in from SysConfig — avoids the
-     * RF driver bug where runtime-modified loDivider fails after RF_close. */
+    /* For 433 MHz: use pristine SysConfig-generated structs (commit 2eca110 approach).
+     * For 868+: use copy to avoid loDivider corruption. */
     {
-        extern RF_Mode Prop0_mode433;
-        extern rfc_CMD_PROP_RADIO_DIV_SETUP_PA_t Prop0_cmdPropRadioDivSetup433;
-        extern rfc_CMD_FS_t Prop0_cmdFs433;
-        extern rfc_CMD_PROP_RX_t Prop0_cmdPropRx433;
-
-        uint32_t freq_mhz = s_frequency_hz / 1000000u;
-        bool use_433_config = (freq_mhz > 0u && freq_mhz < 861u);
-
-        RF_Mode *mode;
+        RF_Mode *mode = RadioIF_getPropMode();
         RF_RadioSetup *setup;
+        uint32_t freq_mhz = s_frequency_hz / 1000000u;
+        bool use_433 = (freq_mhz > 0u && freq_mhz < 861u);
 
-        if (use_433_config) {
-            /* SysConfig 433 — structs are pristine, never modified at runtime */
-            mode = &Prop0_mode433;
+        if (use_433) {
+            /* SysConfig 433 — pristine structs, never modified at runtime */
             setup = (RF_RadioSetup *)&Prop0_cmdPropRadioDivSetup433;
 
-            /* Configure RX queue on the 433 RX command */
+            /* Configure RX on the 433 RX command */
             Prop0_cmdPropRx433.pQueue = &s_rf_data_queue;
             Prop0_cmdPropRx433.pOutput = NULL;
             Prop0_cmdPropRx433.pktConf.bRepeatOk = 1u;
@@ -1323,14 +1376,16 @@ static bool RadioIF_startSub1ghzRfBackend(void) {
             Prop0_cmdPropRx433.rxConf.bAppendTimestamp = 1u;
             Prop0_cmdPropRx433.rxConf.bAppendStatus = 1u;
             Prop0_cmdPropRx433.maxPktLen = 0xFF;
+            Prop0_cmdPropRx433.endTrigger.triggerType = TRIG_NEVER;
+            Prop0_cmdPropRx433.endTime = 0x00000000;
 
-            /* Set FS frequency for 433 */
+            /* Set FS frequency for 433 RX (LNA mode) */
             uint16_t frac = (uint16_t)(((s_frequency_hz % 1000000u) * 65536u) / 1000000u);
             Prop0_cmdFs433.frequency = (uint16_t)freq_mhz;
             Prop0_cmdFs433.fractFreq = frac;
+            Prop0_cmdFs433.synthConf.bTxMode = 0u; /* LNA mode for RX */
         } else {
-            /* 868/915/2.4GHz — use our standard structs */
-            mode = RadioIF_getPropMode();
+            /* 868/915/2.4GHz — use copy of standard struct */
             memcpy(&s_prop_setup_copy, &Prop0_cmdPropRadioDivSetup, sizeof(s_prop_setup_copy));
             setup = (RF_RadioSetup *)&s_prop_setup_copy;
         }
@@ -1348,6 +1403,12 @@ static bool RadioIF_startSub1ghzRfBackend(void) {
     }
 
     s_rf_event_flags = 0u;
+
+    /* Pre-set TX session for 433 so executeTxCommand reuses handle */
+    if (RadioIF_getPropMode() == &Prop0_mode433) {
+        s_tx_session_handle = s_rf_handle;
+        s_tx_session_mode = &Prop0_mode433;
+    }
     return true;
 }
 
@@ -1413,6 +1474,43 @@ static bool RadioIF_transmitPropRaw(const uint8_t *payload, uint8_t payload_len)
     memcpy(s_prop_tx_buffer, payload, payload_len);
     RadioIF_applySub1ghzChannelConfig(s_channel, s_frequency_hz);
 
+    RF_Mode *mode = RadioIF_getPropMode();
+    if (mode == &Prop0_mode433) {
+        /* 433 MHz: handle opened at boot in main_rtos.c, reused forever.
+         * NEVER RF_close — TI RF driver bug breaks subsequent RF_open. */
+        RF_EventMask result;
+
+        uint32_t freq_mhz = s_frequency_hz / 1000000u;
+        uint16_t frac = (uint16_t)(((s_frequency_hz % 1000000u) * 65536u) / 1000000u);
+
+        if (s_433_handle == NULL) {
+            return false; /* Handle not opened at boot */
+        }
+
+        /* Use SAME dedicated 433 structs that the handle was opened with.
+         * Driver caches pRadioSetup + first CMD_FS pointers — must match. */
+        Prop0_cmdFs433.frequency = (uint16_t)freq_mhz;
+        Prop0_cmdFs433.fractFreq = frac;
+        Prop0_cmdFs433.synthConf.bTxMode = 1u; /* PA mode */
+        Prop0_cmdFs433.status = 0x0000;
+        RF_postCmd(s_433_handle, (RF_Op *)&Prop0_cmdFs433, RF_PriorityNormal, NULL, 0);
+
+        Prop0_cmdPropTx433.pPkt = s_prop_tx_buffer;
+        Prop0_cmdPropTx433.pktLen = payload_len;
+        Prop0_cmdPropTx433.startTrigger.triggerType = 0x0;
+        Prop0_cmdPropTx433.startTrigger.pastTrig = 0x1;
+        Prop0_cmdPropTx433.status = 0x0000;
+
+        result = RF_runCmd(s_433_handle, (RF_Op *)&Prop0_cmdPropTx433,
+                           RF_PriorityNormal, NULL, 0);
+
+        s_last_tx_status = Prop0_cmdPropTx433.status;
+        s_last_tx_event = (uint32_t)result;
+        s_last_tx_result = (Prop0_cmdPropTx433.status == 0x3400) ? 1u : 0u;
+        return s_last_tx_result;
+    }
+
+    /* 868+ MHz: use standard structs */
     Prop0_cmdPropTx.pPkt = s_prop_tx_buffer;
     Prop0_cmdPropTx.pktLen = payload_len;
     Prop0_cmdPropTx.startTrigger.triggerType = TRIG_NOW;
@@ -1420,7 +1518,7 @@ static bool RadioIF_transmitPropRaw(const uint8_t *payload, uint8_t payload_len)
     Prop0_cmdPropTx.condition.rule = COND_NEVER;
     Prop0_cmdPropTx.pNextOp = 0;
 
-    return RadioIF_executeTxCommand(RadioIF_getPropMode(),
+    return RadioIF_executeTxCommand(mode,
                                     (RF_RadioSetup *)&Prop0_cmdPropRadioDivSetup,
                                     (RF_Op *)&Prop0_cmdFs,
                                     (RF_Op *)&Prop0_cmdPropTx, tx_power);
@@ -1459,7 +1557,7 @@ void RadioIF_init(void) {
     s_prop_ook_active = false;
     s_backend = RADIO_IF_BACKEND_SYNTH;
 
-    /* Restore default prop overrides */
+    /* Restore 868 MHz overrides on the shared prop struct (433 uses its own SysConfig struct) */
     Prop0_cmdPropRadioDivSetup.pRegOverride = Prop0_pOverrides;
     Prop0_cmdPropRadioDivSetup.pRegOverrideTxStd = Prop0_pOverridesTxStd;
     Prop0_cmdPropRadioDivSetup.pRegOverrideTx20 = Prop0_pOverridesTx20;
@@ -1479,19 +1577,14 @@ void RadioIF_init(void) {
     /* Set RF_MODE_MULTIPLE for dual-client operation (rfDualModeRx pattern) */
     Ble5_0_mode.rfMode = RF_MODE_MULTIPLE;
     Prop0_mode.rfMode = RF_MODE_MULTIPLE;
+    /* Prop0_mode433 stays RF_MODE_AUTO — matches working hardcoded test */
     Ieee154_0_mode.rfMode = RF_MODE_MULTIPLE;
 
-    /* TEST: Open with SysConfig-generated 433 MHz config (exact TI example) */
-    extern RF_Mode Prop0_mode433;
-    extern rfc_CMD_PROP_RADIO_DIV_SETUP_PA_t Prop0_cmdPropRadioDivSetup433;
-    if (s_rf_handle == NULL) {
-        RF_Params rf_params;
-        RF_Params_init(&rf_params);
-        s_rf_handle = RF_open(&s_rf_object, &Prop0_mode433,
-                               (RF_RadioSetup *)&Prop0_cmdPropRadioDivSetup433, &rf_params);
-        s_current_rf_mode = (s_rf_handle != NULL) ? &Prop0_mode433 : NULL;
-    }
-    s_tx_session_handle = s_rf_handle;
+    /* No RF_open at init — TX path opens from scratch each time */
+    s_rf_handle = NULL;
+    s_current_rf_mode = NULL;
+    s_tx_session_handle = NULL;
+    s_tx_session_mode = NULL;
 }
 
 static void RadioIF_closeTxSession(void) {
@@ -1505,6 +1598,7 @@ static void RadioIF_closeTxSession(void) {
         if (s_prop_ook_active) {
             ClockP_usleep(20000); /* 20ms post-close */
         }
+        s_tx_session_handle = NULL;
         s_tx_session_mode = NULL;
     }
 }
@@ -1518,9 +1612,26 @@ void RadioIF_setPhy(uint8_t phy, uint16_t channel, uint32_t frequency_hz) {
     s_rx_running = false;
     /* Now safe to reset OOK state */
     s_prop_ook_active = false;
-    Prop0_cmdPropRadioDivSetup.pRegOverride = Prop0_pOverrides;
-    Prop0_cmdPropRadioDivSetup.pRegOverrideTxStd = Prop0_pOverridesTxStd;
-    Prop0_cmdPropRadioDivSetup.pRegOverrideTx20 = Prop0_pOverridesTx20;
+
+    /* Update frequency FIRST so override selection uses new value */
+    if (frequency_hz != 0u) {
+        s_frequency_hz = frequency_hz;
+    }
+
+    /* 433 uses its own SysConfig struct — only set 868 overrides on shared struct */
+    {
+        uint32_t fmhz = s_frequency_hz / 1000000u;
+        if (fmhz > 0u && fmhz < 861u) {
+            /* 433 MHz: shared struct overrides don't matter, 433 uses Prop0_cmdPropRadioDivSetup433 */
+            Prop0_cmdPropRadioDivSetup.pRegOverride = Prop0_pOverrides433;
+            Prop0_cmdPropRadioDivSetup.pRegOverrideTxStd = 0;
+            Prop0_cmdPropRadioDivSetup.pRegOverrideTx20 = 0;
+        } else {
+            Prop0_cmdPropRadioDivSetup.pRegOverride = Prop0_pOverrides;
+            Prop0_cmdPropRadioDivSetup.pRegOverrideTxStd = Prop0_pOverridesTxStd;
+            Prop0_cmdPropRadioDivSetup.pRegOverrideTx20 = Prop0_pOverridesTx20;
+        }
+    }
     s_selected_phy = phy;
 
     if (channel != 0u) {
@@ -1534,10 +1645,6 @@ void RadioIF_setPhy(uint8_t phy, uint16_t channel, uint32_t frequency_hz) {
     } else if ((phy == PHY_MANAGER_PHY_IEEE_802_15_4) &&
                (s_channel < IEEE_15_4_CHANNEL_MIN || s_channel > IEEE_15_4_CHANNEL_MAX)) {
         s_channel = IEEE_15_4_DEFAULT_CHANNEL;
-    }
-
-    if (frequency_hz != 0u) {
-        s_frequency_hz = frequency_hz;
     }
 
     if (PhyManager_isBlePhy(s_selected_phy)) {
@@ -1610,23 +1717,33 @@ void RadioIF_setPropConfig(const RadioIF_PropConfig *config) {
         /* Cannot reconfigure while OOK patches are loaded.
          * Silently update config struct but don't close/reopen RF. */
     } else {
-        /* Don't stop RF backend — just update struct params.
-         * startRx will handle the mode switch. */
+        /* For <861 MHz: don't stop RF backend — SysConfig 433 structs stay pristine.
+         * startRx will handle mode switch via switchRfMode. */
+        uint32_t new_freq_mhz = config->frequency_hz / 1000000u;
+        if (new_freq_mhz >= 861u) {
+            RadioIF_closeTxSession();
+            if (s_rf_handle != NULL) {
+                RadioIF_stopRfBackend();
+            }
+        }
     }
 
     /* Frequency */
     freq_mhz = config->frequency_hz / 1000000u;
     frac = (uint16_t)(((config->frequency_hz % 1000000u) * 65536u) / 1000000u);
 
+    /* Always update 868 struct (used for >=861 MHz) */
     Prop0_cmdFs.frequency = (uint16_t)freq_mhz;
     Prop0_cmdFs.fractFreq = frac;
     Prop0_cmdPropRadioDivSetup.centerFreq = (uint16_t)freq_mhz;
 
-    /* Also update 433 SysConfig structs for frequencies < 861 MHz */
-    {
-        extern rfc_CMD_FS_t Prop0_cmdFs433;
+    /* Also update 433 SysConfig FS for <861 MHz */
+    if (freq_mhz < 861u) {
         Prop0_cmdFs433.frequency = (uint16_t)freq_mhz;
         Prop0_cmdFs433.fractFreq = frac;
+        /* Update sync word on 433 commands */
+        Prop0_cmdPropTx433.syncWord = config->sync_word;
+        Prop0_cmdPropRx433.syncWord = config->sync_word;
     }
 
     /* loDivider based on frequency */
@@ -1647,41 +1764,32 @@ void RadioIF_setPropConfig(const RadioIF_PropConfig *config) {
     }
     Prop0_cmdPropRadioDivSetup.loDivider = lo_div;
 
-    /* Modulation type */
-    Prop0_cmdPropRadioDivSetup.modulation.modType = config->mod_type;
+    /* For <861 MHz: keep 433 SysConfig radio params pristine (modType, deviation,
+     * symbolRate, rxBw). Only frequency + sync word are configurable.
+     * For >=861 MHz: full configuration as before. */
+    if (freq_mhz >= 861u) {
+        /* Modulation type */
+        Prop0_cmdPropRadioDivSetup.modulation.modType = config->mod_type;
 
-    /* Deviation (in units of 250 Hz for the register, but SmartRF uses raw value) */
-    /* The deviation field is in kHz units at the register level.
-     * Actual formula: deviation_Hz = deviation_reg * (24MHz / 2^22)
-     * So: deviation_reg = deviation_Hz * 2^22 / 24MHz = deviation_Hz * 0.1747...
-     * Simplified: deviation_reg = (deviation_Hz * 4194304) / 24000000
-     * For 25000 Hz: 25000 * 4194304 / 24000000 = 4369 ≈ but SmartRF uses 0x64=100
-     * The SmartRF value is: deviation_kHz * 4 (approximately)
-     * Actually the field is deviation in units that depend on symbolRate.preScale.
-     * Simplification: pass raw register value from Python, let user or presets handle it.
-     */
-    Prop0_cmdPropRadioDivSetup.modulation.deviation = config->deviation;
+        /* Deviation — raw register value from Python */
+        Prop0_cmdPropRadioDivSetup.modulation.deviation = config->deviation;
 
-    /* Symbol rate: rateWord and preScale
-     * symbolRate = (rateWord * 24MHz) / (2^20 * preScale)
-     * => rateWord = (symbolRate * 2^20 * preScale) / 24MHz
-     * Use preScale=15 as default (works for wide range of rates).
-     */
-    pre_scale = 15u;
-    rate_word = (uint32_t)(((uint64_t)config->symbol_rate * 1048576u * (uint64_t)pre_scale)
-                           / 24000000u);
-    if (rate_word > 0xFFFFFu) {
-        /* Rate too high for preScale=15, try preScale=5 */
-        pre_scale = 5u;
+        /* Symbol rate */
+        pre_scale = 15u;
         rate_word = (uint32_t)(((uint64_t)config->symbol_rate * 1048576u * (uint64_t)pre_scale)
                                / 24000000u);
-    }
-    Prop0_cmdPropRadioDivSetup.symbolRate.preScale = pre_scale;
-    Prop0_cmdPropRadioDivSetup.symbolRate.rateWord = rate_word;
+        if (rate_word > 0xFFFFFu) {
+            pre_scale = 5u;
+            rate_word = (uint32_t)(((uint64_t)config->symbol_rate * 1048576u * (uint64_t)pre_scale)
+                                   / 24000000u);
+        }
+        Prop0_cmdPropRadioDivSetup.symbolRate.preScale = pre_scale;
+        Prop0_cmdPropRadioDivSetup.symbolRate.rateWord = rate_word;
 
-    /* RX bandwidth */
-    if (config->rx_bw != 0u) {
-        Prop0_cmdPropRadioDivSetup.rxBw = config->rx_bw;
+        /* RX bandwidth */
+        if (config->rx_bw != 0u) {
+            Prop0_cmdPropRadioDivSetup.rxBw = config->rx_bw;
+        }
     }
 
     /* Sync word (applied to both TX and RX commands) */
@@ -1690,28 +1798,25 @@ void RadioIF_setPropConfig(const RadioIF_PropConfig *config) {
 
     /* Select overrides by modulation type and frequency band */
     if (config->mod_type == 2u) {
-        /* OOK: use genook patches + OOK overrides.
-         * WARNING: after this, only OOK operations are safe. Switching to
-         * BLE/GFSK/IEEE will hang the RF Core (TI SDK bug). Power cycle
-         * required to use other modes. */
+        /* OOK: use genook patches + OOK overrides */
         Prop0_cmdPropRadioDivSetup.pRegOverride = Prop0_pOverridesOok;
         Prop0_cmdPropRadioDivSetup.pRegOverrideTxStd = Prop0_pOverridesOokTxStd;
         Prop0_cmdPropRadioDivSetup.pRegOverrideTx20 = Prop0_pOverridesOokTx20;
         s_prop_ook_active = true;
     } else if (freq_mhz < 250u) {
-        /* 169 MHz band: heavy synth calibration */
+        /* 169 MHz band */
         Prop0_cmdPropRadioDivSetup.pRegOverride = Prop0_pOverrides169;
         Prop0_cmdPropRadioDivSetup.pRegOverrideTxStd = Prop0_pOverrides433TxStd;
         Prop0_cmdPropRadioDivSetup.pRegOverrideTx20 = Prop0_pOverrides433Tx20;
         s_prop_ook_active = false;
     } else if (freq_mhz < 861u) {
-        /* 287-860 MHz (315, 390, 433, 470 MHz): use 433 overrides */
+        /* 287-860 MHz: 433 SysConfig struct handles this — update shared for fallback */
         Prop0_cmdPropRadioDivSetup.pRegOverride = Prop0_pOverrides433;
-        Prop0_cmdPropRadioDivSetup.pRegOverrideTxStd = Prop0_pOverrides433TxStd;
-        Prop0_cmdPropRadioDivSetup.pRegOverrideTx20 = Prop0_pOverrides433Tx20;
+        Prop0_cmdPropRadioDivSetup.pRegOverrideTxStd = 0;
+        Prop0_cmdPropRadioDivSetup.pRegOverrideTx20 = 0;
         s_prop_ook_active = false;
     } else {
-        /* 861+ MHz (868, 915, 2.4 GHz): standard overrides */
+        /* 861+ MHz: standard overrides */
         Prop0_cmdPropRadioDivSetup.pRegOverride = Prop0_pOverrides;
         Prop0_cmdPropRadioDivSetup.pRegOverrideTxStd = Prop0_pOverridesTxStd;
         Prop0_cmdPropRadioDivSetup.pRegOverrideTx20 = Prop0_pOverridesTx20;
@@ -1735,20 +1840,23 @@ void RadioIF_setPower(int8_t power_dbm) {
 bool RadioIF_transmitRaw(const uint8_t *data, uint8_t data_len, int8_t power_dbm) {
     s_tx_power_dbm = power_dbm;
 
-    if (s_rx_running || (s_rf_handle == NULL)) {
+    if (s_rx_running) {
         return false;
     }
 
-    if (RadioIF_isIeee154PhySelected()) {
-        return RadioIF_transmitIeee154Raw(data, data_len);
+    /* Each TX path calls executeTxCommand → switchRfMode which opens
+     * the RF handle if needed. No s_rf_handle NULL guard here —
+     * 433 has its own persistent handle, BLE/IEEE open on demand. */
+    if (RadioIF_isSub1ghzPhySelected()) {
+        return RadioIF_transmitPropRaw(data, data_len);
     }
 
     if (PhyManager_isBlePhy(s_selected_phy)) {
         return RadioIF_transmitBleAdvRaw(data, data_len);
     }
 
-    if (RadioIF_isSub1ghzPhySelected()) {
-        return RadioIF_transmitPropRaw(data, data_len);
+    if (RadioIF_isIeee154PhySelected()) {
+        return RadioIF_transmitIeee154Raw(data, data_len);
     }
 
     return false;

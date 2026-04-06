@@ -35,6 +35,13 @@ typedef struct {
 } RadioIF_Metrics;
 
 void RadioIF_init(void);
+
+/* 433 MHz boot handle — opened once at boot, never closed */
+#include <ti/drivers/rf/RF.h>
+RF_Object *RadioIF_get433Object(void);
+void RadioIF_set433Handle(RF_Handle h);
+RF_Handle RadioIF_get433Handle(void);
+
 void RadioIF_setPhy(uint8_t phy, uint16_t channel, uint32_t frequency_hz);
 void RadioIF_setChannel(uint8_t channel);
 void RadioIF_setPower(int8_t power_dbm);
@@ -63,6 +70,29 @@ void RadioIF_setPropConfig(const RadioIF_PropConfig *config);
 void RadioIF_setActiveScan(bool enabled);
 void RadioIF_getScannerStats(uint16_t *tx_req, uint16_t *rx_adv_ok, uint16_t *rx_rsp_ok);
 void RadioIF_setBleAdvAddress(const uint8_t *addr);
+
+/* RF debug diagnostics */
+typedef struct {
+    uint8_t  rf_handle_ok;      /* 1 if RF_open succeeded */
+    uint8_t  rf_mode;           /* current s_rf_mode */
+    uint16_t setup_status;      /* RadioSetup command status */
+    uint16_t fs_status;         /* CMD_FS status */
+    uint16_t rx_status;         /* CMD_PROP_RX status */
+    uint16_t tx_status;         /* last CMD_PROP_TX status */
+    uint16_t fs_freq;           /* CMD_FS frequency field */
+    uint8_t  lo_divider;        /* RadioSetup loDivider */
+    uint32_t freq_hz;           /* s_frequency_hz */
+    uint8_t  tx_result_ok;      /* 1 if last transmitRaw returned true */
+    uint32_t tx_event_mask;     /* RF_EventMask from last RF_runCmd(TX) */
+    uint16_t fs_frac;           /* CMD_FS fractional freq */
+    uint16_t setup_center;      /* RadioSetup centerFreq */
+    uint8_t  tx_session_ok;     /* 1 if s_tx_session_handle != NULL */
+    uint8_t  tx_session_match;  /* 1 if s_tx_session_mode == expected */
+    uint16_t tx_cmd_no;         /* CMD_PROP_TX commandNo check */
+} RadioIF_RfDebug;
+
+void RadioIF_getRfDebug(RadioIF_RfDebug *out);
+void *RadioIF_getRfHandle(void);
 
 /* Jamming functions - optimized continuous transmission */
 bool RadioIF_startJamSession(uint8_t phy, uint8_t channel, int8_t power_dbm);

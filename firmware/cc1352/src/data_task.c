@@ -9,6 +9,7 @@
 #include <stdint.h>
 
 #include "control_task.h"
+#include "host_if_task.h"
 #include "ll_manager.h"
 #include "output_if.h"
 #include "protocol.h"
@@ -63,10 +64,15 @@ static void DataTask_emitRxPacket(const RadioIF_RxPacket *pkt) {
 void DataTask_init(void) {
     s_rx_active = false;
     s_rx_rsp_seq = 0;
+    /* RadioIF_init only touches shared 868 structs, not dedicated 433 SysConfig structs.
+     * 433 handle was opened at boot with its own structs — safe to init. */
     RadioIF_init();
 }
 
 void DataTask_poll(void) {
+    /* Process deferred commands from UART task (runs in RF task context) */
+    HostIFTask_processPendingCommand();
+
     if (TaskEvent_isSet(TASK_EVENT_CONTROL_RX_STOP)) {
         s_rx_active = false;
         RadioIF_stopRx();

@@ -10,7 +10,7 @@
  *  Library source code must extern the correct symbol--which is resolved
  *  when the application is linked.
  *
- *  DO NOT EDIT - This file is generated for the LP_CC1352P7_1
+ *  DO NOT EDIT - This file is generated for the LP_CC1352P7_4
  *  by the SysConfig tool.
  */
 #ifndef ti_drivers_config_h
@@ -18,7 +18,7 @@
 
 #define CONFIG_SYSCONFIG_PREVIEW
 
-#define CONFIG_LP_CC1352P7_1
+#define CONFIG_LP_CC1352P7_4
 #ifndef DeviceFamily_CC13X2X7
 #define DeviceFamily_CC13X2X7
 #endif
@@ -53,21 +53,8 @@ extern const uint_least8_t CONFIG_RF_HIGH_PA_CONST;
 extern const uint_least8_t CONFIG_RF_SUB1GHZ_CONST;
 #define CONFIG_RF_SUB1GHZ 30
 
-/* Owned by CONFIG_LED_0 as  */
-extern const uint_least8_t CONFIG_LED_0_GPIO_CONST;
-#define CONFIG_LED_0_GPIO 6
-
-/* Owned by CONFIG_LED_1 as  */
-extern const uint_least8_t CONFIG_LED_1_GPIO_CONST;
-#define CONFIG_LED_1_GPIO 7
-
-/* Owned by CONFIG_UART2_0 as  */
-extern const uint_least8_t CONFIG_GPIO_UART2_0_TX_CONST;
-#define CONFIG_GPIO_UART2_0_TX 13
-
-/* Owned by CONFIG_UART2_0 as  */
-extern const uint_least8_t CONFIG_GPIO_UART2_0_RX_CONST;
-#define CONFIG_GPIO_UART2_0_RX 12
+extern const uint_least8_t CONFIG_GPIO_GLED_CONST;
+#define CONFIG_GPIO_GLED 7
 
 /* The range of pins available on this device */
 extern const uint_least8_t GPIO_pinLowerBound;
@@ -85,31 +72,6 @@ extern const uint_least8_t GPIO_pinUpperBound;
  *  ======== RF ========
  */
 #define Board_DIO_30_RFSW 0x0000001e
-
-
-/*
- *  ======== UART2 ========
- */
-
-/*
- *  TX: DIO13
- *  RX: DIO12
- *  XDS110 UART
- */
-extern const uint_least8_t                  CONFIG_UART2_0_CONST;
-#define CONFIG_UART2_0                      0
-#define CONFIG_TI_DRIVERS_UART2_COUNT       1
-
-
-/*
- *  ======== LED ========
- */
-
-extern const uint_least8_t              CONFIG_LED_0_CONST;
-#define CONFIG_LED_0                    0
-extern const uint_least8_t              CONFIG_LED_1_CONST;
-#define CONFIG_LED_1                    1
-#define CONFIG_TI_DRIVERS_LED_COUNT     2
 
 
 /*

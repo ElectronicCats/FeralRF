@@ -2,7 +2,7 @@
  *  ======== ti_drivers_config.c ========
  *  Configured TI-Drivers module definitions
  *
- *  DO NOT EDIT - This file is generated for the LP_CC1352P7_1
+ *  DO NOT EDIT - This file is generated for the LP_CC1352P7_4
  *  by the SysConfig tool.
  */
 
@@ -16,30 +16,6 @@
 #include <ti/devices/DeviceFamily.h>
 
 #include "ti_drivers_config.h"
-
-/*
- *  =============================== DMA ===============================
- */
-
-#include <ti/drivers/dma/UDMACC26XX.h>
-#include <ti/devices/cc13x2x7_cc26x2x7/driverlib/udma.h>
-#include <ti/devices/cc13x2x7_cc26x2x7/inc/hw_memmap.h>
-
-UDMACC26XX_Object udmaCC26XXObject;
-
-const UDMACC26XX_HWAttrs udmaCC26XXHWAttrs = {
-    .baseAddr        = UDMA0_BASE,
-    .powerMngrId     = PowerCC26XX_PERIPH_UDMA,
-    .intNum          = INT_DMA_ERR,
-    .intPriority     = (~0)
-};
-
-const UDMACC26XX_Config UDMACC26XX_config[1] = {
-    {
-        .object         = &udmaCC26XXObject,
-        .hwAttrs        = &udmaCC26XXHWAttrs,
-    },
-};
 
 /*
  *  =============================== GPIO ===============================
@@ -63,18 +39,14 @@ GPIO_PinConfig gpioPinConfigs[31] = {
     0, /* Pin is not available on this device */
     0, /* Pin is not available on this device */
     GPIO_CFG_NO_DIR, /* DIO_5 */
-    /* Owned by CONFIG_LED_0 as LED GPIO */
-    GPIO_CFG_OUTPUT_INTERNAL | GPIO_CFG_OUT_STR_MED | GPIO_CFG_OUT_LOW, /* CONFIG_LED_0_GPIO */
-    /* Owned by CONFIG_LED_1 as LED GPIO */
-    GPIO_CFG_OUTPUT_INTERNAL | GPIO_CFG_OUT_STR_MED | GPIO_CFG_OUT_LOW, /* CONFIG_LED_1_GPIO */
+    GPIO_CFG_NO_DIR, /* DIO_6 */
+    GPIO_CFG_OUTPUT_INTERNAL | GPIO_CFG_OUT_STR_MED | GPIO_CFG_OUT_LOW, /* CONFIG_GPIO_GLED */
     GPIO_CFG_NO_DIR, /* DIO_8 */
     GPIO_CFG_NO_DIR, /* DIO_9 */
     GPIO_CFG_NO_DIR, /* DIO_10 */
     GPIO_CFG_NO_DIR, /* DIO_11 */
-    /* Owned by CONFIG_UART2_0 as RX */
-    GPIO_CFG_INPUT_INTERNAL | GPIO_CFG_IN_INT_NONE | GPIO_CFG_PULL_DOWN_INTERNAL, /* CONFIG_GPIO_UART2_0_RX */
-    /* Owned by CONFIG_UART2_0 as TX */
-    GPIO_CFG_OUTPUT_INTERNAL | GPIO_CFG_OUT_STR_MED | GPIO_CFG_OUT_HIGH, /* CONFIG_GPIO_UART2_0_TX */
+    GPIO_CFG_NO_DIR, /* DIO_12 */
+    GPIO_CFG_NO_DIR, /* DIO_13 */
     GPIO_CFG_NO_DIR, /* DIO_14 */
     GPIO_CFG_NO_DIR, /* DIO_15 */
     GPIO_CFG_NO_DIR, /* DIO_16 */
@@ -115,10 +87,7 @@ void* gpioUserArgs[31];
 const uint_least8_t CONFIG_RF_24GHZ_CONST = CONFIG_RF_24GHZ;
 const uint_least8_t CONFIG_RF_HIGH_PA_CONST = CONFIG_RF_HIGH_PA;
 const uint_least8_t CONFIG_RF_SUB1GHZ_CONST = CONFIG_RF_SUB1GHZ;
-const uint_least8_t CONFIG_LED_0_GPIO_CONST = CONFIG_LED_0_GPIO;
-const uint_least8_t CONFIG_LED_1_GPIO_CONST = CONFIG_LED_1_GPIO;
-const uint_least8_t CONFIG_GPIO_UART2_0_TX_CONST = CONFIG_GPIO_UART2_0_TX;
-const uint_least8_t CONFIG_GPIO_UART2_0_RX_CONST = CONFIG_GPIO_UART2_0_RX;
+const uint_least8_t CONFIG_GPIO_GLED_CONST = CONFIG_GPIO_GLED;
 
 /*
  *  ======== GPIO_config ========
@@ -137,13 +106,13 @@ const GPIO_Config GPIO_config = {
 #include <ti/drivers/power/PowerCC26X2.h>
 #include "ti_drivers_config.h"
 
-extern void PowerCC26XX_doWFI(void);
+extern void PowerCC26XX_standbyPolicy(void);
 extern bool PowerCC26XX_calibrate(unsigned int);
 
 const PowerCC26X2_Config PowerCC26X2_config = {
     .enablePolicy             = true,
     .policyInitFxn            = NULL,
-    .policyFxn                = PowerCC26XX_doWFI,
+    .policyFxn                = PowerCC26XX_standbyPolicy,
     .calibrateFxn             = PowerCC26XX_calibrate,
     .calibrateRCOSC_LF        = true,
     .calibrateRCOSC_HF        = true,
@@ -341,112 +310,6 @@ void __attribute__((weak)) rfDriverCallbackAntennaSwitching(RF_Handle client, RF
         GPIO_setConfigAndMux(CONFIG_RF_SUB1GHZ, GPIO_CFG_OUTPUT, IOC_PORT_GPIO);
     }
 }
-
-/*
- *  =============================== UART2 ===============================
- */
-
-#include <ti/drivers/UART2.h>
-#include <ti/drivers/uart2/UART2CC26X2.h>
-#include <ti/drivers/GPIO.h>
-#include <ti/drivers/Power.h>
-#include <ti/drivers/dma/UDMACC26XX.h>
-#include <ti/drivers/power/PowerCC26X2.h>
-#include <ti/devices/cc13x2x7_cc26x2x7/driverlib/ioc.h>
-#include <ti/devices/cc13x2x7_cc26x2x7/inc/hw_memmap.h>
-#include <ti/devices/cc13x2x7_cc26x2x7/inc/hw_ints.h>
-
-#define CONFIG_UART2_COUNT 1
-
-UART2CC26X2_Object uart2CC26X2Objects[CONFIG_UART2_COUNT];
-
-static unsigned char uart2RxRingBuffer0[512];
-/* TX ring buffer allocated to be used for nonblocking mode */
-static unsigned char uart2TxRingBuffer0[32];
-
-ALLOCATE_CONTROL_TABLE_ENTRY(dmaUart0RxControlTableEntry, UDMA_CHAN_UART0_RX);
-ALLOCATE_CONTROL_TABLE_ENTRY(dmaUart0TxControlTableEntry, UDMA_CHAN_UART0_TX);
-
-static const UART2CC26X2_HWAttrs uart2CC26X2HWAttrs[CONFIG_UART2_COUNT] = {
-  {
-    .baseAddr           = UART0_BASE,
-    .intNum             = INT_UART0_COMB,
-    .intPriority        = (~0),
-    .rxPin              = CONFIG_GPIO_UART2_0_RX,
-    .txPin              = CONFIG_GPIO_UART2_0_TX,
-    .ctsPin             = GPIO_INVALID_INDEX,
-    .rtsPin             = GPIO_INVALID_INDEX,
-    .flowControl        = UART2_FLOWCTRL_NONE,
-    .powerId            = PowerCC26XX_PERIPH_UART0,
-    .rxBufPtr           = uart2RxRingBuffer0,
-    .rxBufSize          = sizeof(uart2RxRingBuffer0),
-    .txBufPtr           = uart2TxRingBuffer0,
-    .txBufSize          = sizeof(uart2TxRingBuffer0),
-    .txPinMux           = IOC_PORT_MCU_UART0_TX,
-    .rxPinMux           = IOC_PORT_MCU_UART0_RX,
-    .ctsPinMux          = IOC_PORT_MCU_UART0_CTS,
-    .rtsPinMux          = IOC_PORT_MCU_UART0_RTS,
-    .dmaTxTableEntryPri = &dmaUart0TxControlTableEntry,
-    .dmaRxTableEntryPri = &dmaUart0RxControlTableEntry,
-    .rxChannelMask      = 1 << UDMA_CHAN_UART0_RX,
-    .txChannelMask      = 1 << UDMA_CHAN_UART0_TX,
-    .txIntFifoThr       = UART2CC26X2_FIFO_THRESHOLD_1_8,
-    .rxIntFifoThr       = UART2CC26X2_FIFO_THRESHOLD_4_8
-  },
-};
-
-const UART2_Config UART2_config[CONFIG_UART2_COUNT] = {
-    {   /* CONFIG_UART2_0 */
-        .object      = &uart2CC26X2Objects[CONFIG_UART2_0],
-        .hwAttrs     = &uart2CC26X2HWAttrs[CONFIG_UART2_0]
-    },
-};
-
-const uint_least8_t CONFIG_UART2_0_CONST = CONFIG_UART2_0;
-const uint_least8_t UART2_count = CONFIG_UART2_COUNT;
-
-
-/*
- *  =============================== LED ===============================
- */
-#include <ti/drivers/apps/LED.h>
-
-#define CONFIG_LED_COUNT 2
-LED_Object LEDObjects[CONFIG_LED_COUNT];
-
-static const LED_HWAttrs LEDHWAttrs[CONFIG_LED_COUNT] = {
-    /* CONFIG_LED_0 */
-    /* LaunchPad LED Red */
-    {
-        .type = LED_GPIO_CONTROLLED,
-        .index = CONFIG_LED_0_GPIO,
-    },
-    /* CONFIG_LED_1 */
-    /* LaunchPad LED Green */
-    {
-        .type = LED_GPIO_CONTROLLED,
-        .index = CONFIG_LED_1_GPIO,
-    },
-};
-
-const LED_Config LED_config[CONFIG_LED_COUNT] = {
-    /* CONFIG_LED_0 */
-    /* LaunchPad LED Red */
-    {
-        .object = &LEDObjects[CONFIG_LED_0],
-        .hwAttrs = &LEDHWAttrs[CONFIG_LED_0]
-    },
-    /* CONFIG_LED_1 */
-    /* LaunchPad LED Green */
-    {
-        .object = &LEDObjects[CONFIG_LED_1],
-        .hwAttrs = &LEDHWAttrs[CONFIG_LED_1]
-    },
-};
-
-const uint_least8_t CONFIG_LED_0_CONST = CONFIG_LED_0;
-const uint_least8_t CONFIG_LED_1_CONST = CONFIG_LED_1;
-const uint_least8_t LED_count = CONFIG_LED_COUNT;
 
 #include <stdbool.h>
 

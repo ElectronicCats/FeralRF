@@ -19,6 +19,7 @@
 #include <ti/drivers/GPIO.h>
 #include <ti/drivers/Power.h>
 #include <ti/drivers/power/PowerCC26XX.h>
+#include <ti/drivers/rf/RF.h>
 
 /* Device */
 #include <ti/devices/DeviceFamily.h>
@@ -44,12 +45,15 @@
 #include "data_task.h"
 #include "host_if.h"
 #include "host_if_task.h"
+#include "radio_if.h"
+#include "smartrf_prop_0.h"
+#include "ti_radio_config_433.h"
 #include "task_event.h"
 
 /* ─── Task Configuration ─── */
 
 #define UART_TASK_PRIORITY   3   /* Same priority — cooperative via Task_yield */
-#define UART_TASK_STACK_SIZE 2048
+#define UART_TASK_STACK_SIZE 4096
 
 #define RF_TASK_PRIORITY     3   /* Same priority — cooperative via Task_yield */
 #define RF_TASK_STACK_SIZE   4096
@@ -63,6 +67,13 @@ static uint8_t s_rf_task_stack[RF_TASK_STACK_SIZE];
 /* Semaphore for RF callback → RF task notification */
 Semaphore_Struct s_rf_sem_struct;
 Semaphore_Handle g_rf_semaphore = NULL;
+
+/* Semaphore for UART → RF task command deferral */
+static Semaphore_Struct s_rf_cmd_sem;
+
+void RfTask_signalCommand(void) {
+    Semaphore_post(Semaphore_handle(&s_rf_cmd_sem));
+}
 
 /* ─── Board Init ─── */
 
@@ -90,6 +101,11 @@ static void board_gpio_init(void) {
 #else
     GPIO_clearDio(LED_PIN);
 #endif
+
+    /* Antenna switching handled dynamically by SysConfig callback
+     * (rfDriverCallbackAntennaSwitching in ti_drivers_config.c).
+     * Do NOT force DIO28/29/30 here — it overrides the RF driver's
+     * dynamic switching and breaks 2.4 GHz (BLE/IEEE). */
 }
 
 /* ─── UART Task: commands + responses ─── */
@@ -127,10 +143,27 @@ static void RfTask_taskFxn(UArg a0, UArg a1) {
     (void)a0;
     (void)a1;
 
-    /* Initialize RF subsystems */
-    DataTask_init();
+    /* Open 433 MHz RF handle ONCE at boot with dedicated SysConfig structs.
+     * NEVER RF_close — TI RF driver doesn't reset RF_core.init on close,
+     * so subsequent RF_open skips CPE patch loading and RAT sync.
+     * The driver caches pRadioSetup + first CMD_FS pointers. */
+    {
+        RF_Params rfParams;
+        RF_Params_init(&rfParams);
 
-    /* RF processing loop — cooperative with UART task */
+        /* Set FS to TX mode before first use — gets cached by driver */
+        Prop0_cmdFs433.synthConf.bTxMode = 1u;
+
+        RF_Handle h = RF_open(RadioIF_get433Object(), &Prop0_mode433,
+                               (RF_RadioSetup *)&Prop0_cmdPropRadioDivSetup433, &rfParams);
+        if (h != NULL) {
+            /* Seed the driver's FS cache at 433 MHz */
+            RF_postCmd(h, (RF_Op *)&Prop0_cmdFs433, RF_PriorityNormal, NULL, 0);
+            RadioIF_set433Handle(h);
+        }
+    }
+
+    DataTask_init();
     while (1) {
         DataTask_poll();
         Task_yield();
@@ -163,6 +196,11 @@ int main(void) {
     semParams.mode = Semaphore_Mode_BINARY;
     g_rf_semaphore = Semaphore_construct(&s_rf_sem_struct, 0, &semParams);
 
+    /* Create command deferral semaphore */
+    Semaphore_Params_init(&semParams);
+    semParams.mode = Semaphore_Mode_BINARY;
+    Semaphore_construct(&s_rf_cmd_sem, 0, &semParams);
+
     /* BLE5-Stack ICall — disabled until Phase M3 */
 #if 0
     user0Cfg.appServiceInfo->timerTickPeriod = Clock_tickPeriod;
@@ -171,7 +209,7 @@ int main(void) {
     ICall_createRemoteTasks();
 #endif
 
-    /* Create RF task FIRST — must run DataTask_init (RF_open) before UART */
+    /* Create RF task FIRST — must run boot RF_open before UART */
     Task_Params_init(&taskParams);
     taskParams.stack = s_rf_task_stack;
     taskParams.stackSize = RF_TASK_STACK_SIZE;

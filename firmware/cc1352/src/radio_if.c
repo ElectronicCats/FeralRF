@@ -126,6 +126,7 @@ static RF_CmdHandle s_rf_rx_cmd = RF_SCHEDULE_CMD_ERROR;
 /* 433 MHz persistent handle — opened at boot, never closed */
 static RF_Object s_433_rf_object;
 static RF_Handle s_433_handle = NULL;
+static RF_Mode *s_current_rf_mode = NULL;
 
 RF_Object *RadioIF_get433Object(void) { return &s_433_rf_object; }
 void RadioIF_set433Handle(RF_Handle h) { s_433_handle = h; }
@@ -834,8 +835,8 @@ static bool RadioIF_runFsAndPostRx(void) {
         event_mask |= RF_EventLastFGCmdDone;
         break;
     case RADIO_IF_RF_MODE_SUB_1GHZ: {
-        uint32_t fmhz = s_frequency_hz / 1000000u;
-        if (fmhz > 0u && fmhz < 861u) {
+        /* Use 433 SysConfig structs only when active mode is Prop0_mode433 */
+        if (s_current_rf_mode == &Prop0_mode433) {
             fs_cmd = (RF_Op *)&Prop0_cmdFs433;
             rx_cmd = (RF_Op *)&Prop0_cmdPropRx433;
         } else {
@@ -929,7 +930,6 @@ static void RadioIF_applyBlePhyMode(uint8_t phy) {
 }
 
 /* rfDiagnostics pattern: RF_yield → RF_close → RF_open for PHY switch */
-static RF_Mode *s_current_rf_mode = NULL;
 
 static bool RadioIF_switchRfMode(RF_Mode *mode, RF_RadioSetup *setup) {
     /* 433 MHz uses a persistent boot handle — never RF_close/RF_open.
@@ -1362,7 +1362,8 @@ static bool RadioIF_startSub1ghzRfBackend(void) {
         RF_Mode *mode = RadioIF_getPropMode();
         RF_RadioSetup *setup;
         uint32_t freq_mhz = s_frequency_hz / 1000000u;
-        bool use_433 = (freq_mhz > 0u && freq_mhz < 861u);
+        /* Use 433 SysConfig structs only when mode is Prop0_mode433 */
+        bool use_433 = (mode == &Prop0_mode433);
 
         if (use_433) {
             /* SysConfig 433 — pristine structs, never modified at runtime */
@@ -1777,10 +1778,10 @@ void RadioIF_setPropConfig(const RadioIF_PropConfig *config) {
     }
     Prop0_cmdPropRadioDivSetup.loDivider = lo_div;
 
-    /* For <861 MHz: keep 433 SysConfig radio params pristine (modType, deviation,
-     * symbolRate, rxBw). Only frequency + sync word are configurable.
-     * For >=861 MHz: full configuration as before. */
-    if (freq_mhz >= 861u) {
+    /* For <861 MHz GFSK: keep 433 SysConfig radio params pristine.
+     * For >=861 MHz or OOK (any freq): apply full modulation config.
+     * OOK uses the shared 868 struct + Prop0_modeOok, not SysConfig 433. */
+    if (freq_mhz >= 861u || config->mod_type == 2u) {
         /* Modulation type */
         Prop0_cmdPropRadioDivSetup.modulation.modType = config->mod_type;
 

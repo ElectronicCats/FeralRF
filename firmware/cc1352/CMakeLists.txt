@@ -140,6 +140,7 @@ if(USE_TIRTOS)
     set(SYSCFG_SOURCES
         syscfg/ti_sysbios_config.c
         syscfg/ti_drivers_config.c
+        syscfg/ti_radio_config_433.c
     )
 
     set(ALL_SOURCES

@@ -68,6 +68,7 @@ class Radio:
         self.baudrate = baudrate
         self._serial: Optional[serial.Serial] = None
         self._seq = 0
+        self._last_seq = 0
         self._phy: Optional[PHY] = None
         self._channel: int = 0
         self._capabilities: int = 0
@@ -191,7 +192,8 @@ class Radio:
         if not self._serial:
             raise ConnectionError("Not connected")
 
-        frame = build_frame(cmd, self._next_seq(), payload)
+        self._last_seq = self._next_seq()
+        frame = build_frame(cmd, self._last_seq, payload)
         self._serial.write(frame)
         self._serial.flush()
 
@@ -264,6 +266,20 @@ class Radio:
                         ignored_command_frames += 1
                         continue
 
+                    # Skip async errors (seq=0xFF) — log but don't consume as response.
+                    if seq == 0xFF:
+                        import warnings
+                        err_code = payload[0] if payload else 0
+                        warnings.warn(f"Async RF error: code=0x{err_code:02X}", stacklevel=2)
+                        continue
+
+                    # Skip stale responses with mismatched seq — only when
+                    # expecting a command response (not during RX stream).
+                    if expected is not None and seq != self._last_seq:
+                        ignored_unexpected_responses += 1
+                        last_unexpected_response = cmd_id
+                        continue
+
                     # If caller expects specific response types, keep reading until match.
                     if expected is not None and cmd_id not in expected:
                         ignored_unexpected_responses += 1
@@ -332,9 +348,9 @@ class Radio:
         self._capabilities = info.capabilities
         return info
 
-    def set_phy(self, phy: PHY, channel: int = 0) -> None:
-        """Set PHY type and channel"""
-        self._send_command(Command.SET_PHY, CommandBuilder.set_phy(phy, channel))
+    def set_phy(self, phy: PHY, channel: int = 0, frequency_hz: int = 0) -> None:
+        """Set PHY type, channel, and optionally frequency in Hz"""
+        self._send_command(Command.SET_PHY, CommandBuilder.set_phy(phy, channel, frequency_hz))
         cmd_id, seq, payload = self._read_response(expected={Response.ACK, Response.ERROR})
 
         if cmd_id == Response.ERROR:

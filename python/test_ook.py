@@ -1,5 +1,7 @@
-"""Test OOK 868 MHz TX/RX between two boards.
+"""Test OOK TX/RX between two boards.
+Usage: python test_ook.py [868|433]
 OOK locks the radio — needs reset_device() to recover."""
+import sys
 import time
 import threading
 from feralrf import Radio, PHY, PROP_PRESETS
@@ -9,7 +11,14 @@ RX_PORT = "/dev/ttyACM0"
 COUNT = 5
 
 def main():
-    preset = PROP_PRESETS["ook_868_4k8"]
+    freq = sys.argv[1] if len(sys.argv) > 1 else "868"
+    preset_name = f"ook_{freq}_4k8"
+    if preset_name not in PROP_PRESETS:
+        print(f"Unknown preset: {preset_name}")
+        print(f"Available: {[k for k in PROP_PRESETS if 'ook' in k]}")
+        return
+    preset = PROP_PRESETS[preset_name]
+    print(f"Using preset: {preset_name} ({preset})")
 
     # RX
     rx_data = []

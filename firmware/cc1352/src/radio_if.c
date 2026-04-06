@@ -1731,10 +1731,11 @@ void RadioIF_setPropConfig(const RadioIF_PropConfig *config) {
         /* Cannot reconfigure while OOK patches are loaded.
          * Silently update config struct but don't close/reopen RF. */
     } else {
-        /* For <861 MHz: don't stop RF backend — SysConfig 433 structs stay pristine.
-         * startRx will handle mode switch via switchRfMode. */
+        /* OOK needs stopRfBackend to force RF_close+RF_open with Prop0_modeOok.
+         * For GFSK <861 MHz: don't stop — SysConfig 433 structs stay pristine.
+         * For >=861 MHz: stop to allow mode switch. */
         uint32_t new_freq_mhz = config->frequency_hz / 1000000u;
-        if (new_freq_mhz >= 861u) {
+        if (new_freq_mhz >= 861u || config->mod_type == 2u) {
             RadioIF_closeTxSession();
             if (s_rf_handle != NULL) {
                 RadioIF_stopRfBackend();
@@ -1812,10 +1813,16 @@ void RadioIF_setPropConfig(const RadioIF_PropConfig *config) {
 
     /* Select overrides by modulation type and frequency band */
     if (config->mod_type == 2u) {
-        /* OOK: use genook patches + OOK overrides */
-        Prop0_cmdPropRadioDivSetup.pRegOverride = Prop0_pOverridesOok;
-        Prop0_cmdPropRadioDivSetup.pRegOverrideTxStd = Prop0_pOverridesOokTxStd;
-        Prop0_cmdPropRadioDivSetup.pRegOverrideTx20 = Prop0_pOverridesOokTx20;
+        /* OOK: use genook patches + band-appropriate front-end overrides. */
+        if (freq_mhz < 861u) {
+            Prop0_cmdPropRadioDivSetup.pRegOverride = Prop0_pOverridesOok433;
+            Prop0_cmdPropRadioDivSetup.pRegOverrideTxStd = Prop0_pOverridesOok433TxStd;
+            Prop0_cmdPropRadioDivSetup.pRegOverrideTx20 = Prop0_pOverridesOok433Tx20;
+        } else {
+            Prop0_cmdPropRadioDivSetup.pRegOverride = Prop0_pOverridesOok;
+            Prop0_cmdPropRadioDivSetup.pRegOverrideTxStd = Prop0_pOverridesOokTxStd;
+            Prop0_cmdPropRadioDivSetup.pRegOverrideTx20 = Prop0_pOverridesOokTx20;
+        }
         s_prop_ook_active = true;
     } else if (freq_mhz < 250u) {
         /* 169 MHz band */

@@ -7,5 +7,6 @@
 
 void HostIFTask_init(void);
 void HostIFTask_poll(void);
+void HostIFTask_processPendingCommand(void);
 
 #endif /* HOST_IF_TASK_H */

@@ -22,6 +22,11 @@ static uint8_t s_encoded_frame[COBS_MAX_ENCODED];
 static size_t s_encoded_len = 0;
 static bool s_overflow = false;
 
+/* Deferred command: UART task stores frame, RF task processes it */
+static uint8_t s_pending_frame[COBS_MAX_ENCODED];
+static size_t s_pending_len = 0;
+static volatile bool s_pending_ready = false;
+
 static void HostIFTask_flushTx(void) {
     uint8_t tx_frame[PACKET_QUEUE_MAX_FRAME_SIZE];
     size_t tx_len = 0;
@@ -40,7 +45,16 @@ static void HostIFTask_flushTx(void) {
 void HostIFTask_init(void) {
     s_encoded_len = 0;
     s_overflow = false;
+    s_pending_len = 0;
+    s_pending_ready = false;
     PacketQueue_init();
+}
+
+void HostIFTask_processPendingCommand(void) {
+    if (s_pending_ready) {
+        CommandProcessor_processEncodedFrame(s_pending_frame, s_pending_len);
+        s_pending_ready = false;
+    }
 }
 
 void HostIFTask_poll(void) {
@@ -73,7 +87,23 @@ void HostIFTask_poll(void) {
             }
 
             TaskEvent_set(TASK_EVENT_HOST_IF_RX_FRAME);
-            CommandProcessor_processEncodedFrame(s_encoded_frame, s_encoded_len);
+            /* Defer to RF task — copy frame and signal via semaphore */
+            if (s_pending_ready) {
+                /* Previous command still pending — send async error to host */
+                static const uint8_t busy_err[] = {0x05u}; /* ERR_INVALID_STATE */
+                extern void OutputIF_sendResponse(uint8_t cmd_id, uint8_t seq,
+                                                   const uint8_t *payload, uint16_t payload_len);
+                OutputIF_sendResponse(0x81u, 0xFFu, busy_err, 1u);
+            } else if (s_encoded_len <= sizeof(s_pending_frame)) {
+                size_t j;
+                for (j = 0; j < s_encoded_len; j++) {
+                    s_pending_frame[j] = s_encoded_frame[j];
+                }
+                s_pending_len = s_encoded_len;
+                s_pending_ready = true;
+                extern void RfTask_signalCommand(void);
+                RfTask_signalCommand();
+            }
             s_encoded_len = 0;
             continue;
         }

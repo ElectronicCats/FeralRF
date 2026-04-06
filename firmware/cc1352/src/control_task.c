@@ -335,10 +335,20 @@ void ControlTask_processTxRaw(void) {
 
     s_tx_power_dbm = s_tx_raw_power_dbm;
     RadioIF_setPower(s_tx_raw_power_dbm);
-    (void)RadioIF_transmitRaw(s_tx_raw_payload, s_tx_raw_len, s_tx_raw_power_dbm);
+    bool tx_ok = RadioIF_transmitRaw(s_tx_raw_payload, s_tx_raw_len, s_tx_raw_power_dbm);
 
     s_tx_raw_pending = false;
     s_tx_raw_len = 0u;
+
+    /* Report TX failure to host — ACK was already sent at enqueue time,
+     * so send an async error if the actual RF transmission failed.
+     * seq=0xFF signals async (not correlated to a specific command). */
+    if (!tx_ok) {
+        uint8_t err_payload[1] = {0x05u}; /* ERR_INVALID_STATE */
+        extern void OutputIF_sendResponse(uint8_t cmd_id, uint8_t seq, const uint8_t *payload,
+                                           uint16_t payload_len);
+        OutputIF_sendResponse(0x81u, 0xFFu, err_payload, 1u);
+    }
 }
 
 void ControlTask_processTxBurst(void) {

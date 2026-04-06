@@ -1112,13 +1112,18 @@ static void RadioIF_stopRfBackend(void) {
             RF_yield(s_rf_handle);
             ClockP_usleep(50000);
         }
-        /* No RF_close — single handle stays open */
+        /* Close non-433 handle to free client slot. 433 handle stays open. */
+        if (s_rf_handle != s_433_handle) {
+            RF_yield(s_rf_handle);
+            ClockP_usleep(1000);
+            RF_close(s_rf_handle);
+        }
+        s_rf_handle = NULL;
     }
 
     s_rf_rx_cmd = RF_SCHEDULE_CMD_ERROR;
     s_rf_event_flags = 0u;
     s_rf_mode = RADIO_IF_RF_MODE_NONE;
-    /* Invalidate current mode — forces RF_close+RF_open on next switchRfMode */
     s_current_rf_mode = NULL;
     RadioIF_resetRfDataQueue();
 }
@@ -1487,13 +1492,21 @@ static bool RadioIF_transmitPropRaw(const uint8_t *payload, uint8_t payload_len)
             return false; /* Handle not opened at boot */
         }
 
+        /* Ensure 433 mode is active — closes any non-433 handle (e.g. BLE/IEEE)
+         * that may still be open from a previous PHY. Without this, the stale
+         * 2.4 GHz handle blocks the 433 handle on the second round trip. */
+        if (!RadioIF_switchRfMode(&Prop0_mode433,
+                                   (RF_RadioSetup *)&Prop0_cmdPropRadioDivSetup433)) {
+            return false;
+        }
+
         /* Use SAME dedicated 433 structs that the handle was opened with.
          * Driver caches pRadioSetup + first CMD_FS pointers — must match. */
         Prop0_cmdFs433.frequency = (uint16_t)freq_mhz;
         Prop0_cmdFs433.fractFreq = frac;
         Prop0_cmdFs433.synthConf.bTxMode = 1u; /* PA mode */
         Prop0_cmdFs433.status = 0x0000;
-        RF_postCmd(s_433_handle, (RF_Op *)&Prop0_cmdFs433, RF_PriorityNormal, NULL, 0);
+        RF_postCmd(s_rf_handle, (RF_Op *)&Prop0_cmdFs433, RF_PriorityNormal, NULL, 0);
 
         Prop0_cmdPropTx433.pPkt = s_prop_tx_buffer;
         Prop0_cmdPropTx433.pktLen = payload_len;
@@ -1501,7 +1514,7 @@ static bool RadioIF_transmitPropRaw(const uint8_t *payload, uint8_t payload_len)
         Prop0_cmdPropTx433.startTrigger.pastTrig = 0x1;
         Prop0_cmdPropTx433.status = 0x0000;
 
-        result = RF_runCmd(s_433_handle, (RF_Op *)&Prop0_cmdPropTx433,
+        result = RF_runCmd(s_rf_handle, (RF_Op *)&Prop0_cmdPropTx433,
                            RF_PriorityNormal, NULL, 0);
 
         s_last_tx_status = Prop0_cmdPropTx433.status;

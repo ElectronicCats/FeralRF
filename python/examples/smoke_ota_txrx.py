@@ -34,7 +34,7 @@ def reset_cc1352(port):
         s.close()
     except Exception:
         pass
-    time.sleep(2.0)
+    time.sleep(3.5)
 
 
 def main():

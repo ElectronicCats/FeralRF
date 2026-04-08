@@ -165,6 +165,15 @@ run_step "Proprietary 2.4 GHz GFSK preset" \
 run_step "MSK 868 preset" \
     python3 "${SCRIPT_DIR}/smoke_prop_phase1.py" "${common_args[@]}" --preset msk_868_50k --power 0
 
+run_step "W-MBus S-mode 868 preset" \
+    python3 "${SCRIPT_DIR}/smoke_prop_phase1.py" "${common_args[@]}" --preset wireless_mbus_s_868 --power 0
+
+run_step "W-MBus T-mode 868 preset" \
+    python3 "${SCRIPT_DIR}/smoke_prop_phase1.py" "${common_args[@]}" --preset wireless_mbus_t_868 --power 0
+
+run_step "W-MBus C-mode 868 preset" \
+    python3 "${SCRIPT_DIR}/smoke_prop_phase1.py" "${common_args[@]}" --preset wireless_mbus_c_868 --power 0
+
 # --- 433 MHz tests last (marginal link on CatSniffer antenna) ---
 
 run_step "Proprietary GFSK 433 preset" \

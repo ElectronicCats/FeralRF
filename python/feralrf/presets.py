@@ -101,6 +101,38 @@ PROP_PRESETS = {
         rx_bw=0x52,
         sync_word=0x543D0000,
     ),
+    "wireless_mbus_t_868": dict(
+        frequency_hz=868950000,
+        mod_type=1,
+        symbol_rate=100000,
+        deviation=200,
+        rx_bw=0x57,
+        sync_word=0x543D0000,
+    ),
+    "wireless_mbus_c_868": dict(
+        frequency_hz=868950000,
+        mod_type=1,
+        symbol_rate=100000,
+        deviation=180,
+        rx_bw=0x57,
+        sync_word=0x543D0000,
+    ),
+    "wireless_mbus_n_169_2k4": dict(
+        frequency_hz=169450000,
+        mod_type=1,
+        symbol_rate=2400,
+        deviation=154,
+        rx_bw=0x44,
+        sync_word=0x543D0000,
+    ),
+    "wireless_mbus_n_169_4k8": dict(
+        frequency_hz=169450000,
+        mod_type=1,
+        symbol_rate=4800,
+        deviation=154,
+        rx_bw=0x44,
+        sync_word=0x543D0000,
+    ),
     # === 915 MHz ISM Band (US) ===
     "gfsk_915_50k": dict(
         frequency_hz=915000000,

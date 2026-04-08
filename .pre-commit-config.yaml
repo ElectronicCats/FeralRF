@@ -30,7 +30,7 @@ repos:
     hooks:
       - id: clang-format
         files: ^firmware/cc1352/.*\.(c|h)$
-        exclude: ^firmware/sdk/
+        exclude: ^(firmware/sdk/|firmware/cc1352/syscfg/)
 
   - repo: local
     hooks:

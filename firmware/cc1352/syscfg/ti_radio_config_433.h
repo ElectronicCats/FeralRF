@@ -40,16 +40,14 @@
 #define SUPPORT_FREQBAND_433
 
 // TX power table size definitions
-#define TXPOWERTABLE_2400_PA5_SIZE 16 // 2400 MHz, 5 dBm
+#define TXPOWERTABLE_2400_PA5_SIZE 16    // 2400 MHz, 5 dBm
 #define TXPOWERTABLE_2400_PA5_10_SIZE 21 // 2400 MHz, 5 + 10 dBm
-#define TXPOWERTABLE_433_PA13_SIZE 18 // 433 MHz, 13 dBm
+#define TXPOWERTABLE_433_PA13_SIZE 18    // 433 MHz, 13 dBm
 
 // TX power tables
-extern RF_TxPowerTable_Entry txPowerTable_2400_pa5[]; // 2400 MHz, 5 dBm
+extern RF_TxPowerTable_Entry txPowerTable_2400_pa5[];    // 2400 MHz, 5 dBm
 extern RF_TxPowerTable_Entry txPowerTable_2400_pa5_10[]; // 2400 MHz, 5 + 10 dBm
-extern RF_TxPowerTable_Entry txPowerTable_433_pa13[]; // 433 MHz, 13 dBm
-
-
+extern RF_TxPowerTable_Entry txPowerTable_433_pa13[];    // 433 MHz, 13 dBm
 
 //*********************************************************************************
 //  RF Setting:   50 kbps, 25kHz Deviation, 2-GFSK, 78 kHz RX Bandwidth

@@ -42,77 +42,80 @@ uint32_t Prop0_pOverrides[] = {
     /* SDK 8.30 SysConfig overrides for LP_CC1352P7_1 868 MHz */
     ADI_2HALFREG_OVERRIDE(0, 16, 0x8, 0x8, 17, 0x1, 0x1),
     HW_REG_OVERRIDE(0x609C, 0x001A),       /* AGC ref level */
-    (uint32_t)0x000188A3,                   /* RSSI offset -1dB */
+    (uint32_t)0x000188A3,                  /* RSSI offset -1dB */
     ADI_HALFREG_OVERRIDE(0, 61, 0xF, 0xD), /* Anti-aliasing BW */
-    HW32_ARRAY_OVERRIDE(0x405C, 0x0001),    /* FSCA divider bias */
-    (uint32_t)0x08141131,                   /* FSCA divider bias */
-    (uint32_t)0x00F788D3,                   /* DC/DC IPEAK=7 */
+    HW32_ARRAY_OVERRIDE(0x405C, 0x0001),   /* FSCA divider bias */
+    (uint32_t)0x08141131,                  /* FSCA divider bias */
+    (uint32_t)0x00F788D3,                  /* DC/DC IPEAK=7 */
     (uint32_t)0xFFFFFFFF,
 };
 
 uint32_t Prop0_pOverridesTxStd[] = {
     TX_STD_POWER_OVERRIDE(0x013F),
-    (uint32_t)0x11310703,                /* ANADIV */
-    HW_REG_OVERRIDE(0x6028, 0x001A),     /* PA ramp */
-    HW_REG_OVERRIDE(0x60A8, 0x0401),     /* TXRX pin (SDK 8.30) */
+    (uint32_t)0x11310703,            /* ANADIV */
+    HW_REG_OVERRIDE(0x6028, 0x001A), /* PA ramp */
+    HW_REG_OVERRIDE(0x60A8, 0x0401), /* TXRX pin (SDK 8.30) */
     (uint32_t)0xFFFFFFFF,
 };
 
 uint32_t Prop0_pOverridesTx20[] = {
-    TX20_POWER_OVERRIDE(0x001B8ED2),      /* SDK 8.30 value */
-    (uint32_t)0x11C10703,                /* ANADIV */
-    HW_REG_OVERRIDE(0x6028, 0x001F),     /* PA ramp */
-    HW_REG_OVERRIDE(0x60A8, 0x0001),     /* TXRX pin (SDK 8.30) */
+    TX20_POWER_OVERRIDE(0x001B8ED2), /* SDK 8.30 value */
+    (uint32_t)0x11C10703,            /* ANADIV */
+    HW_REG_OVERRIDE(0x6028, 0x001F), /* PA ramp */
+    HW_REG_OVERRIDE(0x60A8, 0x0001), /* TXRX pin (SDK 8.30) */
     (uint32_t)0xFFFFFFFF,
 };
 
-/* 433 MHz overrides — exact copy of SysConfig tc112 (LP_CC1352P7_4 rfPacketTx) */
+/* 433 MHz overrides — exact match of SysConfig tc112 (LP_CC1352P7_4 rfPacketTx)
+ * These are used by setPropConfig when dynamically switching to 433 MHz.
+ * The SysConfig-generated pOverrides433Sys (in ti_radio_config_433.c) is used
+ * by the boot handle. These must match exactly. */
 uint32_t Prop0_pOverrides433[] = {
     ADI_2HALFREG_OVERRIDE(0, 16, 0x8, 0x8, 17, 0x1, 0x1), /* PA ramp PACTL2 */
-    HW_REG_OVERRIDE(0x609C, 0x001C),                    /* AGC ref level (tc112) */
-    (uint32_t)0x000688A3,                                /* RSSI offset -6dB (tc112) */
-    ADI_HALFREG_OVERRIDE(0, 61, 0xF, 0xD),              /* Anti-aliasing filter BW */
-    HW_REG_OVERRIDE(0x6028, 0x001A),                     /* TX analog ramp time */
-    (uint32_t)0x00F788D3,                                /* DC/DC IPEAK=7 */
-    HW32_ARRAY_OVERRIDE(0x405C, 0x0001),                 /* FSCA divider bias */
-    (uint32_t)0x08141131,                                /* FSCA divider bias */
+    HW_REG_OVERRIDE(0x609C, 0x001C),                      /* AGC ref level (tc112) */
+    (uint32_t)0x000688A3,                                 /* RSSI offset -6dB (tc112) */
+    ADI_HALFREG_OVERRIDE(0, 61, 0xF, 0xD),                /* Anti-aliasing filter BW */
+    HW_REG_OVERRIDE(0x6028, 0x001A),                      /* TX analog ramp time */
+    (uint32_t)0x00F788D3,                                 /* DC/DC IPEAK=7 */
+    HW32_ARRAY_OVERRIDE(0x405C, 0x0001),                  /* FSCA divider bias */
+    (uint32_t)0x08141131,                                 /* FSCA divider bias */
     (uint32_t)0xFFFFFFFF,
 };
 
 uint32_t Prop0_pOverrides433TxStd[] = {
-    TX_STD_POWER_OVERRIDE(0x003F),
-    (uint32_t)0x11310703,                /* ANADIV */
-    HW_REG_OVERRIDE(0x6028, 0x001A),     /* PA ramp */
-    HW_REG_OVERRIDE(0x60A8, 0x0401),     /* TXRX pin (SDK 8.30) */
+    TX_STD_POWER_OVERRIDE(0x013F),   /* SDK tc112 value (was 0x003F) */
+    (uint32_t)0x11310703,            /* ANADIV */
+    HW_REG_OVERRIDE(0x6028, 0x001A), /* PA ramp */
+    HW_REG_OVERRIDE(0x60A8, 0x0401), /* TXRX pin (SDK 8.30) */
     (uint32_t)0xFFFFFFFF,
 };
 
 uint32_t Prop0_pOverrides433Tx20[] = {
-    TX20_POWER_OVERRIDE(0x003F00FF),
-    (uint32_t)0x11C10703,                /* ANADIV */
-    HW_REG_OVERRIDE(0x6028, 0x001F),     /* PA ramp */
-    HW_REG_OVERRIDE(0x60A8, 0x0001),     /* TXRX pin (SDK 8.30) */
+    TX20_POWER_OVERRIDE(0x001B8ED2), /* SDK 8.30 value (was 0x003F00FF) */
+    (uint32_t)0x11C10703,            /* ANADIV */
+    HW_REG_OVERRIDE(0x6028, 0x001F), /* PA ramp */
+    HW_REG_OVERRIDE(0x60A8, 0x0001), /* TXRX pin (SDK 8.30) */
     (uint32_t)0xFFFFFFFF,
 };
 
 /* 169 MHz band overrides (from SDK setting_tc220_rx.json — WMBUS N-mode) */
 uint32_t Prop0_pOverrides169[] = {
-    (uint32_t)0x00F788D3,                                /* DC/DC regulator config */
-    HW32_ARRAY_OVERRIDE(0x405C, 0x0001),                 /* FSCA divider bias */
-    (uint32_t)0x08141131,                                /* FSCA divider bias (cont) */
-    (uint32_t)0x40024029,                                /* IIR filter enable, 2nd order */
-    (uint32_t)0x38000000,                                /* IIR_FILT_BW=1 */
-    (uint32_t)0x01608402,                                /* IIR clk div */
-    (uint32_t)0x424C0583,                                /* Synth loop BW K2 = 150 kHz */
-    (uint32_t)0x000205A3,                                /* Synth K2 continuation */
-    (uint32_t)0x98630603,                                /* Synth loop BW K3 (LSB) */
-    (uint32_t)0x00030623,                                /* Synth loop BW K3 (MSB) */
-    (uint32_t)0x000684A3,                                /* Synth FREF = 8 MHz */
-    ADI_HALFREG_OVERRIDE(0, 61, 0xF, 0xD),              /* Anti-aliasing filter BW */
-    (uint32_t)0x000E88A3,                                /* RSSI offset -14 dB */
-    HW_REG_OVERRIDE(0x609C, 0x0019),                     /* AGC ref level */
-    HW_REG_OVERRIDE(0x6098, 0x34D1),                     /* AGC max gain */
-    ADI_REG_OVERRIDE(0, 12, 0xF8),                       /* PA trim max */
+    (uint32_t)0x00F788D3,                  /* DC/DC regulator config */
+    HW32_ARRAY_OVERRIDE(0x405C, 0x0001),   /* FSCA divider bias */
+    (uint32_t)0x08141131,                  /* FSCA divider bias (cont) */
+    (uint32_t)0x40024029,                  /* IIR filter enable, 2nd order */
+    (uint32_t)0x38000000,                  /* IIR_FILT_BW=1 */
+    (uint32_t)0x01608402,                  /* IIR clk div */
+    (uint32_t)0x424C0583,                  /* Synth loop BW K2 = 150 kHz */
+    (uint32_t)0x000205A3,                  /* Synth K2 continuation */
+    (uint32_t)0x98630603,                  /* Synth loop BW K3 (LSB) */
+    (uint32_t)0x00030623,                  /* Synth loop BW K3 (MSB) */
+    (uint32_t)0x000684A3,                  /* Synth FREF = 8 MHz */
+    ADI_HALFREG_OVERRIDE(0, 61, 0xF, 0xD), /* Anti-aliasing filter BW */
+    (uint32_t)0x000E88A3,                  /* RSSI offset -14 dB */
+    HW_REG_OVERRIDE(0x609C, 0x0019),       /* AGC ref level */
+    HW_REG_OVERRIDE(0x6098, 0x34D1),       /* AGC max gain */
+    ADI_REG_OVERRIDE(0, 12, 0xF8),         /* PA trim max */
     (uint32_t)0xFFFFFFFF,
 };
 
@@ -121,17 +124,17 @@ uint32_t Prop0_pOverrides169[] = {
  * power cycle. MCE_RFE_OVERRIDE loads genook patches into MCE/RFE RAM
  * that cannot be unloaded (TI SDK bug: RFCCpePatchReset is a no-op). */
 uint32_t Prop0_pOverridesOok[] = {
-    MCE_RFE_OVERRIDE(1, 0, 0, 1, 0, 0),                /* Enable MCE+RFE genook patches */
+    MCE_RFE_OVERRIDE(1, 0, 0, 1, 0, 0), /* Enable MCE+RFE genook patches */
     ADI_2HALFREG_OVERRIDE(0, 16, 0x8, 0x8, 17, 0x1, 0x1),
-    HW_REG_OVERRIDE(0x609C, 0x001E),                    /* AGC ref level for OOK */
-    (uint32_t)0x000288A3,                                /* RSSI offset */
-    ADI_HALFREG_OVERRIDE(0, 61, 0xF, 0xF),              /* Anti-aliasing filter */
-    HW32_ARRAY_OVERRIDE(0x405C, 1),                      /* FSCA divider bias */
+    HW_REG_OVERRIDE(0x609C, 0x001E),       /* AGC ref level for OOK */
+    (uint32_t)0x000288A3,                  /* RSSI offset */
+    ADI_HALFREG_OVERRIDE(0, 61, 0xF, 0xF), /* Anti-aliasing filter */
+    HW32_ARRAY_OVERRIDE(0x405C, 1),        /* FSCA divider bias */
     (uint32_t)0x08141131,
-    HW_REG_OVERRIDE(0x51E4, 0x80AF),                     /* OOK duty cycle compensation */
-    HW_REG_OVERRIDE(0x5270, 0x0002),                     /* Viterbi k=7 */
-    HW_REG_OVERRIDE(0x6028, 0x001A),                     /* PA ramp timing */
-    (uint32_t)0x00F788D3,                                /* DC/DC regulator */
+    HW_REG_OVERRIDE(0x51E4, 0x80AF), /* OOK duty cycle compensation */
+    HW_REG_OVERRIDE(0x5270, 0x0002), /* Viterbi k=7 */
+    HW_REG_OVERRIDE(0x6028, 0x001A), /* PA ramp timing */
+    (uint32_t)0x00F788D3,            /* DC/DC regulator */
     (uint32_t)0xFFFFFFFF,
 };
 

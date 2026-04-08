@@ -41,15 +41,13 @@
 
 // TX power table size definitions
 #define TXPOWERTABLE_868_PA13_SIZE 20 // 868 MHz, 13 dBm
-#define TXPOWERTABLE_868_PA20_SIZE 8 // 868 MHz, 20 dBm
+#define TXPOWERTABLE_868_PA20_SIZE 8  // 868 MHz, 20 dBm
 #define TXPOWERTABLE_2400_PA5_SIZE 16 // 2400 MHz, 5 dBm
 
 // TX power tables
 extern RF_TxPowerTable_Entry txPowerTable_868_pa13[]; // 868 MHz, 13 dBm
 extern RF_TxPowerTable_Entry txPowerTable_868_pa20[]; // 868 MHz, 20 dBm
 extern RF_TxPowerTable_Entry txPowerTable_2400_pa5[]; // 2400 MHz, 5 dBm
-
-
 
 //*********************************************************************************
 //  RF Setting:   BLE, 1 Mbps, LE 1M

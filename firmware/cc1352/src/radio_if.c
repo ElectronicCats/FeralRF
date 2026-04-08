@@ -24,8 +24,8 @@
 #include DeviceFamily_constructPath(driverlib/sys_ctrl.h)
 #include DeviceFamily_constructPath(driverlib/systick.h)
 /* clang-format on */
-#include <ti/drivers/rf/RF.h>
 #include <ti/drivers/dpl/ClockP.h>
+#include <ti/drivers/rf/RF.h>
 #include <ti/sysbios/knl/Semaphore.h>
 
 #define RADIO_IF_RX_QUEUE_DEPTH 8u
@@ -128,10 +128,15 @@ static RF_Object s_433_rf_object;
 static RF_Handle s_433_handle = NULL;
 static RF_Mode *s_current_rf_mode = NULL;
 
-RF_Object *RadioIF_get433Object(void) { return &s_433_rf_object; }
-void RadioIF_set433Handle(RF_Handle h) { s_433_handle = h; }
-RF_Handle RadioIF_get433Handle(void) { return s_433_handle; }
-
+RF_Object *RadioIF_get433Object(void) {
+    return &s_433_rf_object;
+}
+void RadioIF_set433Handle(RF_Handle h) {
+    s_433_handle = h;
+}
+RF_Handle RadioIF_get433Handle(void) {
+    return s_433_handle;
+}
 
 /* RF event signaling — TI-RTOS Semaphore for ISR→task notification */
 static volatile uint32_t s_rf_event_flags = 0u;
@@ -357,8 +362,8 @@ static bool RadioIF_executeTxCommand(RF_Mode *mode, RF_RadioSetup *setup_cmd, RF
     }
 
     /* Run TX command */
-    result = RF_runCmd(s_tx_session_handle, tx_cmd, RF_PriorityNormal, NULL,
-                       RADIO_IF_TX_TERM_EVENTS);
+    result =
+        RF_runCmd(s_tx_session_handle, tx_cmd, RF_PriorityNormal, NULL, RADIO_IF_TX_TERM_EVENTS);
     s_last_tx_status = tx_cmd->status;
     s_last_tx_event = (uint32_t)result;
     s_last_tx_result = ((result & RADIO_IF_TX_SUCCESS_EVENTS) != 0u) ? 1u : 0u;
@@ -531,8 +536,7 @@ static bool RadioIF_transmitBleAdvRaw(const uint8_t *payload, uint8_t payload_le
     Ble5_0_cmdBleAdvNc.pOutput = &s_ble_adv_output;
 
     return RadioIF_executeTxCommand(&Ble5_0_mode, (RF_RadioSetup *)&Ble5_0_cmdBle5RadioSetup,
-                                    (RF_Op *)&Ble5_0_cmdFs, (RF_Op *)&Ble5_0_cmdBleAdvNc,
-                                    tx_power);
+                                    (RF_Op *)&Ble5_0_cmdFs, (RF_Op *)&Ble5_0_cmdBleAdvNc, tx_power);
 }
 
 static bool RadioIF_isBleAdvChannel(uint16_t channel) {
@@ -645,22 +649,28 @@ void *RadioIF_getRfHandle(void) {
 }
 
 void RadioIF_getRfDebug(RadioIF_RfDebug *out) {
+    bool is_433 = (s_current_rf_mode == &Prop0_mode433);
     out->rf_handle_ok = (s_rf_handle != NULL) ? 1u : 0u;
     out->rf_mode = (uint8_t)s_rf_mode;
-    out->setup_status = (uint16_t)Prop0_cmdPropRadioDivSetup.status;
-    out->fs_status = (uint16_t)Prop0_cmdFs.status;
-    out->rx_status = (uint16_t)Prop0_cmdPropRx.status;
+    out->setup_status = is_433 ? (uint16_t)Prop0_cmdPropRadioDivSetup433.status
+                               : (uint16_t)Prop0_cmdPropRadioDivSetup.status;
+    out->fs_status = is_433 ? (uint16_t)Prop0_cmdFs433.status
+                            : (uint16_t)Prop0_cmdFs.status;
+    out->rx_status = is_433 ? (uint16_t)Prop0_cmdPropRx433.status
+                            : (uint16_t)Prop0_cmdPropRx.status;
     out->tx_status = s_last_tx_status;
-    out->fs_freq = Prop0_cmdFs.frequency;
-    out->lo_divider = Prop0_cmdPropRadioDivSetup.loDivider;
+    out->fs_freq = is_433 ? Prop0_cmdFs433.frequency : Prop0_cmdFs.frequency;
+    out->lo_divider = is_433 ? Prop0_cmdPropRadioDivSetup433.loDivider
+                             : Prop0_cmdPropRadioDivSetup.loDivider;
     out->freq_hz = s_frequency_hz;
     out->tx_result_ok = s_last_tx_result;
     out->tx_event_mask = s_last_tx_event;
-    out->fs_frac = Prop0_cmdFs.fractFreq;
-    out->setup_center = Prop0_cmdPropRadioDivSetup.centerFreq;
+    out->fs_frac = is_433 ? Prop0_cmdFs433.fractFreq : Prop0_cmdFs.fractFreq;
+    out->setup_center = is_433 ? Prop0_cmdPropRadioDivSetup433.centerFreq
+                               : Prop0_cmdPropRadioDivSetup.centerFreq;
     out->tx_session_ok = (s_tx_session_handle != NULL) ? 1u : 0u;
     out->tx_session_match = (s_tx_session_mode == &Prop0_mode433) ? 1u : 0u;
-    out->tx_cmd_no = Prop0_cmdPropTx.commandNo;
+    out->tx_cmd_no = is_433 ? Prop0_cmdPropTx433.commandNo : Prop0_cmdPropTx.commandNo;
 }
 
 static uint32_t RadioIF_getElapsedCycles(void) {
@@ -826,8 +836,8 @@ static bool RadioIF_runFsAndPostRx(void) {
     switch (s_rf_mode) {
     case RADIO_IF_RF_MODE_BLE:
         fs_cmd = (RF_Op *)&Ble5_0_cmdFs;
-        rx_cmd = s_ble_active_scan ? (RF_Op *)&Ble5_0_cmdBle5Scanner
-                                   : (RF_Op *)&Ble5_0_cmdBle5GenericRx;
+        rx_cmd =
+            s_ble_active_scan ? (RF_Op *)&Ble5_0_cmdBle5Scanner : (RF_Op *)&Ble5_0_cmdBle5GenericRx;
         break;
     case RADIO_IF_RF_MODE_IEEE_15_4:
         fs_cmd = (RF_Op *)&Ieee154_0_cmdFs;
@@ -1012,10 +1022,8 @@ static bool RadioIF_startBleRfBackend(void) {
         Ble5_0_cmdBle5Scanner.pParams->scanConfig.bEndOnRpt = 0u;
         memset(&s_ble5_scanner_output, 0, sizeof(s_ble5_scanner_output));
         Ble5_0_cmdBle5Scanner.pOutput = &s_ble5_scanner_output;
-        Ble5_0_cmdBle5Scanner.phyMode.mainMode =
-            Ble5_0_cmdBle5GenericRx.phyMode.mainMode;
-        Ble5_0_cmdBle5Scanner.phyMode.coding =
-            Ble5_0_cmdBle5GenericRx.phyMode.coding;
+        Ble5_0_cmdBle5Scanner.phyMode.mainMode = Ble5_0_cmdBle5GenericRx.phyMode.mainMode;
+        Ble5_0_cmdBle5Scanner.phyMode.coding = Ble5_0_cmdBle5GenericRx.phyMode.coding;
     } else {
         /* Passive scan: use CMD_BLE5_GENERIC_RX (receive only) */
         Ble5_0_cmdBle5GenericRx.pParams->pRxQ = &s_rf_data_queue;
@@ -1456,9 +1464,8 @@ static void RadioIF_processPropPackets(void) {
             continue;
         }
 
-        pkt.data_len = (pdu_len > RADIO_IF_MAX_PACKET_DATA)
-                            ? (uint8_t)RADIO_IF_MAX_PACKET_DATA
-                            : (uint8_t)pdu_len;
+        pkt.data_len = (pdu_len > RADIO_IF_MAX_PACKET_DATA) ? (uint8_t)RADIO_IF_MAX_PACKET_DATA
+                                                            : (uint8_t)pdu_len;
         memcpy(pkt.data, entry_data, pkt.data_len);
 
         if (RadioIF_enqueuePacket(&pkt)) {
@@ -1497,7 +1504,7 @@ static bool RadioIF_transmitPropRaw(const uint8_t *payload, uint8_t payload_len)
          * that may still be open from a previous PHY. Without this, the stale
          * 2.4 GHz handle blocks the 433 handle on the second round trip. */
         if (!RadioIF_switchRfMode(&Prop0_mode433,
-                                   (RF_RadioSetup *)&Prop0_cmdPropRadioDivSetup433)) {
+                                  (RF_RadioSetup *)&Prop0_cmdPropRadioDivSetup433)) {
             return false;
         }
 
@@ -1515,8 +1522,7 @@ static bool RadioIF_transmitPropRaw(const uint8_t *payload, uint8_t payload_len)
         Prop0_cmdPropTx433.startTrigger.pastTrig = 0x1;
         Prop0_cmdPropTx433.status = 0x0000;
 
-        result = RF_runCmd(s_rf_handle, (RF_Op *)&Prop0_cmdPropTx433,
-                           RF_PriorityNormal, NULL, 0);
+        result = RF_runCmd(s_rf_handle, (RF_Op *)&Prop0_cmdPropTx433, RF_PriorityNormal, NULL, 0);
 
         s_last_tx_status = Prop0_cmdPropTx433.status;
         s_last_tx_event = (uint32_t)result;
@@ -1532,10 +1538,8 @@ static bool RadioIF_transmitPropRaw(const uint8_t *payload, uint8_t payload_len)
     Prop0_cmdPropTx.condition.rule = COND_NEVER;
     Prop0_cmdPropTx.pNextOp = 0;
 
-    return RadioIF_executeTxCommand(mode,
-                                    (RF_RadioSetup *)&Prop0_cmdPropRadioDivSetup,
-                                    (RF_Op *)&Prop0_cmdFs,
-                                    (RF_Op *)&Prop0_cmdPropTx, tx_power);
+    return RadioIF_executeTxCommand(mode, (RF_RadioSetup *)&Prop0_cmdPropRadioDivSetup,
+                                    (RF_Op *)&Prop0_cmdFs, (RF_Op *)&Prop0_cmdPropTx, tx_power);
 }
 
 static void RadioIF_processRfPackets(void) {
@@ -1636,7 +1640,8 @@ void RadioIF_setPhy(uint8_t phy, uint16_t channel, uint32_t frequency_hz) {
     {
         uint32_t fmhz = s_frequency_hz / 1000000u;
         if (fmhz > 0u && fmhz < 861u) {
-            /* 433 MHz: shared struct overrides don't matter, 433 uses Prop0_cmdPropRadioDivSetup433 */
+            /* 433 MHz: shared struct overrides don't matter, 433 uses Prop0_cmdPropRadioDivSetup433
+             */
             Prop0_cmdPropRadioDivSetup.pRegOverride = Prop0_pOverrides433;
             Prop0_cmdPropRadioDivSetup.pRegOverrideTxStd = 0;
             Prop0_cmdPropRadioDivSetup.pRegOverrideTx20 = 0;
@@ -1791,12 +1796,13 @@ void RadioIF_setPropConfig(const RadioIF_PropConfig *config) {
 
         /* Symbol rate */
         pre_scale = 15u;
-        rate_word = (uint32_t)(((uint64_t)config->symbol_rate * 1048576u * (uint64_t)pre_scale)
-                               / 24000000u);
+        rate_word = (uint32_t)(((uint64_t)config->symbol_rate * 1048576u * (uint64_t)pre_scale) /
+                               24000000u);
         if (rate_word > 0xFFFFFu) {
             pre_scale = 5u;
-            rate_word = (uint32_t)(((uint64_t)config->symbol_rate * 1048576u * (uint64_t)pre_scale)
-                                   / 24000000u);
+            rate_word =
+                (uint32_t)(((uint64_t)config->symbol_rate * 1048576u * (uint64_t)pre_scale) /
+                           24000000u);
         }
         Prop0_cmdPropRadioDivSetup.symbolRate.preScale = pre_scale;
         Prop0_cmdPropRadioDivSetup.symbolRate.rateWord = rate_word;
@@ -1813,16 +1819,10 @@ void RadioIF_setPropConfig(const RadioIF_PropConfig *config) {
 
     /* Select overrides by modulation type and frequency band */
     if (config->mod_type == 2u) {
-        /* OOK: use genook patches + band-appropriate front-end overrides. */
-        if (freq_mhz < 861u) {
-            Prop0_cmdPropRadioDivSetup.pRegOverride = Prop0_pOverridesOok433;
-            Prop0_cmdPropRadioDivSetup.pRegOverrideTxStd = Prop0_pOverridesOok433TxStd;
-            Prop0_cmdPropRadioDivSetup.pRegOverrideTx20 = Prop0_pOverridesOok433Tx20;
-        } else {
-            Prop0_cmdPropRadioDivSetup.pRegOverride = Prop0_pOverridesOok;
-            Prop0_cmdPropRadioDivSetup.pRegOverrideTxStd = Prop0_pOverridesOokTxStd;
-            Prop0_cmdPropRadioDivSetup.pRegOverrideTx20 = Prop0_pOverridesOokTx20;
-        }
+        /* OOK: use genook patches — same overrides for all frequencies */
+        Prop0_cmdPropRadioDivSetup.pRegOverride = Prop0_pOverridesOok;
+        Prop0_cmdPropRadioDivSetup.pRegOverrideTxStd = Prop0_pOverridesOokTxStd;
+        Prop0_cmdPropRadioDivSetup.pRegOverrideTx20 = Prop0_pOverridesOokTx20;
         s_prop_ook_active = true;
     } else if (freq_mhz < 250u) {
         /* 169 MHz band */
@@ -1999,33 +1999,21 @@ bool RadioIF_popRxPacket(RadioIF_RxPacket *out) {
 
 /* Jam payload - all 0xFF for maximum interference */
 static const uint8_t s_jam_ble_payload[31] = {
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
-};
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 
 static const uint8_t s_jam_ieee154_payload[125] = {
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF
-};
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 
 static bool RadioIF_executeJamTx(RF_Handle rf_handle, uint8_t phy, uint8_t channel,
-                                  int8_t power_dbm) {
+                                 int8_t power_dbm) {
     RF_TxPowerTable_Value tx_power = RadioIF_resolveTxPowerValue(power_dbm);
     RF_EventMask result;
 
@@ -2059,8 +2047,8 @@ static bool RadioIF_executeJamTx(RF_Handle rf_handle, uint8_t phy, uint8_t chann
         memset(&s_ble_adv_output, 0, sizeof(s_ble_adv_output));
         Ble5_0_cmdBle5AdvNc.pOutput = &s_ble_adv_output;
 
-        result = RF_runCmd(rf_handle, (RF_Op *)&Ble5_0_cmdBle5AdvNc,
-                          RF_PriorityNormal, NULL, RADIO_IF_TX_TERM_EVENTS);
+        result = RF_runCmd(rf_handle, (RF_Op *)&Ble5_0_cmdBle5AdvNc, RF_PriorityNormal, NULL,
+                           RADIO_IF_TX_TERM_EVENTS);
         return (result & RADIO_IF_TX_SUCCESS_EVENTS) != 0u;
     }
 
@@ -2074,12 +2062,13 @@ static bool RadioIF_executeJamTx(RF_Handle rf_handle, uint8_t phy, uint8_t chann
         Ieee154_0_cmdIeeeTx.condition.rule = COND_NEVER;
         Ieee154_0_cmdIeeeTx.pNextOp = 0;
 
-        result = RF_runCmd(rf_handle, (RF_Op *)&Ieee154_0_cmdIeeeTx,
-                          RF_PriorityNormal, NULL, RADIO_IF_TX_TERM_EVENTS);
+        result = RF_runCmd(rf_handle, (RF_Op *)&Ieee154_0_cmdIeeeTx, RF_PriorityNormal, NULL,
+                           RADIO_IF_TX_TERM_EVENTS);
         return (result & RADIO_IF_TX_SUCCESS_EVENTS) != 0u;
     }
 
-    if (phy == PHY_MANAGER_PHY_SUB_1GHZ_868 || phy == PHY_MANAGER_PHY_SUB_1GHZ_915 || phy == PHY_MANAGER_PHY_PROPRIETARY_GFSK) {
+    if (phy == PHY_MANAGER_PHY_SUB_1GHZ_868 || phy == PHY_MANAGER_PHY_SUB_1GHZ_915 ||
+        phy == PHY_MANAGER_PHY_PROPRIETARY_GFSK) {
         RadioIF_applySub1ghzChannelConfig((uint16_t)channel, 0u);
 
         Prop0_cmdPropTx.pPkt = (uint8_t *)s_jam_ieee154_payload; /* reuse 125-byte payload */
@@ -2089,8 +2078,8 @@ static bool RadioIF_executeJamTx(RF_Handle rf_handle, uint8_t phy, uint8_t chann
         Prop0_cmdPropTx.condition.rule = COND_NEVER;
         Prop0_cmdPropTx.pNextOp = 0;
 
-        result = RF_runCmd(rf_handle, (RF_Op *)&Prop0_cmdPropTx,
-                          RF_PriorityNormal, NULL, RADIO_IF_TX_TERM_EVENTS);
+        result = RF_runCmd(rf_handle, (RF_Op *)&Prop0_cmdPropTx, RF_PriorityNormal, NULL,
+                           RADIO_IF_TX_TERM_EVENTS);
         return (result & RADIO_IF_TX_SUCCESS_EVENTS) != 0u;
     }
 
@@ -2118,7 +2107,8 @@ bool RadioIF_startJamSession(uint8_t phy, uint8_t channel, int8_t power_dbm) {
     } else if (phy == PHY_MANAGER_PHY_IEEE_802_15_4) {
         mode = &Ieee154_0_mode;
         setup_cmd = (RF_RadioSetup *)&Ieee154_0_cmdRadioSetup;
-    } else if (phy == PHY_MANAGER_PHY_SUB_1GHZ_868 || phy == PHY_MANAGER_PHY_SUB_1GHZ_915 || phy == PHY_MANAGER_PHY_PROPRIETARY_GFSK) {
+    } else if (phy == PHY_MANAGER_PHY_SUB_1GHZ_868 || phy == PHY_MANAGER_PHY_SUB_1GHZ_915 ||
+               phy == PHY_MANAGER_PHY_PROPRIETARY_GFSK) {
         RadioIF_applySub1ghzChannelConfig((uint16_t)channel, 0u);
         mode = RadioIF_getPropMode();
         setup_cmd = (RF_RadioSetup *)&Prop0_cmdPropRadioDivSetup;
@@ -2139,7 +2129,8 @@ bool RadioIF_startJamSession(uint8_t phy, uint8_t channel, int8_t power_dbm) {
         if (PhyManager_isBlePhy(phy)) {
             fs_cmd = (RF_Op *)&Ble5_0_cmdFs;
             RadioIF_applyBleChannelConfig(channel);
-        } else if (phy == PHY_MANAGER_PHY_SUB_1GHZ_868 || phy == PHY_MANAGER_PHY_SUB_1GHZ_915 || phy == PHY_MANAGER_PHY_PROPRIETARY_GFSK) {
+        } else if (phy == PHY_MANAGER_PHY_SUB_1GHZ_868 || phy == PHY_MANAGER_PHY_SUB_1GHZ_915 ||
+                   phy == PHY_MANAGER_PHY_PROPRIETARY_GFSK) {
             fs_cmd = (RF_Op *)&Prop0_cmdFs;
             RadioIF_applySub1ghzChannelConfig((uint16_t)channel, 0u);
         } else {
@@ -2148,9 +2139,8 @@ bool RadioIF_startJamSession(uint8_t phy, uint8_t channel, int8_t power_dbm) {
         }
         fs_cmd->status = 0x0000;
 
-        RF_EventMask fs_result = RF_runCmd(s_jam_rf_handle, fs_cmd,
-                                           RF_PriorityNormal, NULL,
-                                           RADIO_IF_TX_TERM_EVENTS);
+        RF_EventMask fs_result =
+            RF_runCmd(s_jam_rf_handle, fs_cmd, RF_PriorityNormal, NULL, RADIO_IF_TX_TERM_EVENTS);
         if ((fs_result & RADIO_IF_TX_SUCCESS_EVENTS) == 0u) {
             /* RF_close removed — TI-RTOS */
             return false;

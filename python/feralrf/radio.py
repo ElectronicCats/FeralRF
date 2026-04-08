@@ -56,12 +56,54 @@ class DeviceStats:
 
 class Radio:
     """
-    Synchronous Radio interface for FeralRF
+    Synchronous Radio interface for FeralRF.
+
+    Public API status:
+        Stable:
+            init, set_phy, set_channel, set_power, start_rx, read_packets,
+            stop_rx, transmit, transmit_frame, transmit_burst,
+            transmit_continuous, stop_transmit, get_stats, configure_prop,
+            set_ble_addr, set_ble_addr_str, set_ble_scan_mode, set_adv_hop,
+            reset_device.
+        Experimental:
+            start_jam, stop_jam.
+        Pending:
+            spectrum helpers, GATT discovery, non-BLE attack helpers in host.
     """
 
     CAPABILITY_RX_STATS = 0x01
     CAPABILITY_LL_PDU_META = 0x02
     CAPABILITY_LL_STATS_EXT = 0x04
+    STABLE_METHODS = (
+        "init",
+        "set_phy",
+        "set_channel",
+        "set_power",
+        "start_rx",
+        "read_packets",
+        "stop_rx",
+        "transmit",
+        "transmit_frame",
+        "transmit_burst",
+        "transmit_continuous",
+        "stop_transmit",
+        "get_stats",
+        "configure_prop",
+        "set_ble_addr",
+        "set_ble_addr_str",
+        "set_ble_scan_mode",
+        "set_adv_hop",
+        "reset_device",
+    )
+    EXPERIMENTAL_METHODS = (
+        "start_jam",
+        "stop_jam",
+    )
+    PENDING_FEATURES = (
+        "spectrum",
+        "gatt_discovery",
+        "initiator_mode",
+    )
 
     def __init__(self, port: Optional[str] = None, baudrate: int = 921600):
         self.port = port
@@ -120,10 +162,14 @@ class Radio:
     def _get_shell_port(self) -> str:
         """Derive RP2040 shell port from bridge port (offset +2)."""
         import re
-        m = re.search(r'(\d+)$', self.port)
+
+        if self.port is None:
+            raise ConnectionError("Cannot derive shell port without an active bridge port")
+
+        m = re.search(r"(\d+)$", self.port)
         if m:
             base_num = int(m.group(1))
-            return self.port[:m.start(1)] + str(base_num + 2)
+            return self.port[: m.start(1)] + str(base_num + 2)
         raise ConnectionError(f"Cannot derive shell port from {self.port}")
 
     def reset_device(self, wait: float = 1.5) -> None:
@@ -142,7 +188,8 @@ class Radio:
         was_connected = self._serial and self._serial.is_open
         if was_connected:
             try:
-                self._serial.close()
+                if self._serial is not None:
+                    self._serial.close()
             except Exception:
                 pass
 
@@ -150,9 +197,9 @@ class Radio:
         # then exit (returns to passthrough, resets CC1352 again with correct baud)
         try:
             shell = serial.Serial(shell_port, 115200, timeout=1.0, write_timeout=1.0)
-            shell.write(b'boot\r\n')
+            shell.write(b"boot\r\n")
             time.sleep(0.5)
-            shell.write(b'exit\r\n')
+            shell.write(b"exit\r\n")
             time.sleep(0.3)
             shell.close()
         except serial.SerialException as e:
@@ -269,6 +316,7 @@ class Radio:
                     # Skip async errors (seq=0xFF) — log but don't consume as response.
                     if seq == 0xFF:
                         import warnings
+
                         err_code = payload[0] if payload else 0
                         warnings.warn(f"Async RF error: code=0x{err_code:02X}", stacklevel=2)
                         continue
@@ -452,6 +500,7 @@ class Radio:
         """
         if mod_type == 2:
             import warnings
+
             warnings.warn(
                 "OOK mode locks the radio — power cycle required to change "
                 "frequency or switch to other modes. Set target frequency now.",
@@ -471,7 +520,11 @@ class Radio:
             raise ProtocolError(f"Unexpected response to SET_PROP_CONFIG: 0x{cmd_id:02X}")
 
     def set_adv_hop(self, enabled: bool) -> None:
-        """Enable/disable BLE advertising channel hopping on RX"""
+        """Enable or disable BLE advertising channel hopping during RX.
+
+        This is part of the stable BLE RX API, but only applies to BLE
+        advertising-channel reception.
+        """
         self._send_command(Command.SET_ADV_HOP, CommandBuilder.set_adv_hop(enabled))
         cmd_id, seq, payload = self._read_response(expected={Response.ACK, Response.ERROR})
 
@@ -715,7 +768,12 @@ class Radio:
         duration_ms: int = 3000,
         timeout: float = 5.0,
     ) -> None:
-        """Start continuous jamming-style TX stream (firmware auto-stops by duration)."""
+        """Experimental: start a continuous jamming-style TX stream.
+
+        This command exists in firmware, but it is not part of the current
+        stable RF baseline because "ACK" is not the same as validated
+        interference against real signals.
+        """
         if channel < 0 or channel > 255:
             raise ValueError("channel must be in range 0..255")
         if duration_ms <= 0 or duration_ms > 30000:
@@ -735,7 +793,7 @@ class Radio:
             raise ProtocolError(f"Unexpected response to JAM_CONTINUOUS: 0x{cmd_id:02X}")
 
     def stop_jam(self, timeout: float = 5.0) -> None:
-        """Stop active jamming stream."""
+        """Experimental: stop an active jamming stream."""
         last_exc: Optional[Exception] = None
 
         for _ in range(2):

@@ -19,7 +19,14 @@ class PHY(IntEnum):
 
 
 class Command(IntEnum):
-    """Command IDs — only commands with firmware handlers"""
+    """Command IDs currently exposed by firmware.
+
+    Notes:
+        - Most commands below are part of the stable baseline.
+        - Jamming commands are implemented but treated as experimental.
+        - Spectrum and other future commands are intentionally omitted until
+          firmware support exists and the host API is finalized.
+    """
 
     # Configuration
     RADIO_INIT = 0x01
@@ -57,3 +64,37 @@ class Response(IntEnum):
     RX_PACKET = 0x90
     STATS = 0x93
     INFO = 0x94
+
+
+STABLE_COMMANDS = (
+    Command.RADIO_INIT,
+    Command.SET_CHANNEL,
+    Command.SET_POWER,
+    Command.SET_PHY,
+    Command.GET_INFO,
+    Command.GET_STATS,
+    Command.SET_ADV_HOP,
+    Command.SET_PROP_CONFIG,
+    Command.SET_BLE_ADDR,
+    Command.SET_BLE_SCAN_MODE,
+    Command.RX_START,
+    Command.RX_STOP,
+    Command.TX_RAW,
+    Command.TX_CONTINUOUS,
+    Command.TX_BURST,
+    Command.TX_FRAME,
+    Command.TX_STOP,
+)
+
+EXPERIMENTAL_COMMANDS = (
+    Command.JAM_CONTINUOUS,
+    Command.JAM_STOP,
+)
+
+PENDING_COMMAND_IDS = {
+    "JAM_REACTIVE": 0x31,
+    "JAM_PATTERN": 0x32,
+    "SPECTRUM_SCAN": 0x40,
+    "SPECTRUM_MONITOR": 0x41,
+    "SPECTRUM_STOP": 0x42,
+}

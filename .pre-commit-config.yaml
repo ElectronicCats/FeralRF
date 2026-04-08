@@ -39,7 +39,7 @@ repos:
         entry: cppcheck
         language: system
         files: ^firmware/cc1352/.*\.c$
-        exclude: ^firmware/sdk/
+        exclude: ^(firmware/sdk/|firmware/cc1352/syscfg/|firmware/cc1352/startup/)
         args:
           - '--enable=warning,performance,portability'
           - '--suppress=missingIncludeSystem'

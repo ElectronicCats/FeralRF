@@ -6,7 +6,9 @@
 #include <stdint.h>
 
 #include <ti/devices/DeviceFamily.h>
+/* clang-format off */
 #include DeviceFamily_constructPath(driverlib/setup.h)
+/* clang-format on */
 
 #define WEAK_ALIAS(x) __attribute__((weak, alias(#x)))
 

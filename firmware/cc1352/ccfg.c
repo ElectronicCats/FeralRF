@@ -8,7 +8,9 @@
 #include <stdint.h>
 
 #include <ti/devices/DeviceFamily.h>
+/* clang-format off */
 #include DeviceFamily_constructPath(inc/hw_ccfg_simple_struct.h)
+/* clang-format on */
 
 /* Clock settings */
 #define SET_CCFG_EXT_LF_CLK 0x01800000u

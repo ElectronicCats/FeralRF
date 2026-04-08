@@ -162,6 +162,9 @@ run_step "Sub-1GHz 915 GFSK preset" \
 run_step "Proprietary 2.4 GHz GFSK preset" \
     python3 "${SCRIPT_DIR}/smoke_prop_phase1.py" "${common_args[@]}" --preset gfsk_2440_50k --power 0
 
+run_step "MSK 868 preset" \
+    python3 "${SCRIPT_DIR}/smoke_prop_phase1.py" "${common_args[@]}" --preset msk_868_50k --power 0
+
 # --- 433 MHz tests last (marginal link on CatSniffer antenna) ---
 
 run_step "Proprietary GFSK 433 preset" \
@@ -169,6 +172,9 @@ run_step "Proprietary GFSK 433 preset" \
 
 run_step "Proprietary FSK 433 preset" \
     python3 "${SCRIPT_DIR}/smoke_prop_phase1.py" "${common_args[@]}" --preset fsk_433_50k --power 0
+
+run_step "MSK 433 preset" \
+    python3 "${SCRIPT_DIR}/smoke_prop_phase1.py" "${common_args[@]}" --preset msk_433_50k --power 0
 
 # --- OOK last (locks radio — requires power cycle after) ---
 

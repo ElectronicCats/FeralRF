@@ -51,6 +51,15 @@ PROP_PRESETS = {
         rx_bw=76,
         sync_word=0x930B51DE,
     ),
+    # MSK presets — used by Sidewalk, Wi-SUN, some IoT protocols
+    "msk_433_50k": dict(
+        frequency_hz=433920000,
+        mod_type=4,
+        symbol_rate=50000,
+        deviation=100,
+        rx_bw=0x52,
+        sync_word=0x930B51DE,
+    ),
     # === 868 MHz ISM Band (EU) ===
     "gfsk_868_50k": dict(
         frequency_hz=868000000,
@@ -74,6 +83,14 @@ PROP_PRESETS = {
         symbol_rate=4800,
         deviation=0,
         rx_bw=76,
+        sync_word=0x930B51DE,
+    ),
+    "msk_868_50k": dict(
+        frequency_hz=868000000,
+        mod_type=4,
+        symbol_rate=50000,
+        deviation=100,
+        rx_bw=0x52,
         sync_word=0x930B51DE,
     ),
     "wireless_mbus_s_868": dict(

@@ -89,13 +89,28 @@ Comandos reservados o pendientes hoy:
 - Para sesiones normales:
 - `init() -> set_phy() -> set_channel()/configure_prop() -> start_rx()/transmit_*()`
 
-- Para OOK:
-- usar `configure_prop(mod_type=2, ...)`
-- tratar OOK como modo especial
-- llamar `reset_device()` antes de volver a BLE/IEEE/u otro modo
-
 - Para BLE active scan:
 - llamar `set_ble_scan_mode(active=True)` antes de `start_rx()`
+
+- Para modo propietario (GFSK/FSK/OOK):
+- `set_phy(PHY.PROPRIETARY_GFSK)` seguido de `configure_prop(frequency_hz, mod_type, ...)`
+- `mod_type`: 0=FSK, 1=GFSK, 2=OOK/ASK, 4=MSK
+
+### `reset_device()`
+
+`reset_device()` envia `boot` + `exit` al RP2040 shell port, que resetea el CC1352 por hardware y reinicializa la sesion. Se recomienda usar en los siguientes casos:
+
+| Caso | Razon |
+|------|-------|
+| Despues de OOK | OOK carga patches MCE+RFE (genook) que no se pueden descargar. El radio queda bloqueado en OOK hasta power cycle o reset. |
+| Entre cambios de banda de frecuencia | Cambiar de 433 a 868 MHz (o viceversa) puede dejar el sintetizador en estado inconsistente si no se hace reset. |
+| Despues de timeout o error de comunicacion | Si el firmware deja de responder (timeout en `init()` o cualquier comando), un reset recupera el dispositivo. |
+| Entre PHYs diferentes en tests automatizados | El validation script (`run_validation_baseline.sh`) resetea entre cada step para garantizar estado limpio. |
+| Despues de `start_jam()` / `stop_jam()` | Jamming puede dejar el radio en modo TX continuo. Reset garantiza regreso a idle. |
+
+Nota: `reset_device()` funciona incluso cuando el firmware esta colgado porque opera directamente sobre el RP2040 shell port (bridge_port + 2), sin depender de respuesta del CC1352.
+
+Para scripts automatizados donde `reset_device()` puede fallar (radio completamente muerto), el validation script usa reset directo via serial al shell port como fallback.
 
 ## 5. Compatibilidad
 

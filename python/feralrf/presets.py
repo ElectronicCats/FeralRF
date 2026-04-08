@@ -60,6 +60,23 @@ PROP_PRESETS = {
         rx_bw=0x52,
         sync_word=0x930B51DE,
     ),
+    # 4-FSK / 4-GFSK 433 MHz
+    "4fsk_433_50k": dict(
+        frequency_hz=433920000,
+        mod_type=5,
+        symbol_rate=50000,
+        deviation=100,
+        rx_bw=0x52,
+        sync_word=0x930B51DE,
+    ),
+    "4gfsk_433_50k": dict(
+        frequency_hz=433920000,
+        mod_type=6,
+        symbol_rate=50000,
+        deviation=100,
+        rx_bw=0x52,
+        sync_word=0x930B51DE,
+    ),
     # === 868 MHz ISM Band (EU) ===
     "gfsk_868_50k": dict(
         frequency_hz=868000000,
@@ -132,6 +149,23 @@ PROP_PRESETS = {
         deviation=154,
         rx_bw=0x44,
         sync_word=0x543D0000,
+    ),
+    # 4-FSK / 4-GFSK 868 MHz
+    "4fsk_868_50k": dict(
+        frequency_hz=868000000,
+        mod_type=5,
+        symbol_rate=50000,
+        deviation=100,
+        rx_bw=0x52,
+        sync_word=0x930B51DE,
+    ),
+    "4gfsk_868_50k": dict(
+        frequency_hz=868000000,
+        mod_type=6,
+        symbol_rate=50000,
+        deviation=100,
+        rx_bw=0x52,
+        sync_word=0x930B51DE,
     ),
     # === 915 MHz ISM Band (US) ===
     "gfsk_915_50k": dict(

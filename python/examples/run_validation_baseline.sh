@@ -84,7 +84,7 @@ try:
     s.write(b'exit\r\n')
     time.sleep(0.3)
     s.close()
-    time.sleep(2.0)
+    time.sleep(3.5)
 except Exception:
     sys.exit(1)
 " 2>/dev/null
@@ -240,6 +240,15 @@ run_ota "GFSK 915 OTA" --preset gfsk_915_50k
 run_ota "GFSK 2440 OTA" --preset gfsk_2440_50k
 run_ota "MSK 868 OTA" --preset msk_868_50k
 
+run_step "4-FSK 868 preset" \
+    python3 "${SCRIPT_DIR}/smoke_prop_phase1.py" "${common_args[@]}" --preset 4fsk_868_50k --power 0
+
+run_step "4-GFSK 868 preset" \
+    python3 "${SCRIPT_DIR}/smoke_prop_phase1.py" "${common_args[@]}" --preset 4gfsk_868_50k --power 0
+
+run_ota "4-FSK 868 OTA" --preset 4fsk_868_50k
+run_ota "4-GFSK 868 OTA" --preset 4gfsk_868_50k
+
 run_step "W-MBus S-mode 868 preset" \
     python3 "${SCRIPT_DIR}/smoke_prop_phase1.py" "${common_args[@]}" --preset wireless_mbus_s_868 --power 0
 
@@ -267,6 +276,15 @@ run_step "MSK 433 preset" \
 run_ota "GFSK 433 OTA" --preset gfsk_433_50k
 run_ota "FSK 433 OTA" --preset fsk_433_50k
 run_ota "MSK 433 OTA" --preset msk_433_50k
+
+run_step "4-FSK 433 preset" \
+    python3 "${SCRIPT_DIR}/smoke_prop_phase1.py" "${common_args[@]}" --preset 4fsk_433_50k --power 0
+
+run_step "4-GFSK 433 preset" \
+    python3 "${SCRIPT_DIR}/smoke_prop_phase1.py" "${common_args[@]}" --preset 4gfsk_433_50k --power 0
+
+run_ota "4-FSK 433 OTA" --preset 4fsk_433_50k
+run_ota "4-GFSK 433 OTA" --preset 4gfsk_433_50k
 
 # --- OOK last (locks radio — requires power cycle after) ---
 

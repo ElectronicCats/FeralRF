@@ -59,11 +59,12 @@ void RadioIF_resetMetrics(void);
 /* Proprietary radio configuration */
 typedef struct {
     uint32_t frequency_hz;
-    uint8_t mod_type;     /* 0=FSK, 1=GFSK, 2=OOK/ASK, 4=MSK */
+    uint8_t mod_type;     /* 0=FSK, 1=GFSK, 2=OOK/ASK, 4=MSK, 5=4-FSK, 6=4-GFSK */
     uint32_t symbol_rate; /* baud */
     uint16_t deviation;   /* Hz (for FSK/GFSK) */
     uint8_t rx_bw;        /* RX bandwidth register value */
     uint32_t sync_word;
+    uint16_t format_conf; /* raw formatConf bitfield (0=use defaults) */
 } RadioIF_PropConfig;
 
 void RadioIF_setPropConfig(const RadioIF_PropConfig *config);

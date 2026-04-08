@@ -196,9 +196,9 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
 
     case CMD_SET_PROP_CONFIG: {
         /* Payload: freq_hz(4) | mod_type(1) | symbol_rate(4) | deviation(2) | rx_bw(1) |
-         * sync_word(4) = 16 bytes */
+         * sync_word(4) | format_conf(2) = 18 bytes (16 accepted for backwards compat) */
         RadioIF_PropConfig prop_cfg;
-        if (payload_len != 16u) {
+        if (payload_len != 18u && payload_len != 16u) {
             send_error(seq, ERR_INVALID_PAYLOAD);
             return;
         }
@@ -208,6 +208,7 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
         prop_cfg.deviation = read_u16_le(&payload[9]);
         prop_cfg.rx_bw = payload[11];
         prop_cfg.sync_word = read_u32_le(&payload[12]);
+        prop_cfg.format_conf = (payload_len >= 18u) ? read_u16_le(&payload[16]) : 0u;
         RadioIF_setPropConfig(&prop_cfg);
         send_ack(seq);
         return;

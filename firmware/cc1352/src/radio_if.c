@@ -1332,10 +1332,9 @@ static void RadioIF_applySub1ghzChannelConfig(uint16_t channel, uint32_t frequen
     }
     Prop0_cmdPropRadioDivSetup.loDivider = lo_div;
 
-    /* 433 SysConfig structs are NEVER modified here — they are dedicated
-     * to the boot handle. TX/RX paths update Prop0_cmdFs433 directly
-     * before each operation. Modifying them here would corrupt the
-     * RF driver's cached pRadioSetup. */
+    /* 433 SysConfig setup struct IS modified by setPropConfig for modulation
+     * changes (FSK/MSK/GFSK). RF_yield forces re-setup on next command.
+     * TX/RX paths update Prop0_cmdFs433 directly before each operation. */
 }
 
 static bool RadioIF_startSub1ghzRfBackend(void) {
@@ -1717,6 +1716,17 @@ void RadioIF_setChannel(uint8_t channel) {
     }
 }
 
+/* Apply formatConf: 0 restores SysConfig defaults (nSwBits=32, bMsbFirst=1) */
+static void RadioIF_applyFormatConf(void *dest, uint16_t raw) {
+    if (raw != 0u) {
+        memcpy(dest, &raw, sizeof(uint16_t));
+    } else {
+        /* Restore SysConfig defaults: nSwBits=0x20, bMsbFirst=1, rest=0 */
+        uint16_t defaults = 0x00A0u; /* bits: nSwBits=0x20(6b), bBitRev=0, bMsb=1, fec=0, wh=0 */
+        memcpy(dest, &defaults, sizeof(uint16_t));
+    }
+}
+
 void RadioIF_setPropConfig(const RadioIF_PropConfig *config) {
     uint32_t freq_mhz;
     uint16_t frac;
@@ -1736,7 +1746,7 @@ void RadioIF_setPropConfig(const RadioIF_PropConfig *config) {
          * Silently update config struct but don't close/reopen RF. */
     } else {
         /* OOK needs stopRfBackend to force RF_close+RF_open with Prop0_modeOok.
-         * For GFSK <861 MHz: don't stop — SysConfig 433 structs stay pristine.
+         * For <861 MHz: don't stop — 433 handle is persistent, RF_yield forces re-setup.
          * For >=861 MHz: stop to allow mode switch. */
         uint32_t new_freq_mhz = config->frequency_hz / 1000000u;
         if (new_freq_mhz >= 861u || config->mod_type == 2u) {
@@ -1783,32 +1793,48 @@ void RadioIF_setPropConfig(const RadioIF_PropConfig *config) {
     }
     Prop0_cmdPropRadioDivSetup.loDivider = lo_div;
 
-    /* For <861 MHz GFSK: keep 433 SysConfig radio params pristine.
-     * For >=861 MHz or OOK (any freq): apply full modulation config.
-     * OOK uses the shared 868 struct + Prop0_modeOok, not SysConfig 433. */
-    if (freq_mhz >= 861u || config->mod_type == 2u) {
-        /* Modulation type */
-        Prop0_cmdPropRadioDivSetup.modulation.modType = config->mod_type;
-
-        /* Deviation — raw register value from Python */
-        Prop0_cmdPropRadioDivSetup.modulation.deviation = config->deviation;
-
-        /* Symbol rate */
-        pre_scale = 15u;
+    /* Symbol rate calculation — needed for both 868 and 433 paths */
+    pre_scale = 15u;
+    rate_word =
+        (uint32_t)(((uint64_t)config->symbol_rate * 1048576u * (uint64_t)pre_scale) / 24000000u);
+    if (rate_word > 0xFFFFFu) {
+        pre_scale = 5u;
         rate_word = (uint32_t)(((uint64_t)config->symbol_rate * 1048576u * (uint64_t)pre_scale) /
                                24000000u);
-        if (rate_word > 0xFFFFFu) {
-            pre_scale = 5u;
-            rate_word =
-                (uint32_t)(((uint64_t)config->symbol_rate * 1048576u * (uint64_t)pre_scale) /
-                           24000000u);
-        }
+    }
+
+    /* Apply modulation config to the appropriate setup struct.
+     * OOK (mod_type=2) always uses the shared 868 struct + Prop0_modeOok.
+     * For >=861 MHz: use shared 868 struct.
+     * For <861 MHz non-OOK: update 433 SysConfig struct + yield to force re-setup. */
+    if (freq_mhz >= 861u || config->mod_type == 2u) {
+        Prop0_cmdPropRadioDivSetup.modulation.modType = config->mod_type;
+        Prop0_cmdPropRadioDivSetup.modulation.deviation = config->deviation;
         Prop0_cmdPropRadioDivSetup.symbolRate.preScale = pre_scale;
         Prop0_cmdPropRadioDivSetup.symbolRate.rateWord = rate_word;
-
-        /* RX bandwidth */
         if (config->rx_bw != 0u) {
             Prop0_cmdPropRadioDivSetup.rxBw = config->rx_bw;
+        }
+        RadioIF_applyFormatConf(&Prop0_cmdPropRadioDivSetup.formatConf, config->format_conf);
+    } else if (freq_mhz < 861u) {
+        /* Update 433 setup struct so FSK/MSK/GFSK presets all apply */
+        Prop0_cmdPropRadioDivSetup433.modulation.modType = config->mod_type;
+        Prop0_cmdPropRadioDivSetup433.modulation.deviation = config->deviation;
+        Prop0_cmdPropRadioDivSetup433.symbolRate.preScale = pre_scale;
+        Prop0_cmdPropRadioDivSetup433.symbolRate.rateWord = rate_word;
+        Prop0_cmdPropRadioDivSetup433.loDivider = lo_div;
+        Prop0_cmdPropRadioDivSetup433.centerFreq = (uint16_t)freq_mhz;
+        if (config->rx_bw != 0u) {
+            Prop0_cmdPropRadioDivSetup433.rxBw = config->rx_bw;
+        }
+        RadioIF_applyFormatConf(&Prop0_cmdPropRadioDivSetup433.formatConf, config->format_conf);
+        /* Stop RX before yield — otherwise s_rx_running stays true after radio powers down */
+        if (s_rx_running) {
+            RadioIF_stopRx();
+        }
+        /* Yield persistent 433 handle to force RF driver re-setup on next cmd */
+        if (s_433_handle != NULL) {
+            RF_yield(s_433_handle);
         }
     }
 

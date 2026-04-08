@@ -480,16 +480,18 @@ class Radio:
         deviation: int = 100,
         rx_bw: int = 0x52,
         sync_word: int = 0x930B51DE,
+        format_conf: int = 0,
     ) -> None:
         """Configure proprietary radio parameters.
 
         Args:
             frequency_hz: Frequency in Hz (e.g. 433920000 for 433.92 MHz)
-            mod_type: Modulation type (0=FSK, 1=GFSK, 2=OOK/ASK, 4=MSK)
+            mod_type: Modulation type (0=FSK, 1=GFSK, 2=OOK/ASK, 4=MSK, 5=4-FSK, 6=4-GFSK)
             symbol_rate: Symbol rate in baud (e.g. 4800, 50000)
             deviation: Deviation register value (for FSK/GFSK)
             rx_bw: RX bandwidth register value
             sync_word: 32-bit sync word
+            format_conf: Raw formatConf bitfield (0=use defaults)
 
         Warning:
             OOK mode (mod_type=2) loads dedicated RF core patches that lock
@@ -509,7 +511,7 @@ class Radio:
         self._send_command(
             Command.SET_PROP_CONFIG,
             CommandBuilder.set_prop_config(
-                frequency_hz, mod_type, symbol_rate, deviation, rx_bw, sync_word
+                frequency_hz, mod_type, symbol_rate, deviation, rx_bw, sync_word, format_conf
             ),
         )
         cmd_id, seq, payload = self._read_response(expected={Response.ACK, Response.ERROR})

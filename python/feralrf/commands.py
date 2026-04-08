@@ -111,18 +111,21 @@ class CommandBuilder:
         deviation: int = 100,
         rx_bw: int = 0x52,
         sync_word: int = 0x930B51DE,
+        format_conf: int = 0,
     ) -> bytes:
-        """Payload for SET_PROP_CONFIG (16 bytes):
-        freq_hz(4) | mod_type(1) | symbol_rate(4) | deviation(2) | rx_bw(1) | sync_word(4)
+        """Payload for SET_PROP_CONFIG (18 bytes):
+        freq_hz(4) | mod_type(1) | symbol_rate(4) | deviation(2) | rx_bw(1) | sync_word(4) |
+        format_conf(2)
         """
         return struct.pack(
-            "<IBIHBI",
+            "<IBIHBIH",
             frequency_hz & 0xFFFFFFFF,
             mod_type & 0xFF,
             symbol_rate & 0xFFFFFFFF,
             deviation & 0xFFFF,
             rx_bw & 0xFF,
             sync_word & 0xFFFFFFFF,
+            format_conf & 0xFFFF,
         )
 
     @staticmethod

@@ -477,6 +477,101 @@ static bool RadioIF_transmitIeee154Raw(const uint8_t *payload, uint8_t payload_l
                                     tx_power);
 }
 
+/* BLE 2M Extended Advertising: ADV_EXT_IND(1M, ch37) → AUX_ADV_IND(2M, data ch).
+ * Follows Sniffle pattern — BLE spec forbids 2M on primary adv channels. */
+#define BLE5_EXT_ADV_AUX_CHANNEL 9u /* fixed secondary channel for OTA */
+static bool RadioIF_transmitBle2mExtAdv(uint8_t payload_len, RF_TxPowerTable_Value tx_power) {
+    /* All structs on stack (Sniffle pattern) — safe for single-shot TX */
+    rfc_CMD_BLE5_ADV_EXT_t adv37;
+    rfc_ble5AdvExtPar_t ext_par;
+    rfc_ble5ExtAdvEntry_t ext_pkt;
+    uint8_t ext_hdr[5]; /* ADI(2) + AuxPtr(3) */
+
+    rfc_CMD_BLE5_ADV_AUX_t adv_aux;
+    rfc_ble5AdvAuxPar_t aux_par;
+    rfc_ble5ExtAdvEntry_t aux_pkt;
+
+    /* --- Primary: ADV_EXT_IND on ch 37, 1M, with AuxPtr to secondary --- */
+    memset(&adv37, 0, sizeof(adv37));
+    adv37.commandNo = CMD_BLE5_ADV_EXT;
+    adv37.startTrigger.triggerType = TRIG_NOW;
+    adv37.startTrigger.pastTrig = 1u;
+    adv37.condition.rule = COND_ALWAYS; /* always chain to ADV_AUX */
+    adv37.channel = 37u;
+    adv37.phyMode.mainMode = 0u; /* 1M on primary */
+    adv37.phyMode.coding = 0u;
+    adv37.pParams = &ext_par;
+    adv37.pOutput = &s_ble_adv_output;
+    adv37.pNextOp = (rfc_radioOp_t *)&adv_aux;
+
+    memset(&ext_par, 0, sizeof(ext_par));
+    ext_par.advConfig.deviceAddrType = 1u; /* random */
+    /* TRIG_REL_PREVEND: AuxPtr offset relative to end of ADV_EXT — no stale absolute time */
+    ext_par.auxPtrTargetType = TRIG_REL_PREVEND;
+    ext_par.auxPtrTargetTime = 4000u; /* 1ms after ADV_EXT ends */
+    ext_par.pAdvPkt = (uint8_t *)&ext_pkt;
+    ext_par.pDeviceAddress = (uint16_t *)s_ble_adv_tx_device_addr;
+
+    memset(&ext_pkt, 0, sizeof(ext_pkt));
+    ext_pkt.extHdrInfo.length = 6u;  /* flags(1) + ADI(2) + AuxPtr(3) */
+    ext_pkt.extHdrInfo.advMode = 0u; /* non-connectable, non-scannable */
+    ext_pkt.extHdrFlags = 0x18u;     /* bit3=ADI, bit4=AuxPtr */
+    ext_pkt.pExtHeader = ext_hdr;
+
+    /* AuxPtr: channel | offset_units | offset | PHY */
+    memset(ext_hdr, 0, sizeof(ext_hdr));
+    /* ADI: SID=0, DID=0 */
+    ext_hdr[0] = 0x00u;
+    ext_hdr[1] = 0x00u;
+    /* AuxPtr byte 0: channel(6 bits) | CA(1 bit) | offset_units(1 bit) */
+    ext_hdr[2] = BLE5_EXT_ADV_AUX_CHANNEL | 0x40u; /* ch9, CA=1, offset_units=0 (30µs) */
+    /* AuxPtr byte 1-2: offset(13 bits) | PHY(3 bits) — RF core fills offset automatically */
+    ext_hdr[3] = 0x00u;
+    ext_hdr[4] = 1u << 5u; /* PHY=1 (2M) in bits [7:5] */
+
+    /* --- Secondary: AUX_ADV_IND on data channel, 2M, with payload --- */
+    memset(&adv_aux, 0, sizeof(adv_aux));
+    adv_aux.commandNo = CMD_BLE5_ADV_AUX;
+    adv_aux.startTime = 0u;
+    adv_aux.startTrigger.triggerType = TRIG_NOW; /* fire immediately after ADV_EXT */
+    adv_aux.startTrigger.pastTrig = 1u;
+    adv_aux.condition.rule = COND_NEVER;
+    adv_aux.channel = BLE5_EXT_ADV_AUX_CHANNEL;
+    adv_aux.phyMode.mainMode = 1u; /* 2M */
+    adv_aux.phyMode.coding = 0u;
+    adv_aux.pParams = &aux_par;
+    adv_aux.pOutput = &s_ble_adv_output;
+
+    memset(&aux_par, 0, sizeof(aux_par));
+    aux_par.advConfig.deviceAddrType = 1u;
+    aux_par.pAdvPkt = (uint8_t *)&aux_pkt;
+    aux_par.pRspPkt = NULL;
+    aux_par.pDeviceAddress = (uint16_t *)s_ble_adv_tx_device_addr;
+
+    memset(&aux_pkt, 0, sizeof(aux_pkt));
+    aux_pkt.extHdrInfo.length = 9u; /* flags(1) + AdvA(6) + ADI(2) */
+    aux_pkt.extHdrInfo.advMode = 0u;
+    aux_pkt.extHdrFlags = 0x09u;         /* bit0=AdvA, bit3=ADI */
+    aux_pkt.extHdrConfig.bSkipAdvA = 1u; /* RF core inserts AdvA from pDeviceAddress */
+    aux_pkt.pExtHeader = ext_hdr;        /* reuse ADI bytes */
+    aux_pkt.advDataLen = payload_len;
+    aux_pkt.pAdvData = s_ble_adv_tx_payload;
+
+    /* bt5 patch required: multi_protocol does NOT support CMD_BLE5_ADV_AUX (hangs). */
+    if (!RadioIF_switchRfMode(&Ble5_0_mode, (RF_RadioSetup *)&Ble5_0_cmdBle5RadioSetup)) {
+        return false;
+    }
+    RadioIF_applyRfTxPower(s_rf_handle, tx_power);
+
+    /* Run ADV_EXT(1M,ch37) → ADV_AUX(2M,data ch) chain (Sniffle pattern, RF_runCmd). */
+    {
+        RF_EventMask result = RF_runCmd(s_rf_handle, (RF_Op *)&adv37, RF_PriorityNormal, NULL,
+                                        RF_EventLastCmdDone | RF_EventCmdAborted |
+                                            RF_EventCmdStopped | RF_EventCmdCancelled);
+        return (result & RF_EventLastCmdDone) != 0u;
+    }
+}
+
 static bool RadioIF_transmitBleAdvRaw(const uint8_t *payload, uint8_t payload_len) {
     RF_TxPowerTable_Value tx_power = RadioIF_resolveTxPowerValue(s_tx_power_dbm);
     uint8_t ble_channel = RadioIF_convertToBleChannel((uint8_t)s_channel);
@@ -485,15 +580,27 @@ static bool RadioIF_transmitBleAdvRaw(const uint8_t *payload, uint8_t payload_le
         return false;
     }
 
-    if (!RadioIF_isBleAdvChannel(ble_channel)) {
-        return false;
-    }
-
     memcpy(s_ble_adv_tx_payload, payload, payload_len);
 
     /* Configure BLE FS command for this channel */
     RadioIF_applyBleChannelConfig((uint8_t)s_channel);
     RadioIF_applyBlePhyMode(s_selected_phy);
+
+    memset(&s_ble_adv_output, 0, sizeof(s_ble_adv_output));
+
+    /* BLE 2M: extended advertising — ADV_EXT(1M, ch37) → ADV_AUX(2M, data ch).
+     * BLE spec forbids 2M on primary channels. Sniffle pattern.
+     * Force RadioSetup defaultPhy to 1M — 2M goes in the ADV command phyMode only.
+     * Having defaultPhy=2M causes RF core hang on second TX. */
+    if (s_selected_phy == PHY_MANAGER_PHY_BLE_2M) {
+        Ble5_0_cmdBle5RadioSetup.defaultPhy.mainMode = 0u; /* 1M setup */
+        Ble5_0_cmdBle5RadioSetup.defaultPhy.coding = 0u;
+        return RadioIF_transmitBle2mExtAdv(payload_len, tx_power);
+    }
+
+    if (!RadioIF_isBleAdvChannel(ble_channel)) {
+        return false;
+    }
 
     /* Shared ADV params for both BLE4 and BLE5 commands */
     if (Ble5_0_cmdBleAdvNc.pParams == NULL) {
@@ -507,9 +614,7 @@ static bool RadioIF_transmitBleAdvRaw(const uint8_t *payload, uint8_t payload_le
     Ble5_0_cmdBleAdvNc.pParams->pDeviceAddress = (uint16_t *)s_ble_adv_tx_device_addr;
     Ble5_0_cmdBleAdvNc.pParams->pWhiteList = NULL;
 
-    memset(&s_ble_adv_output, 0, sizeof(s_ble_adv_output));
-
-    /* Use BLE5 ADV_NC for 2M/Coded (has phyMode), BLE4 for 1M (simpler) */
+    /* BLE Coded S8/S2: ADV_NC with phyMode (works on adv channels per BLE 5.0 spec) */
     if (s_selected_phy != PHY_MANAGER_PHY_BLE_1M) {
         Ble5_0_cmdBle5AdvNc.channel = ble_channel;
         Ble5_0_cmdBle5AdvNc.whitening.init = 0u;

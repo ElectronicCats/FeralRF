@@ -9,7 +9,7 @@
 /* clang-format on */
 #include <ti/drivers/rf/RF.h>
 
-extern RF_Mode Ble5_0_mode;
+extern RF_Mode Ble5_0_mode; /* bt5 patch — supports BLE5 extended advertising */
 
 extern rfc_CMD_BLE5_RADIO_SETUP_PA_t Ble5_0_cmdBle5RadioSetup;
 extern rfc_CMD_FS_t Ble5_0_cmdFs;

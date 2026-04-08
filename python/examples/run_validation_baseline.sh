@@ -9,13 +9,18 @@ export PYTHONPATH="${REPO_ROOT}/python${PYTHONPATH:+:${PYTHONPATH}}"
 
 PORT=""
 BAUDRATE="921600"
+ONLY=""
 FAILURES=0
 
 usage() {
     cat <<'EOF'
-Usage: python/examples/run_validation_baseline.sh [--port PORT] [--baudrate BAUD]
+Usage: python/examples/run_validation_baseline.sh [--port PORT] [--baudrate BAUD] [--only FILTER]
 
 Runs the full baseline validation sweep with CC1352 reset between each step.
+
+Options:
+  --only FILTER   Run only steps whose label contains FILTER (case-insensitive).
+                  Examples: --only "OOK 868", --only 433, --only BLE, --only IEEE
 
 Notes:
 - Resets CC1352 via RP2040 shell between every test for clean RF state.
@@ -32,6 +37,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --baudrate|-b)
             BAUDRATE="${2:-}"
+            shift 2
+            ;;
+        --only|-o)
+            ONLY="${2:-}"
             shift 2
             ;;
         --help|-h)
@@ -79,6 +88,14 @@ except Exception:
 run_step() {
     local label="$1"
     shift
+    # Skip if --only filter is set and label doesn't match
+    if [[ -n "${ONLY}" ]]; then
+        local label_lower="${label,,}"
+        local only_lower="${ONLY,,}"
+        if [[ "${label_lower}" != *"${only_lower}"* ]]; then
+            return 0
+        fi
+    fi
     echo
     reset_device
     echo "[STEP] ${label}"
@@ -95,7 +112,7 @@ run_step() {
 echo "FeralRF Validation Baseline"
 echo "==========================="
 echo "repo=${REPO_ROOT}"
-echo "port=${PORT:-auto} baudrate=${BAUDRATE}"
+echo "port=${PORT:-auto} baudrate=${BAUDRATE} only=${ONLY:-all}"
 
 run_step "BLE 1M control path" \
     python3 "${SCRIPT_DIR}/smoke_phase2.py" "${common_args[@]}" --phy 0 --channel 37 --power 0

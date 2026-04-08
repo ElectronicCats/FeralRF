@@ -27,7 +27,6 @@ import time
 from dataclasses import dataclass, field
 from typing import List, Optional
 
-
 POWER_SWEEP_DBM = [0]  # Fixed 0 dBm — safe for both SKY66312-11 and TQP7M9104
 
 DEFAULT_CONFIGS = ["baseline", "SKY66312", "TQP7M9104"]
@@ -51,9 +50,7 @@ class LevelResult:
         if len(self.rssi_values) < 2:
             return float("nan")
         mean = self.rssi_mean
-        variance = sum((r - mean) ** 2 for r in self.rssi_values) / (
-            len(self.rssi_values) - 1
-        )
+        variance = sum((r - mean) ** 2 for r in self.rssi_values) / (len(self.rssi_values) - 1)
         return math.sqrt(variance)
 
     @property
@@ -123,9 +120,7 @@ def run_sweep(
             pass
 
         # TX burst
-        radio_tx.transmit_burst(
-            packet, count=packets_per_level, interval_us=interval_us
-        )
+        radio_tx.transmit_burst(packet, count=packets_per_level, interval_us=interval_us)
 
         # Wait for all packets to arrive
         burst_duration_s = (packets_per_level * interval_us) / 1_000_000.0
@@ -164,9 +159,7 @@ def run_sweep(
     return result
 
 
-def compute_gain(
-    baseline: ConfigResult, pa: ConfigResult
-) -> List[Optional[float]]:
+def compute_gain(baseline: ConfigResult, pa: ConfigResult) -> List[Optional[float]]:
     """Compute gain (dB) per power level: PA_rssi - baseline_rssi."""
     gains = []
     for bl, pl in zip(baseline.levels, pa.levels):
@@ -198,9 +191,7 @@ def estimate_p1db(gains: List[Optional[float]]) -> Optional[str]:
     return None
 
 
-def print_results(
-    configs: List[ConfigResult], phy_id: int, channel: int, packets_per_level: int
-):
+def print_results(configs: List[ConfigResult], phy_id: int, channel: int, packets_per_level: int):
     """Print comparative results table."""
     baseline = configs[0]
     pa_configs = configs[1:]
@@ -254,9 +245,7 @@ def print_results(
     print("=" * 80)
 
 
-def export_csv(
-    filepath: str, configs: List[ConfigResult], phy_id: int, channel: int
-):
+def export_csv(filepath: str, configs: List[ConfigResult], phy_id: int, channel: int):
     """Export all results to CSV."""
     baseline = configs[0]
     pa_configs = configs[1:]
@@ -266,12 +255,20 @@ def export_csv(
         writer = csv.writer(f)
 
         # Header
-        header = ["tx_power_dbm", "baseline_rssi_mean", "baseline_rssi_std",
-                  "baseline_rx", "baseline_per"]
+        header = [
+            "tx_power_dbm",
+            "baseline_rssi_mean",
+            "baseline_rssi_std",
+            "baseline_rx",
+            "baseline_per",
+        ]
         for pa in pa_configs:
             header += [
-                f"{pa.name}_rssi_mean", f"{pa.name}_rssi_std",
-                f"{pa.name}_rx", f"{pa.name}_per", f"{pa.name}_gain_db",
+                f"{pa.name}_rssi_mean",
+                f"{pa.name}_rssi_std",
+                f"{pa.name}_rx",
+                f"{pa.name}_per",
+                f"{pa.name}_gain_db",
             ]
         writer.writerow(header)
 
@@ -306,34 +303,24 @@ def main() -> int:
     parser.add_argument("--port-tx", required=True, help="TX board serial port")
     parser.add_argument("--port-rx", required=True, help="RX board serial port")
     parser.add_argument("-b", "--baudrate", type=int, default=921600)
-    parser.add_argument(
-        "--phy", type=int, default=0,
-        help="PHY id (0=BLE_1M, 4=IEEE_802_15_4)"
-    )
+    parser.add_argument("--phy", type=int, default=0, help="PHY id (0=BLE_1M, 4=IEEE_802_15_4)")
     parser.add_argument("--channel", "-c", type=int, default=37, help="RF channel")
     parser.add_argument(
-        "--packets-per-level", type=int, default=200,
-        help="Packets to TX at each power level"
+        "--packets-per-level", type=int, default=200, help="Packets to TX at each power level"
     )
     parser.add_argument(
-        "--interval-us", type=int, default=5000,
-        help="Inter-packet interval in microseconds"
+        "--interval-us", type=int, default=5000, help="Inter-packet interval in microseconds"
     )
+    parser.add_argument("--tx-packet", default="a1b2c3d4e5f6", help="TX payload hex string")
     parser.add_argument(
-        "--tx-packet", default="a1b2c3d4e5f6",
-        help="TX payload hex string"
+        "--configs",
+        nargs="+",
+        default=DEFAULT_CONFIGS,
+        help="Configuration names (first is baseline)",
     )
+    parser.add_argument("--output", "-o", default=None, help="Export results to CSV file")
     parser.add_argument(
-        "--configs", nargs="+", default=DEFAULT_CONFIGS,
-        help="Configuration names (first is baseline)"
-    )
-    parser.add_argument(
-        "--output", "-o", default=None,
-        help="Export results to CSV file"
-    )
-    parser.add_argument(
-        "--rx-settle", type=float, default=0.3,
-        help="Seconds to wait after starting RX before TX"
+        "--rx-settle", type=float, default=0.3, help="Seconds to wait after starting RX before TX"
     )
     args = parser.parse_args()
 
@@ -401,6 +388,7 @@ def main() -> int:
     except Exception as exc:
         fail(f"Error: {exc}")
         import traceback
+
         traceback.print_exc()
         return 1
     finally:

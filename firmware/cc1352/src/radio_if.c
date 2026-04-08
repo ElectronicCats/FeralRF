@@ -654,20 +654,19 @@ void RadioIF_getRfDebug(RadioIF_RfDebug *out) {
     out->rf_mode = (uint8_t)s_rf_mode;
     out->setup_status = is_433 ? (uint16_t)Prop0_cmdPropRadioDivSetup433.status
                                : (uint16_t)Prop0_cmdPropRadioDivSetup.status;
-    out->fs_status = is_433 ? (uint16_t)Prop0_cmdFs433.status
-                            : (uint16_t)Prop0_cmdFs.status;
-    out->rx_status = is_433 ? (uint16_t)Prop0_cmdPropRx433.status
-                            : (uint16_t)Prop0_cmdPropRx.status;
+    out->fs_status = is_433 ? (uint16_t)Prop0_cmdFs433.status : (uint16_t)Prop0_cmdFs.status;
+    out->rx_status =
+        is_433 ? (uint16_t)Prop0_cmdPropRx433.status : (uint16_t)Prop0_cmdPropRx.status;
     out->tx_status = s_last_tx_status;
     out->fs_freq = is_433 ? Prop0_cmdFs433.frequency : Prop0_cmdFs.frequency;
-    out->lo_divider = is_433 ? Prop0_cmdPropRadioDivSetup433.loDivider
-                             : Prop0_cmdPropRadioDivSetup.loDivider;
+    out->lo_divider =
+        is_433 ? Prop0_cmdPropRadioDivSetup433.loDivider : Prop0_cmdPropRadioDivSetup.loDivider;
     out->freq_hz = s_frequency_hz;
     out->tx_result_ok = s_last_tx_result;
     out->tx_event_mask = s_last_tx_event;
     out->fs_frac = is_433 ? Prop0_cmdFs433.fractFreq : Prop0_cmdFs.fractFreq;
-    out->setup_center = is_433 ? Prop0_cmdPropRadioDivSetup433.centerFreq
-                               : Prop0_cmdPropRadioDivSetup.centerFreq;
+    out->setup_center =
+        is_433 ? Prop0_cmdPropRadioDivSetup433.centerFreq : Prop0_cmdPropRadioDivSetup.centerFreq;
     out->tx_session_ok = (s_tx_session_handle != NULL) ? 1u : 0u;
     out->tx_session_match = (s_tx_session_mode == &Prop0_mode433) ? 1u : 0u;
     out->tx_cmd_no = is_433 ? Prop0_cmdPropTx433.commandNo : Prop0_cmdPropTx.commandNo;

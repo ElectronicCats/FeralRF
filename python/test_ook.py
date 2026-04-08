@@ -1,14 +1,17 @@
 """Test OOK TX/RX between two boards.
 Usage: python test_ook.py [868|433]
 OOK locks the radio — needs reset_device() to recover."""
+
 import sys
-import time
 import threading
-from feralrf import Radio, PHY, PROP_PRESETS
+import time
+
+from feralrf import PHY, PROP_PRESETS, Radio
 
 TX_PORT = "/dev/ttyACM3"
 RX_PORT = "/dev/ttyACM0"
 COUNT = 5
+
 
 def main():
     freq = sys.argv[1] if len(sys.argv) > 1 else "868"
@@ -23,10 +26,13 @@ def main():
     # RX
     rx_data = []
     rx_err = [None]
+
     def rx_thread():
         try:
             r = Radio(RX_PORT)
-            r.connect(); time.sleep(0.5); r.init()
+            r.connect()
+            time.sleep(0.5)
+            r.init()
             r.set_phy(PHY.PROPRIETARY_GFSK, frequency_hz=preset["frequency_hz"])
             time.sleep(0.3)
             r.configure_prop(**preset)
@@ -52,7 +58,9 @@ def main():
 
     # TX
     tx = Radio(TX_PORT)
-    tx.connect(); time.sleep(0.5); tx.init()
+    tx.connect()
+    time.sleep(0.5)
+    tx.init()
     tx.set_phy(PHY.PROPRIETARY_GFSK, frequency_hz=preset["frequency_hz"])
     time.sleep(0.3)
     tx.configure_prop(**preset)
@@ -60,8 +68,12 @@ def main():
     tx.set_power(5)
 
     pkt = bytearray(20)
-    pkt[0] = 0xDE; pkt[1] = 0xAD; pkt[2] = 0xBE; pkt[3] = 0xEF
-    for k in range(4, 20): pkt[k] = k
+    pkt[0] = 0xDE
+    pkt[1] = 0xAD
+    pkt[2] = 0xBE
+    pkt[3] = 0xEF
+    for k in range(4, 20):
+        pkt[k] = k
 
     print(f"[TX] Sending {COUNT} OOK packets at 868 MHz...")
     tx_ok = 0
@@ -82,7 +94,9 @@ def main():
 
     err = rx_err[0]
     rx_count = len(rx_data)
-    status = "PASS" if rx_count >= max(1, int(COUNT * 0.8)) else ("ERROR: " + err if err else "FAIL")
+    status = (
+        "PASS" if rx_count >= max(1, int(COUNT * 0.8)) else ("ERROR: " + err if err else "FAIL")
+    )
     print(f"\n=== OOK 868: TX {tx_ok}/{COUNT}, RX {rx_count}/{COUNT} (DEADBEEF) [{status}] ===")
 
 

@@ -28,11 +28,12 @@ Usage:
 All steps are interactive — press Enter to advance.
 """
 
+import json
 import sys
 import time
-import json
 from collections import defaultdict
-from feralrf import Radio, PHY
+
+from feralrf import PHY, Radio
 
 PORT = sys.argv[1] if len(sys.argv) > 1 else "/dev/ttyACM0"
 OUTPUT = sys.argv[2] if len(sys.argv) > 2 else "ble_analysis.json"
@@ -40,43 +41,81 @@ OUTPUT = sys.argv[2] if len(sys.argv) > 2 else "ble_analysis.json"
 # ─── Known Identifiers ───
 
 COMPANIES = {
-    0x004C: "Apple", 0x0006: "Microsoft", 0x00E0: "Google",
-    0x0075: "Samsung", 0x2BF4: "Anker", 0x000D: "Texas Instruments",
-    0x0059: "Nordic Semiconductor", 0x0131: "Cypress", 0x02FF: "Qualcomm",
-    0x0171: "Amazon", 0x038F: "Xiaomi", 0x0157: "Huawei",
-    0x0087: "Garmin", 0x00D2: "Bose", 0x012D: "Sony",
-    0x0310: "Jabra", 0x0056: "Sony Ericsson", 0x0046: "MediaTek",
+    0x004C: "Apple",
+    0x0006: "Microsoft",
+    0x00E0: "Google",
+    0x0075: "Samsung",
+    0x2BF4: "Anker",
+    0x000D: "Texas Instruments",
+    0x0059: "Nordic Semiconductor",
+    0x0131: "Cypress",
+    0x02FF: "Qualcomm",
+    0x0171: "Amazon",
+    0x038F: "Xiaomi",
+    0x0157: "Huawei",
+    0x0087: "Garmin",
+    0x00D2: "Bose",
+    0x012D: "Sony",
+    0x0310: "Jabra",
+    0x0056: "Sony Ericsson",
+    0x0046: "MediaTek",
 }
 
 UUIDS16 = {
-    0xFE2C: "Google Fast Pair", 0xFCF1: "Google Nearby Share",
-    0xFE9F: "Google Eddystone", 0xFD6F: "Apple Exposure Notification",
-    0xFEAA: "Google Eddystone", 0xFE07: "Sonos",
-    0x180A: "Device Information", 0x1812: "Human Interface Device",
-    0x180F: "Battery Service", 0x1800: "Generic Access",
-    0x1801: "Generic Attribute", 0x181A: "Environmental Sensing",
-    0xFFF0: "Custom/Vendor", 0xFFF1: "Custom/Vendor",
+    0xFE2C: "Google Fast Pair",
+    0xFCF1: "Google Nearby Share",
+    0xFE9F: "Google Eddystone",
+    0xFD6F: "Apple Exposure Notification",
+    0xFEAA: "Google Eddystone",
+    0xFE07: "Sonos",
+    0x180A: "Device Information",
+    0x1812: "Human Interface Device",
+    0x180F: "Battery Service",
+    0x1800: "Generic Access",
+    0x1801: "Generic Attribute",
+    0x181A: "Environmental Sensing",
+    0xFFF0: "Custom/Vendor",
+    0xFFF1: "Custom/Vendor",
 }
 
 PDU_TYPES = {
-    0: "ADV_IND", 1: "ADV_DIRECT_IND", 2: "ADV_NONCONN_IND",
-    3: "SCAN_REQ", 4: "SCAN_RSP", 5: "CONNECT_IND", 6: "ADV_SCAN_IND",
+    0: "ADV_IND",
+    1: "ADV_DIRECT_IND",
+    2: "ADV_NONCONN_IND",
+    3: "SCAN_REQ",
+    4: "SCAN_RSP",
+    5: "CONNECT_IND",
+    6: "ADV_SCAN_IND",
 }
 
 AD_TYPE_NAMES = {
-    0x01: "Flags", 0x02: "16-bit UUID (incomplete)", 0x03: "16-bit UUID (complete)",
-    0x04: "32-bit UUID (incomplete)", 0x05: "32-bit UUID (complete)",
-    0x06: "128-bit UUID (incomplete)", 0x07: "128-bit UUID (complete)",
-    0x08: "Shortened Local Name", 0x09: "Complete Local Name",
-    0x0A: "TX Power Level", 0x0D: "Class of Device",
-    0x0E: "Simple Pairing Hash", 0x0F: "Simple Pairing Randomizer",
-    0x10: "Security Manager TK", 0x11: "Security Manager OOB Flags",
-    0x12: "Peripheral Connection Interval", 0x14: "16-bit Solicitation UUID",
-    0x15: "128-bit Solicitation UUID", 0x16: "Service Data (16-bit)",
-    0x17: "Public Target Address", 0x18: "Random Target Address",
-    0x19: "Appearance", 0x1A: "Advertising Interval",
-    0x1B: "LE Bluetooth Device Address", 0x1C: "LE Role",
-    0x20: "Service Data (32-bit)", 0x21: "Service Data (128-bit)",
+    0x01: "Flags",
+    0x02: "16-bit UUID (incomplete)",
+    0x03: "16-bit UUID (complete)",
+    0x04: "32-bit UUID (incomplete)",
+    0x05: "32-bit UUID (complete)",
+    0x06: "128-bit UUID (incomplete)",
+    0x07: "128-bit UUID (complete)",
+    0x08: "Shortened Local Name",
+    0x09: "Complete Local Name",
+    0x0A: "TX Power Level",
+    0x0D: "Class of Device",
+    0x0E: "Simple Pairing Hash",
+    0x0F: "Simple Pairing Randomizer",
+    0x10: "Security Manager TK",
+    0x11: "Security Manager OOB Flags",
+    0x12: "Peripheral Connection Interval",
+    0x14: "16-bit Solicitation UUID",
+    0x15: "128-bit Solicitation UUID",
+    0x16: "Service Data (16-bit)",
+    0x17: "Public Target Address",
+    0x18: "Random Target Address",
+    0x19: "Appearance",
+    0x1A: "Advertising Interval",
+    0x1B: "LE Bluetooth Device Address",
+    0x1C: "LE Role",
+    0x20: "Service Data (32-bit)",
+    0x21: "Service Data (128-bit)",
     0xFF: "Manufacturer Specific Data",
 }
 
@@ -89,16 +128,30 @@ FLAG_BITS = {
 }
 
 APPEARANCES = {
-    0x0000: "Unknown", 0x0040: "Phone", 0x0080: "Computer",
-    0x00C0: "Watch", 0x00C1: "Sports Watch", 0x0100: "Clock",
-    0x0140: "Display", 0x0180: "Remote Control",
-    0x01C0: "Eye Glasses", 0x0200: "Tag", 0x0240: "Keyring",
-    0x0280: "Media Player", 0x02C0: "Barcode Scanner",
-    0x0300: "Thermometer", 0x0340: "Heart Rate Sensor",
-    0x03C0: "Cycling", 0x0440: "Pulse Oximeter",
-    0x04C0: "Weight Scale", 0x0540: "Outdoor Sports",
-    0x0841: "Keyboard", 0x0842: "Mouse", 0x0843: "Joystick",
-    0x0844: "Gamepad", 0x0CC1: "Hearing Aid",
+    0x0000: "Unknown",
+    0x0040: "Phone",
+    0x0080: "Computer",
+    0x00C0: "Watch",
+    0x00C1: "Sports Watch",
+    0x0100: "Clock",
+    0x0140: "Display",
+    0x0180: "Remote Control",
+    0x01C0: "Eye Glasses",
+    0x0200: "Tag",
+    0x0240: "Keyring",
+    0x0280: "Media Player",
+    0x02C0: "Barcode Scanner",
+    0x0300: "Thermometer",
+    0x0340: "Heart Rate Sensor",
+    0x03C0: "Cycling",
+    0x0440: "Pulse Oximeter",
+    0x04C0: "Weight Scale",
+    0x0540: "Outdoor Sports",
+    0x0841: "Keyboard",
+    0x0842: "Mouse",
+    0x0843: "Joystick",
+    0x0844: "Gamepad",
+    0x0CC1: "Hearing Aid",
 }
 
 
@@ -174,7 +227,7 @@ def decode_ad(ad_type, ad_data):
     elif ad_type in (0x04, 0x05) and len(ad_data) >= 4:
         uuids = []
         for j in range(0, len(ad_data) - 3, 4):
-            u = int.from_bytes(ad_data[j:j + 4], "little")
+            u = int.from_bytes(ad_data[j : j + 4], "little")
             uuids.append(f"0x{u:08X}")
         result["uuids"] = uuids
 
@@ -188,7 +241,7 @@ def decode_ad(ad_type, ad_data):
 
 def analyze_device(mac, info, start_time):
     """Full analysis of a captured device."""
-    mac_parts = [mac[i:i + 2] for i in range(0, 12, 2)]
+    mac_parts = [mac[i : i + 2] for i in range(0, 12, 2)]
     mac_display = ":".join(reversed(mac_parts)).upper()
     mac_raw = ":".join(mac_parts).upper()
 
@@ -204,7 +257,9 @@ def analyze_device(mac, info, start_time):
         addr_type = "Public"
 
     rssi_avg = info["rssi_sum"] / info["count"] if info["count"] > 0 else 0
-    duration = info["last_seen"] - info["first_seen"] if info["last_seen"] != info["first_seen"] else 0
+    duration = (
+        info["last_seen"] - info["first_seen"] if info["last_seen"] != info["first_seen"] else 0
+    )
     adv_rate = info["count"] / duration if duration > 0 else 0
 
     device = {
@@ -250,7 +305,7 @@ def analyze_device(mac, info, start_time):
             if al == 0 or i + al >= len(payload):
                 break
             at = payload[i + 1]
-            ad = payload[i + 2:i + 1 + al]
+            ad = payload[i + 2 : i + 1 + al]
             decoded = decode_ad(at, ad)
             payload_info["ad_structures"].append(decoded)
 
@@ -277,7 +332,9 @@ def analyze_device(mac, info, start_time):
     if not any("encrypted" in str(p).lower() for p in device["payloads"]):
         device["vulnerabilities"].append("Advertising is unencrypted — replay/clone possible")
     if device["adv_interval_ms"] and device["adv_interval_ms"] < 200:
-        device["vulnerabilities"].append(f"Fast advertising ({device['adv_interval_ms']:.0f}ms) — easy to capture")
+        device["vulnerabilities"].append(
+            f"Fast advertising ({device['adv_interval_ms']:.0f}ms) — easy to capture"
+        )
 
     return device
 
@@ -292,17 +349,23 @@ def print_device(dev, index):
     print(f"  Name:           {dev['device_name'] or '(none)'}")
     print(f"  Manufacturer:   {dev['manufacturer'] or 'Unknown'}")
     print(f"  Packets:        {dev['packets']}")
-    print(f"  RSSI:           min={dev['rssi']['min']} avg={dev['rssi']['avg']} max={dev['rssi']['max']} dBm")
+    print(
+        f"  RSSI:           min={dev['rssi']['min']} avg={dev['rssi']['avg']} max={dev['rssi']['max']} dBm"
+    )
     print(f"  Channels:       {dev['channels']}")
     print(f"  Duration:       {dev['duration_s']}s")
     if dev["adv_interval_ms"]:
-        print(f"  ADV Rate:       {dev['adv_rate_pps']} pkt/s (~{dev['adv_interval_ms']:.0f}ms interval)")
+        print(
+            f"  ADV Rate:       {dev['adv_rate_pps']} pkt/s (~{dev['adv_interval_ms']:.0f}ms interval)"
+        )
     print(f"  PDU Types:      {dev['pdu_types']}")
     print(f"  Fast Pair:      {'Yes' if dev['has_fastpair'] else 'No'}", end="")
     if dev.get("fastpair_model_id"):
         print(f" (Model ID: {dev['fastpair_model_id']})", end="")
     print()
-    print(f"  Apple:          {'Yes (' + dev.get('apple_protocol', '') + ')' if dev['has_apple'] else 'No'}")
+    print(
+        f"  Apple:          {'Yes (' + dev.get('apple_protocol', '') + ')' if dev['has_apple'] else 'No'}"
+    )
 
     print(f"\n  --- Payloads ({len(dev['payloads'])}) ---")
     for j, p in enumerate(dev["payloads"]):
@@ -379,11 +442,20 @@ print(f"Baseline: {len(baseline)} ambient devices")
 wait("Turn ON the target device. Press Enter to scan...")
 print("Scanning with target (30s)...")
 radio.start_rx()
-devices = defaultdict(lambda: {
-    "count": 0, "rssi_min": 0, "rssi_max": -128, "rssi_sum": 0,
-    "channels": set(), "pdu_types": set(), "payloads": {},
-    "payload_pdu": {}, "first_seen": None, "last_seen": None,
-})
+devices = defaultdict(
+    lambda: {
+        "count": 0,
+        "rssi_min": 0,
+        "rssi_max": -128,
+        "rssi_sum": 0,
+        "channels": set(),
+        "pdu_types": set(),
+        "payloads": {},
+        "payload_pdu": {},
+        "first_seen": None,
+        "last_seen": None,
+    }
+)
 start_time = time.time()
 for pkt in radio.read_packets(timeout=30.0):
     if pkt.crc_ok and len(pkt.data) > 8:

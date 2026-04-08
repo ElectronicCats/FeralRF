@@ -1,7 +1,9 @@
 """Test 433 MHz TX — send DEADBEEF markers for board 2 RX verification."""
-import time
+
 import sys
-from feralrf import Radio, PHY
+import time
+
+from feralrf import PHY, Radio
 
 PORT = "/dev/ttyACM3"
 COUNT = int(sys.argv[1]) if len(sys.argv) > 1 else 20

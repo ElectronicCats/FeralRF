@@ -11,7 +11,8 @@ Press Ctrl+C to stop.
 
 import sys
 import time
-from feralrf import Radio, PHY
+
+from feralrf import PHY, Radio
 
 PORT = sys.argv[1] if len(sys.argv) > 1 else "/dev/ttyACM0"
 

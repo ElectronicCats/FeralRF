@@ -346,7 +346,7 @@ void ControlTask_processTxRaw(void) {
     if (!tx_ok) {
         uint8_t err_payload[1] = {0x05u}; /* ERR_INVALID_STATE */
         extern void OutputIF_sendResponse(uint8_t cmd_id, uint8_t seq, const uint8_t *payload,
-                                           uint16_t payload_len);
+                                          uint16_t payload_len);
         OutputIF_sendResponse(0x81u, 0xFFu, err_payload, 1u);
     }
 }

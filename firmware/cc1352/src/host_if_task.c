@@ -92,7 +92,7 @@ void HostIFTask_poll(void) {
                 /* Previous command still pending — send async error to host */
                 static const uint8_t busy_err[] = {0x05u}; /* ERR_INVALID_STATE */
                 extern void OutputIF_sendResponse(uint8_t cmd_id, uint8_t seq,
-                                                   const uint8_t *payload, uint16_t payload_len);
+                                                  const uint8_t *payload, uint16_t payload_len);
                 OutputIF_sendResponse(0x81u, 0xFFu, busy_err, 1u);
             } else if (s_encoded_len <= sizeof(s_pending_frame)) {
                 size_t j;

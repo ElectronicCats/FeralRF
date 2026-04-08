@@ -12,8 +12,8 @@
 
 /* TI-RTOS */
 #include <ti/sysbios/BIOS.h>
-#include <ti/sysbios/knl/Task.h>
 #include <ti/sysbios/knl/Semaphore.h>
+#include <ti/sysbios/knl/Task.h>
 
 /* TI Drivers */
 #include <ti/drivers/GPIO.h>
@@ -47,16 +47,16 @@
 #include "host_if_task.h"
 #include "radio_if.h"
 #include "smartrf_prop_0.h"
-#include "ti_radio_config_433.h"
 #include "task_event.h"
+#include "ti_radio_config_433.h"
 
 /* ─── Task Configuration ─── */
 
-#define UART_TASK_PRIORITY   3   /* Same priority — cooperative via Task_yield */
+#define UART_TASK_PRIORITY 3 /* Same priority — cooperative via Task_yield */
 #define UART_TASK_STACK_SIZE 4096
 
-#define RF_TASK_PRIORITY     3   /* Same priority — cooperative via Task_yield */
-#define RF_TASK_STACK_SIZE   4096
+#define RF_TASK_PRIORITY 3 /* Same priority — cooperative via Task_yield */
+#define RF_TASK_STACK_SIZE 4096
 
 static Task_Struct s_uart_task;
 static uint8_t s_uart_task_stack[UART_TASK_STACK_SIZE];
@@ -79,8 +79,7 @@ void RfTask_signalCommand(void) {
 
 static void board_power_init(void) {
     PRCMPowerDomainOn(PRCM_DOMAIN_PERIPH | PRCM_DOMAIN_SERIAL);
-    while (PRCMPowerDomainsAllOn(PRCM_DOMAIN_PERIPH | PRCM_DOMAIN_SERIAL) !=
-           PRCM_DOMAIN_POWER_ON) {
+    while (PRCMPowerDomainsAllOn(PRCM_DOMAIN_PERIPH | PRCM_DOMAIN_SERIAL) != PRCM_DOMAIN_POWER_ON) {
     }
     PRCMPeripheralRunEnable(PRCM_PERIPH_GPIO);
     PRCMPeripheralRunEnable(PRCM_PERIPH_UART0);
@@ -91,9 +90,8 @@ static void board_power_init(void) {
 
 static void board_gpio_init(void) {
     IOCPortConfigureSet(LED_PIN, IOC_PORT_GPIO,
-                        IOC_CURRENT_8MA | IOC_STRENGTH_MAX | IOC_NO_IOPULL |
-                            IOC_SLEW_DISABLE | IOC_HYST_DISABLE | IOC_NO_EDGE |
-                            IOC_INT_DISABLE | IOC_IOMODE_NORMAL |
+                        IOC_CURRENT_8MA | IOC_STRENGTH_MAX | IOC_NO_IOPULL | IOC_SLEW_DISABLE |
+                            IOC_HYST_DISABLE | IOC_NO_EDGE | IOC_INT_DISABLE | IOC_IOMODE_NORMAL |
                             IOC_NO_WAKE_UP | IOC_INPUT_DISABLE);
     GPIO_setOutputEnableDio(LED_PIN, GPIO_OUTPUT_ENABLE);
 #if LED_ACTIVE_LOW
@@ -155,7 +153,7 @@ static void RfTask_taskFxn(UArg a0, UArg a1) {
         Prop0_cmdFs433.synthConf.bTxMode = 1u;
 
         RF_Handle h = RF_open(RadioIF_get433Object(), &Prop0_mode433,
-                               (RF_RadioSetup *)&Prop0_cmdPropRadioDivSetup433, &rfParams);
+                              (RF_RadioSetup *)&Prop0_cmdPropRadioDivSetup433, &rfParams);
         if (h != NULL) {
             /* Seed the driver's FS cache at 433 MHz */
             RF_postCmd(h, (RF_Op *)&Prop0_cmdFs433, RF_PriorityNormal, NULL, 0);

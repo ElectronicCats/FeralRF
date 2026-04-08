@@ -59,10 +59,10 @@ void RadioIF_resetMetrics(void);
 /* Proprietary radio configuration */
 typedef struct {
     uint32_t frequency_hz;
-    uint8_t mod_type;       /* 0=FSK, 1=GFSK, 2=OOK/ASK, 4=MSK */
-    uint32_t symbol_rate;   /* baud */
-    uint16_t deviation;     /* Hz (for FSK/GFSK) */
-    uint8_t rx_bw;          /* RX bandwidth register value */
+    uint8_t mod_type;     /* 0=FSK, 1=GFSK, 2=OOK/ASK, 4=MSK */
+    uint32_t symbol_rate; /* baud */
+    uint16_t deviation;   /* Hz (for FSK/GFSK) */
+    uint8_t rx_bw;        /* RX bandwidth register value */
     uint32_t sync_word;
 } RadioIF_PropConfig;
 
@@ -73,22 +73,22 @@ void RadioIF_setBleAdvAddress(const uint8_t *addr);
 
 /* RF debug diagnostics */
 typedef struct {
-    uint8_t  rf_handle_ok;      /* 1 if RF_open succeeded */
-    uint8_t  rf_mode;           /* current s_rf_mode */
-    uint16_t setup_status;      /* RadioSetup command status */
-    uint16_t fs_status;         /* CMD_FS status */
-    uint16_t rx_status;         /* CMD_PROP_RX status */
-    uint16_t tx_status;         /* last CMD_PROP_TX status */
-    uint16_t fs_freq;           /* CMD_FS frequency field */
-    uint8_t  lo_divider;        /* RadioSetup loDivider */
-    uint32_t freq_hz;           /* s_frequency_hz */
-    uint8_t  tx_result_ok;      /* 1 if last transmitRaw returned true */
-    uint32_t tx_event_mask;     /* RF_EventMask from last RF_runCmd(TX) */
-    uint16_t fs_frac;           /* CMD_FS fractional freq */
-    uint16_t setup_center;      /* RadioSetup centerFreq */
-    uint8_t  tx_session_ok;     /* 1 if s_tx_session_handle != NULL */
-    uint8_t  tx_session_match;  /* 1 if s_tx_session_mode == expected */
-    uint16_t tx_cmd_no;         /* CMD_PROP_TX commandNo check */
+    uint8_t rf_handle_ok;     /* 1 if RF_open succeeded */
+    uint8_t rf_mode;          /* current s_rf_mode */
+    uint16_t setup_status;    /* RadioSetup command status */
+    uint16_t fs_status;       /* CMD_FS status */
+    uint16_t rx_status;       /* CMD_PROP_RX status */
+    uint16_t tx_status;       /* last CMD_PROP_TX status */
+    uint16_t fs_freq;         /* CMD_FS frequency field */
+    uint8_t lo_divider;       /* RadioSetup loDivider */
+    uint32_t freq_hz;         /* s_frequency_hz */
+    uint8_t tx_result_ok;     /* 1 if last transmitRaw returned true */
+    uint32_t tx_event_mask;   /* RF_EventMask from last RF_runCmd(TX) */
+    uint16_t fs_frac;         /* CMD_FS fractional freq */
+    uint16_t setup_center;    /* RadioSetup centerFreq */
+    uint8_t tx_session_ok;    /* 1 if s_tx_session_handle != NULL */
+    uint8_t tx_session_match; /* 1 if s_tx_session_mode == expected */
+    uint16_t tx_cmd_no;       /* CMD_PROP_TX commandNo check */
 } RadioIF_RfDebug;
 
 void RadioIF_getRfDebug(RadioIF_RfDebug *out);

@@ -27,8 +27,8 @@ extern uint8_t attDeviceName[GAP_DEVICE_NAME_LEN];
 extern uint8_t pRandomAddress[B_ADDR_LEN];
 
 // Address mode of the local device
-// Note: When using the DEFAULT_ADDRESS_MODE as ADDRMODE_RANDOM or 
-// ADDRMODE_RP_WITH_RANDOM_ID, GAP_DeviceInit() should be called with 
+// Note: When using the DEFAULT_ADDRESS_MODE as ADDRMODE_RANDOM or
+// ADDRMODE_RP_WITH_RANDOM_ID, GAP_DeviceInit() should be called with
 // it's last parameter set to a static random address
 #define DEFAULT_ADDRESS_MODE                  ADDRMODE_RP_WITH_PUBLIC_ID
 

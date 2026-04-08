@@ -8,17 +8,22 @@ Usage:
     python demo_ble_clone.py [port]
 """
 
+import os
 import sys
 import time
-import os
 from collections import defaultdict
-from feralrf import Radio, PHY
+
+from feralrf import PHY, Radio
 
 PORT = sys.argv[1] if len(sys.argv) > 1 else "/dev/ttyACM0"
 
 COMPANIES = {
-    0x004C: "Apple", 0x0006: "Microsoft", 0x00E0: "Google",
-    0x0075: "Samsung", 0x2BF4: "Anker", 0x000D: "TI",
+    0x004C: "Apple",
+    0x0006: "Microsoft",
+    0x00E0: "Google",
+    0x0075: "Samsung",
+    0x2BF4: "Anker",
+    0x000D: "TI",
 }
 
 
@@ -53,6 +58,7 @@ def emit_until_enter(radio, mac_str, payload, power=5):
     radio.set_phy(PHY.BLE_1M, channel=37)
 
     import threading
+
     stop = threading.Event()
     count = [0]
 
@@ -108,14 +114,14 @@ print(f"\nNew devices: {len(new_macs)}")
 sorted_new = sorted(new_macs, key=lambda m: target_devs[m]["rssi_max"], reverse=True)
 for i, mac in enumerate(sorted_new[:5]):
     d = target_devs[mac]
-    ms = ":".join(mac[j:j+2] for j in range(0, 12, 2)).upper()
+    ms = ":".join(mac[j : j + 2] for j in range(0, 12, 2)).upper()
     print(f"  {i+1}. {ms}  RSSI={d['rssi_max']:3d}dBm  pkts={d['count']}")
 
 # Auto-pick strongest
 target_mac = sorted_new[0]
 target = target_devs[target_mac]
 # Raw capture is LSB-first, reverse to nRF Connect display order (MSB-first)
-mac_parts = [target_mac[i:i+2] for i in range(0, 12, 2)]
+mac_parts = [target_mac[i : i + 2] for i in range(0, 12, 2)]
 mac_str = ":".join(reversed(mac_parts)).upper()
 mac_raw_str = ":".join(mac_parts).upper()
 print(f"\nSelected: {mac_str} (nRF Connect display)")
@@ -135,7 +141,7 @@ for p, _ in target_payloads:
         if al == 0 or i + al >= len(p):
             break
         at = p[i + 1]
-        ad = p[i + 2:i + 1 + al]
+        ad = p[i + 2 : i + 1 + al]
         if at in (0x08, 0x09) and ad:
             device_name = ad.decode("utf-8", errors="replace")
         if at == 0xFF and len(ad) >= 2:
@@ -147,7 +153,11 @@ for p, _ in target_payloads:
                 fastpair_prefix = ad[2:5].hex()
         i += al + 1
 
-company_name = COMPANIES.get(manufacturer_company, f"0x{manufacturer_company:04X}") if manufacturer_company else "?"
+company_name = (
+    COMPANIES.get(manufacturer_company, f"0x{manufacturer_company:04X}")
+    if manufacturer_company
+    else "?"
+)
 print(f"  Name: {device_name or '(none)'}")
 print(f"  Manufacturer: {company_name}")
 print(f"  Fast Pair: {'Yes (prefix=' + fastpair_prefix + ')' if has_fastpair else 'No'}")
@@ -171,10 +181,11 @@ for p, _ in target_payloads:
     i = 0
     while i < len(p) - 1:
         al = p[i]
-        if al == 0 or i + al >= len(p): break
+        if al == 0 or i + al >= len(p):
+            break
         at = p[i + 1]
         if at != 0x01:
-            chunk = p[i:i + 1 + al]
+            chunk = p[i : i + 1 + al]
             if len(payload_b) + len(chunk) <= 31:
                 payload_b += chunk
         i += al + 1
@@ -183,11 +194,13 @@ if len(payload_b) > 3:
     strategies.append(("Modified flags (0x06)", mac_str, bytes(payload_b)))
 
 # C) With device name
-guess_name = device_name or {0x2BF4: "Soundcore Boom 2", 0x004C: "iPhone"}.get(manufacturer_company, "Device")
+guess_name = device_name or {0x2BF4: "Soundcore Boom 2", 0x004C: "iPhone"}.get(
+    manufacturer_company, "Device"
+)
 payload_c = bytearray([0x02, 0x01, 0x06])
 nb = guess_name.encode("utf-8")[:20]
 payload_c += bytes([len(nb) + 1, 0x09]) + nb
-strategies.append((f"With name \"{guess_name}\"", mac_str, bytes(payload_c)))
+strategies.append((f'With name "{guess_name}"', mac_str, bytes(payload_c)))
 
 # D) Name + manufacturer data
 payload_d = bytearray(payload_c)
@@ -195,10 +208,11 @@ for p, _ in target_payloads:
     i = 0
     while i < len(p) - 1:
         al = p[i]
-        if al == 0 or i + al >= len(p): break
+        if al == 0 or i + al >= len(p):
+            break
         at = p[i + 1]
         if at == 0xFF:
-            chunk = p[i:i + 1 + al]
+            chunk = p[i : i + 1 + al]
             if len(payload_d) + len(chunk) <= 31:
                 payload_d += chunk
         i += al + 1
@@ -210,7 +224,9 @@ if len(payload_d) > len(payload_c):
 if has_fastpair and fastpair_prefix:
     payload_e = bytearray([0x02, 0x01, 0x06, 0x02, 0x0A, 0xF6, 0x06, 0x16, 0x2C, 0xFE])
     payload_e += bytes.fromhex(fastpair_prefix)
-    strategies.append((f"Fast Pair discoverable (0x{fastpair_prefix.upper()})", mac_str, bytes(payload_e)))
+    strategies.append(
+        (f"Fast Pair discoverable (0x{fastpair_prefix.upper()})", mac_str, bytes(payload_e))
+    )
 
 # F) Random MAC + name
 rmac = bytearray(os.urandom(6))
@@ -235,6 +251,7 @@ for idx, strategy in enumerate(strategies):
     if name == "ALL_ALTERNATING":
         # Special: alternate all payloads
         import threading
+
         stop = threading.Event()
         count = [0]
         radio.set_ble_addr_str(smac)
@@ -243,11 +260,13 @@ for idx, strategy in enumerate(strategies):
         def alt_loop():
             while not stop.is_set():
                 for p, _ in target_payloads:
-                    if stop.is_set(): break
+                    if stop.is_set():
+                        break
                     try:
                         radio.transmit(p, power_dbm=5)
                         count[0] += 1
-                    except: pass
+                    except:
+                        pass
                     time.sleep(0.02)
 
         t = threading.Thread(target=alt_loop, daemon=True)

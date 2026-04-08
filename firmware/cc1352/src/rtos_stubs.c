@@ -3,21 +3,33 @@
  * These will be replaced by real implementations when BLE5-Stack is added (M2).
  */
 
-#include <stdint.h>
-#include <stddef.h>
 #include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
 
 /* OSAL heap stubs removed — SDK 8.30 provides them in rtos_heaposal.h */
 
 /* _pthread_cleanupFxn now in POSIX unity build (ti_sysbios_config.c) */
 
 /* ICall_getMaxMSecs — inline in non-JT, needs stub for JT mode */
-uint32_t ICall_getMaxMSecs(void) { return 0xFFFFFFFFu; }
+uint32_t ICall_getMaxMSecs(void) {
+    return 0xFFFFFFFFu;
+}
 
 /* Newlib syscall stubs */
-void _exit(int status) { (void)status; while(1); }
-int _kill(int pid, int sig) { (void)pid; (void)sig; return -1; }
-int _getpid(void) { return 1; }
+void _exit(int status) {
+    (void)status;
+    while (1)
+        ;
+}
+int _kill(int pid, int sig) {
+    (void)pid;
+    (void)sig;
+    return -1;
+}
+int _getpid(void) {
+    return 1;
+}
 
 /* ClockSupport timer struct */
 #include <ti/sysbios/family/arm/cc26xx/Timer.h>

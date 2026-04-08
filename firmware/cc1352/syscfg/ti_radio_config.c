@@ -126,7 +126,7 @@ uint32_t pOverridesCommon[] =
     HW32_ARRAY_OVERRIDE(0x4004,0x0001),
     // Synth: Increase mid code calibration time to 5 us
     (uint32_t)0x38183C30,
-    // Bluetooth 5: Default to no CTE. 
+    // Bluetooth 5: Default to no CTE.
     HW_REG_OVERRIDE(0x5328,0x0000),
     // Synth: Set calibration fine point code to 60 (default: 64)
     HW_REG_OVERRIDE(0x4064,0x003C),
@@ -716,5 +716,3 @@ rfc_CMD_BLE5_INITIATOR_t RF_cmdBle5Initiator =
     .pOutput = 0,
     .tx20Power = 0x00000000
 };
-
-

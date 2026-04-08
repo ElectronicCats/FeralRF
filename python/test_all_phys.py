@@ -1,10 +1,13 @@
 """Test all PHYs — validates TX/RX with DEADBEEF markers between two CatSniffer boards.
 Each PHY tested with fresh board reset. Explicit channel + frequency per PHY."""
-import serial
-import time
-import threading
+
 import sys
-from feralrf import Radio, PHY
+import threading
+import time
+
+import serial
+
+from feralrf import PHY, Radio
 
 TX_PORT = "/dev/ttyACM3"  # Board 1
 RX_PORT = "/dev/ttyACM0"  # Board 2
@@ -14,12 +17,12 @@ COUNT = 10
 
 # PHY configs: (name, phy, channel, frequency_hz)
 PHY_TESTS = [
-    ("BLE 1M",         PHY.BLE_1M,            37, 0),
-    ("IEEE 802.15.4",  PHY.IEEE_802_15_4,      15, 0),
-    ("Sub-1GHz 868",   PHY.SUB_1GHZ_868,       0,  868000000),
-    ("Sub-1GHz 915",   PHY.SUB_1GHZ_915,       0,  902000000),
-    ("GFSK 868",       PHY.PROPRIETARY_GFSK,   0,  868000000),
-    ("GFSK 433",       PHY.PROPRIETARY_GFSK,   0,  433920000),
+    ("BLE 1M", PHY.BLE_1M, 37, 0),
+    ("IEEE 802.15.4", PHY.IEEE_802_15_4, 15, 0),
+    ("Sub-1GHz 868", PHY.SUB_1GHZ_868, 0, 868000000),
+    ("Sub-1GHz 915", PHY.SUB_1GHZ_915, 0, 902000000),
+    ("GFSK 868", PHY.PROPRIETARY_GFSK, 0, 868000000),
+    ("GFSK 433", PHY.PROPRIETARY_GFSK, 0, 433920000),
 ]
 
 
@@ -28,8 +31,10 @@ def reset_boards():
     for name, port in [("TX", TX_SHELL), ("RX", RX_SHELL)]:
         try:
             s = serial.Serial(port, 115200, timeout=2)
-            s.write(b"boot\r\n"); time.sleep(0.5)
-            s.write(b"exit\r\n"); time.sleep(0.5)
+            s.write(b"boot\r\n")
+            time.sleep(0.5)
+            s.write(b"exit\r\n")
+            time.sleep(0.5)
             resp = s.read(256)
             s.close()
             if b"PASSTHROUGH" not in resp:
@@ -47,7 +52,9 @@ def test_phy(name, phy, channel, freq_hz, count=COUNT):
         r = None
         try:
             r = Radio(RX_PORT)
-            r.connect(); time.sleep(0.5); r.init()
+            r.connect()
+            time.sleep(0.5)
+            r.init()
             r.set_phy(phy, channel=channel, frequency_hz=freq_hz)
             time.sleep(0.3)
             r.start_rx()
@@ -74,13 +81,18 @@ def test_phy(name, phy, channel, freq_hz, count=COUNT):
     time.sleep(3)
 
     tx = Radio(TX_PORT)
-    tx.connect(); time.sleep(0.5); tx.init()
+    tx.connect()
+    time.sleep(0.5)
+    tx.init()
     tx.set_phy(phy, channel=channel, frequency_hz=freq_hz)
     time.sleep(0.3)
     tx.set_power(5)
 
     pkt = bytearray(30)
-    pkt[2] = 0xDE; pkt[3] = 0xAD; pkt[4] = 0xBE; pkt[5] = 0xEF
+    pkt[2] = 0xDE
+    pkt[3] = 0xAD
+    pkt[4] = 0xBE
+    pkt[5] = 0xEF
     for k in range(6, 30):
         pkt[k] = k
 

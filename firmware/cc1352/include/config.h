@@ -6,12 +6,12 @@
 #define CONFIG_H
 
 /* UART Configuration */
-#define UART_TX_PIN 13        /* DIO13 */
-#define UART_RX_PIN 12        /* DIO12 */
-#define UART_RTS_PIN 15       /* DIO15 - CC1352 RTS output → RP2040 CTS (GPIO3) */
-#define UART_CTS_PIN 14       /* DIO14 - CC1352 CTS input  ← RP2040 RTS (GPIO2) */
+#define UART_TX_PIN 13         /* DIO13 */
+#define UART_RX_PIN 12         /* DIO12 */
+#define UART_RTS_PIN 15        /* DIO15 - CC1352 RTS output → RP2040 CTS (GPIO3) */
+#define UART_CTS_PIN 14        /* DIO14 - CC1352 CTS input  ← RP2040 RTS (GPIO2) */
 #define UART_HW_FLOW_CONTROL 0 /* Set to 1 when RP2040 bridge also has hw-flow-control */
-#define UART_BAUD_RATE 921600 /* 921600 baud */
+#define UART_BAUD_RATE 921600  /* 921600 baud */
 
 /* LED Configuration (for debugging) */
 #define LED_PIN 24        /* DIO24 - LED on CatSniffer */
@@ -21,8 +21,9 @@
 /* Radio Configuration */
 #define TX_POWER_DBM 0                         /* Default TX power */
 #define RADIO_IF_SYNTH_PACKET_INTERVAL_MS 100u /* Synthetic packet cadence */
-#define RADIO_IF_BLE_ADV_HOP_ENABLE 1u         /* Default: enable BLE adv hopping (host can override at runtime) */
-#define RADIO_IF_BLE_ADV_HOP_INTERVAL_MS 50u   /* Hop dwell time per adv channel */
+#define RADIO_IF_BLE_ADV_HOP_ENABLE \
+    1u /* Default: enable BLE adv hopping (host can override at runtime) */
+#define RADIO_IF_BLE_ADV_HOP_INTERVAL_MS 50u /* Hop dwell time per adv channel */
 
 /* JAM Safe-Mode Configuration */
 #define JAM_MAX_DURATION_MS 30000u /* Maximum JAM session length */

@@ -1,22 +1,24 @@
 """Test PHY switching WITHOUT reset — validates s_433_handle alias survives transitions.
 Sequence: 433 → BLE → 868 → IEEE → 433 → 915 → 433
 Each step does TX/RX with DEADBEEF validation."""
-import time
+
 import threading
-from feralrf import Radio, PHY
+import time
+
+from feralrf import PHY, Radio
 
 TX_PORT = "/dev/ttyACM3"
 RX_PORT = "/dev/ttyACM0"
 COUNT = 5
 
 SEQUENCE = [
-    ("GFSK 433",       PHY.PROPRIETARY_GFSK, 0,  433920000),
-    ("BLE 1M",         PHY.BLE_1M,           37, 0),
-    ("Sub-1GHz 868",   PHY.SUB_1GHZ_868,      0, 868000000),
-    ("IEEE 802.15.4",  PHY.IEEE_802_15_4,     15, 0),
-    ("GFSK 433 (2nd)", PHY.PROPRIETARY_GFSK,  0, 433920000),
-    ("Sub-1GHz 915",   PHY.SUB_1GHZ_915,      0, 902000000),
-    ("GFSK 433 (3rd)", PHY.PROPRIETARY_GFSK,  0, 433920000),
+    ("GFSK 433", PHY.PROPRIETARY_GFSK, 0, 433920000),
+    ("BLE 1M", PHY.BLE_1M, 37, 0),
+    ("Sub-1GHz 868", PHY.SUB_1GHZ_868, 0, 868000000),
+    ("IEEE 802.15.4", PHY.IEEE_802_15_4, 15, 0),
+    ("GFSK 433 (2nd)", PHY.PROPRIETARY_GFSK, 0, 433920000),
+    ("Sub-1GHz 915", PHY.SUB_1GHZ_915, 0, 902000000),
+    ("GFSK 433 (3rd)", PHY.PROPRIETARY_GFSK, 0, 433920000),
 ]
 
 
@@ -52,7 +54,10 @@ def do_txrx(tx_radio, rx_radio, name, phy, channel, freq_hz):
     tx_radio.set_power(5)
 
     pkt = bytearray(30)
-    pkt[2] = 0xDE; pkt[3] = 0xAD; pkt[4] = 0xBE; pkt[5] = 0xEF
+    pkt[2] = 0xDE
+    pkt[3] = 0xAD
+    pkt[4] = 0xBE
+    pkt[5] = 0xEF
     for k in range(6, 30):
         pkt[k] = k
 
@@ -74,10 +79,14 @@ def do_txrx(tx_radio, rx_radio, name, phy, channel, freq_hz):
 def main():
     # Connect once, no reset between PHYs
     tx = Radio(TX_PORT)
-    tx.connect(); time.sleep(0.5); tx.init()
+    tx.connect()
+    time.sleep(0.5)
+    tx.init()
 
     rx = Radio(RX_PORT)
-    rx.connect(); time.sleep(0.5); rx.init()
+    rx.connect()
+    time.sleep(0.5)
+    rx.init()
 
     results = []
     for name, phy, ch, freq in SEQUENCE:

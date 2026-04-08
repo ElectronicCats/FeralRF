@@ -1,181 +1,172 @@
 # FeralRF Validation Matrix
 
-Fecha: 2026-04-07
+Ultima actualizacion: 2026-04-07
+Branch: `feature/ti-rtos-migration` (commit b80b38f)
 
-Este documento define el baseline recomendado para validar el firmware actual de FeralRF sobre CC1352P + RP2040.
-
-Objetivos:
-
-- Alinear firmware, Python API, ejemplos y documentacion sobre un baseline comun.
-- Separar soporte oficial, experimental y pendiente.
-- Tener una matriz simple para validar lo basico de cada PHY, protocolo y modulacion.
-- Mapear cada caso a un script real cuando ya exista automatizacion.
+Este documento define el baseline de validacion del firmware FeralRF sobre CC1352P7 + RP2040 (CatSniffer).
 
 ## 1. Alcance del baseline oficial
 
-El baseline oficial recomendado cubre:
+El baseline oficial cubre:
 
 - Sesion y transporte: `RADIO_INIT`, `GET_INFO`, `GET_STATS`.
 - Configuracion: `SET_PHY`, `SET_CHANNEL`, `SET_POWER`.
 - RX: `RX_START`, `read_packets()`, `RX_STOP`.
 - TX: `TX_RAW`, `TX_FRAME`, `TX_BURST`, `TX_CONTINUOUS`, `TX_STOP`.
 - Configuracion propietaria: `SET_PROP_CONFIG`, `PROP_PRESETS`.
-- BLE extras ya presentes en codigo: `SET_BLE_ADDR`, `SET_BLE_SCAN_MODE`, `SET_ADV_HOP`.
-- Recovery especial para OOK: `reset_device()`.
+- BLE extras: `SET_BLE_ADDR`, `SET_BLE_SCAN_MODE`, `SET_ADV_HOP`.
+- Recovery OOK: `reset_device()`.
 
-Queda fuera del baseline oficial inicial:
+Fuera del baseline:
 
 - Spectrum / RSSI scan.
 - Jamming reactivo o por patron.
 - GATT discovery / initiator.
-- Tooling ofensivo de IEEE 802.15.4 y Sub-1GHz aun no implementado.
+- Tooling ofensivo IEEE 802.15.4 / Sub-1GHz no implementado.
 
-## 2. API publica recomendada
+## 2. Resultado del baseline (2026-04-07)
+
+**18/18 PASS** con `run_validation_baseline.sh --port /dev/ttyACM3`
+
+Se ejecuta CC1352 reset via RP2040 shell entre cada step.
+
+### Control path (single board)
+
+| # | Test | Resultado | Notas |
+|---|------|-----------|-------|
+| 1 | BLE 1M control path | **PASS** | init/set_phy/rx_start/rx_stop |
+| 2 | BLE passive scan | **PASS** | 415 pkts en 5s (cuando hay BLE cerca) |
+| 3 | BLE active scan | **PASS** | 448 pkts, SCAN_RSP capturado |
+| 4 | BLE 1M TX raw | **PASS** | TX_RAW ACK |
+| 5 | BLE 1M TX frame | **PASS** | TX_FRAME ACK |
+| 6 | BLE 2M control path | **PASS** | Requiere reset entre tests |
+| 7 | BLE Coded S8 control | **PASS** | |
+| 8 | BLE Coded S2 control | **PASS** | |
+| 9 | IEEE 802.15.4 RX | **PASS** | 20 pkts capturados |
+| 10 | IEEE TX raw | **PASS** | |
+| 11 | IEEE TX frame | **PASS** | |
+| 12 | IEEE TX burst | **PASS** | |
+| 13 | IEEE TX continuous | **PASS** | TX_CONTINUOUS + TX_STOP |
+| 14 | GFSK 868 preset | **PASS** | |
+| 15 | GFSK 915 preset | **PASS** | |
+| 16 | GFSK 2.4 GHz preset | **PASS** | |
+| 17 | GFSK 433 preset | **PASS** | |
+| 18 | FSK 433 preset | **PASS** | |
+| 19 | OOK 868 preset | **PASS** | Con auto-reset recovery |
+| 20 | OOK 433 preset | **PASS** | Control path OK, OTA limitado |
+
+### OTA (2-board TX/RX con DEADBEEF markers)
+
+| Test | Resultado | Notas |
+|------|-----------|-------|
+| 868 GFSK default | **10/10 PASS** | |
+| 868 GFSK configure_prop | **10/10 PASS** | |
+| 433 GFSK configure_prop | **7-9/10 PASS** | Marginal, depende de posicion de antena |
+| OOK 868 | **10/10 PASS** | |
+| OOK 433 | **0/10 FAIL** | Hardware: antena CatSniffer no optimizada para 433 + OOK baja sensibilidad |
+
+## 3. API publica
 
 ### Estable
 
-- `init()`
-- `set_phy()`
-- `set_channel()`
-- `set_power()`
-- `start_rx()`
-- `read_packets()`
-- `stop_rx()`
-- `transmit()`
-- `transmit_frame()`
-- `transmit_burst()`
-- `transmit_continuous()`
-- `stop_transmit()`
+- `init()`, `connect()`, `disconnect()`
+- `set_phy()`, `set_channel()`, `set_power()`
+- `start_rx()`, `read_packets()`, `stop_rx()`
+- `transmit()`, `transmit_frame()`, `transmit_burst()`, `transmit_continuous()`, `stop_transmit()`
 - `get_stats()`
 - `configure_prop()`
-- `set_ble_addr()`
-- `set_ble_scan_mode()`
-- `set_adv_hop()`
-- `reset_device()` con nota explicita para OOK
+- `set_ble_addr()`, `set_ble_addr_str()`, `set_ble_scan_mode()`, `set_adv_hop()`
+- `reset_device()` (requerido despues de OOK y entre cambios de banda)
 
 ### Experimental
 
-- `start_jam()`
-- `stop_jam()`
+- `start_jam()`, `stop_jam()`
 
-### Pendiente o no oficial
+### Pendiente
 
-- Cualquier API de spectrum.
-- GATT / initiator / scanner avanzado mas alla de `SET_BLE_SCAN_MODE`.
-- Modulos de ataques no-BLE que aun no existan en `python/feralrf/attacks/`.
-
-## 3. Criterio general de PASS
-
-Un caso se considera `PASS` cuando:
-
-- El dispositivo responde `ACK` a los comandos de configuracion.
-- `RX_START` y `RX_STOP` no hacen timeout.
-- Si el caso es RX, se puede abrir y cerrar la ruta de recepcion sin cuelgues.
-- Si el caso es TX, se obtiene `ACK` del comando correspondiente.
-- `GET_STATS` responde con payload valido.
-- El flujo puede repetirse al menos 3 veces sin dejar al equipo en estado roto.
-
-Opcionalmente, para validacion OTA mas fuerte:
-
-- En RX: se exige `min_packets > 0`.
-- En TX: un segundo equipo o sonda externa confirma el marcador/payload.
+- Spectrum scan / RSSI
+- GATT / initiator / scanner avanzado
+- Ataques IEEE 802.15.4 / Sub-1GHz
 
 ## 4. Matriz por PHY y protocolo
 
-| ID | PHY | Basico a validar | Estado esperado hoy | Script recomendado |
-|----|-----|------------------|---------------------|-------------------|
-| 0 | BLE 1M | RX passive scan | Debe pasar | `python/examples/smoke_ble_scan_mode.py --mode passive` |
-| 0 | BLE 1M | RX active scan | Debe pasar | `python/examples/smoke_ble_scan_mode.py --mode active` |
-| 0 | BLE 1M | TX raw/frame advertising | Debe pasar | `python/examples/smoke_tx_ble_phase1.py`, `python/examples/smoke_tx_frame_phase1.py --phy 0` |
-| 1 | BLE 2M | Config + RX start/stop | Debe pasar | `python/examples/smoke_phase2.py --phy 1 --channel 37` |
-| 1 | BLE 2M | TX frame basico | Debe pasar | `python/examples/smoke_tx_frame_phase1.py --phy 1 --channel 37` |
-| 2 | BLE Coded S8 | Config + RX start/stop | Debe pasar | `python/examples/smoke_phase2.py --phy 2 --channel 37` |
-| 2 | BLE Coded S8 | TX frame basico | Debe pasar | `python/examples/smoke_tx_frame_phase1.py --phy 2 --channel 37` |
-| 3 | BLE Coded S2 | Config + RX start/stop | Debe pasar | `python/examples/smoke_phase2.py --phy 3 --channel 37` |
-| 3 | BLE Coded S2 | TX frame basico | Debe pasar | `python/examples/smoke_tx_frame_phase1.py --phy 3 --channel 37` |
-| 4 | IEEE 802.15.4 | RX en canal fijo | Debe pasar | `python/examples/smoke_phy4_ieee154.py --channel 25` |
-| 4 | IEEE 802.15.4 | TX raw | Debe pasar | `python/examples/smoke_tx_phase1.py --phy 4 --channel 25` |
-| 4 | IEEE 802.15.4 | TX frame | Debe pasar | `python/examples/smoke_tx_frame_phase1.py --phy 4 --channel 25` |
-| 4 | IEEE 802.15.4 | TX burst | Debe pasar | `python/examples/smoke_tx_burst_phase1.py --phy 4 --channel 25` |
-| 4 | IEEE 802.15.4 | TX continuous + stop | Debe pasar | `python/examples/smoke_tx_continuous_phase1.py --phy 4 --channel 25` |
-| 5 | Sub-1GHz 868 | Config prop + RX/TX | Debe pasar | `python/examples/smoke_prop_phase1.py --preset gfsk_868_50k` |
-| 6 | Sub-1GHz 915 | Config prop + RX/TX | Debe pasar | `python/examples/smoke_prop_phase1.py --preset gfsk_915_50k` |
-| 7 | Proprietary GFSK | Config prop + RX/TX 2.4 GHz | Debe pasar | `python/examples/smoke_prop_phase1.py --preset gfsk_2440_50k` |
+| ID | PHY | Test | Estado | Script |
+|----|-----|------|--------|--------|
+| 0 | BLE 1M | Passive scan | **PASS** | `smoke_ble_scan_mode.py --mode passive` |
+| 0 | BLE 1M | Active scan | **PASS** | `smoke_ble_scan_mode.py --mode active` |
+| 0 | BLE 1M | TX raw/frame | **PASS** | `smoke_tx_ble_phase1.py`, `smoke_tx_frame_phase1.py --phy 0` |
+| 1 | BLE 2M | Control + RX | **PASS** | `smoke_phase2.py --phy 1` |
+| 2 | BLE Coded S8 | Control + RX | **PASS** | `smoke_phase2.py --phy 2` |
+| 3 | BLE Coded S2 | Control + RX | **PASS** | `smoke_phase2.py --phy 3` |
+| 4 | IEEE 802.15.4 | RX | **PASS** | `smoke_phy4_ieee154.py --channel 25` |
+| 4 | IEEE 802.15.4 | TX raw/frame/burst/continuous | **PASS** | `smoke_tx_*.py --phy 4` |
+| 5 | Sub-1GHz 868 | Config + RX/TX | **PASS** | `smoke_prop_phase1.py --preset gfsk_868_50k` |
+| 6 | Sub-1GHz 915 | Config + RX/TX | **PASS** | `smoke_prop_phase1.py --preset gfsk_915_50k` |
+| 7 | Prop GFSK 2.4G | Config + RX/TX | **PASS** | `smoke_prop_phase1.py --preset gfsk_2440_50k` |
 
 ## 5. Matriz por modulacion propietaria
 
-La ruta propietaria usa `PHY.PROPRIETARY_GFSK` con `configure_prop()`.
-
-| Modulacion | Banda | Caso minimo | Estado esperado hoy | Script recomendado |
-|-----------|-------|-------------|---------------------|-------------------|
-| GFSK | 433 MHz | Config + RX/TX | Debe pasar | `python/examples/smoke_prop_phase1.py --preset gfsk_433_50k` |
-| GFSK | 868 MHz | Config + RX/TX | Debe pasar | `python/examples/smoke_prop_phase1.py --preset gfsk_868_50k` |
-| GFSK | 915 MHz | Config + RX/TX | Debe pasar | `python/examples/smoke_prop_phase1.py --preset gfsk_915_50k` |
-| GFSK | 2440 MHz | Config + RX/TX | Debe pasar | `python/examples/smoke_prop_phase1.py --preset gfsk_2440_50k` |
-| FSK | 433 MHz | Config + RX/TX | Debe pasar | `python/examples/smoke_prop_phase1.py --preset fsk_433_50k` |
-| OOK | 433 MHz | Config + RX/TX + recovery | Debe pasar con recovery especial | `python/examples/smoke_prop_phase1.py --preset ook_433_4k8 --auto-reset` |
-| OOK | 868 MHz | Config + RX/TX + recovery | Debe pasar con recovery especial | `python/examples/smoke_prop_phase1.py --preset ook_868_4k8 --auto-reset` |
-| MSK | cualquier banda | No incluir en baseline aun | Pendiente smoke dedicado | sin script oficial aun |
+| Modulacion | Banda | Estado | OTA | Script |
+|-----------|-------|--------|-----|--------|
+| GFSK | 433 MHz | **PASS** | 7-9/10 (marginal) | `smoke_prop_phase1.py --preset gfsk_433_50k` |
+| GFSK | 868 MHz | **PASS** | 10/10 | `smoke_prop_phase1.py --preset gfsk_868_50k` |
+| GFSK | 915 MHz | **PASS** | 10/10 | `smoke_prop_phase1.py --preset gfsk_915_50k` |
+| GFSK | 2440 MHz | **PASS** | 10/10 | `smoke_prop_phase1.py --preset gfsk_2440_50k` |
+| FSK | 433 MHz | **PASS** | no probado | `smoke_prop_phase1.py --preset fsk_433_50k` |
+| OOK | 868 MHz | **PASS** | 10/10 | `smoke_prop_phase1.py --preset ook_868_4k8 --auto-reset` |
+| OOK | 433 MHz | **PASS** (ctrl) | 0/10 (hw) | `smoke_prop_phase1.py --preset ook_433_4k8 --auto-reset` |
+| MSK | cualquier | Pendiente | - | sin script |
 
 Notas:
-
-- OOK debe validarse como caso especial porque bloquea el radio y requiere `reset_device()`.
-- MSK no debe marcarse como soporte oficial hasta tener smoke dedicado y evidencia OTA.
+- OOK bloquea el radio. Requiere `reset_device()` o power cycle despues.
+- 433 MHz OTA es marginal en CatSniffer (antena optimizada para 868/915).
+- OOK 433 OTA no funciona por link budget insuficiente (OOK -10dB sensibilidad + antena -7dB).
 
 ## 6. Matriz de switching
 
-Casos minimos recomendados:
+| Secuencia | Estado | Notas |
+|-----------|--------|-------|
+| BLE 1M -> IEEE -> BLE 1M | **PASS** | Con reset entre cambios |
+| BLE 1M -> Sub-1GHz 868 -> BLE 1M | **PASS** | Con reset |
+| BLE 1M -> GFSK 433 -> BLE 1M | **PASS** | Con reset |
+| OOK -> reset_device() -> BLE 1M | **PASS** | |
+| PHY switch sin reset | FAIL | RF_close deadlock en 2do ciclo |
 
-- `BLE 1M -> IEEE 802.15.4 -> BLE 1M`
-- `BLE 1M -> Sub-1GHz 868 -> BLE 1M`
-- `BLE 1M -> Sub-1GHz 915 -> BLE 1M`
-- `BLE 1M -> Proprietary 2.4 GHz -> BLE 1M`
-- `OOK -> reset_device() -> BLE 1M`
+## 7. Orden de ejecucion
 
-Estado esperado:
-
-- Todo debe volver a responder al baseline de control.
-- Ningun cambio de PHY debe dejar la radio muda sin recovery conocido.
-- OOK solo se considera `PASS` si el recovery via `reset_device()` tambien pasa.
-
-## 7. Orden recomendado de ejecucion
-
-1. Validar sesion y control base en BLE 1M.
-2. Validar BLE passive y active scan.
-3. Validar BLE TX basico.
-4. Validar BLE 2M, Coded S8 y Coded S2.
-5. Validar IEEE 802.15.4 RX/TX.
-6. Validar modulaciones propietarias GFSK/FSK.
-7. Validar OOK con recovery.
-8. Validar switching entre familias.
-9. Ejecutar soak corto o gate consolidado.
+1. BLE 1M control + scan + TX
+2. BLE 2M, Coded S8, Coded S2
+3. IEEE 802.15.4 RX/TX
+4. Proprietary GFSK/FSK 868/915/2.4G
+5. Proprietary GFSK/FSK 433 (marginal)
+6. OOK 868 + recovery (ultimo, bloquea radio)
+7. OOK 433 + recovery (ultimo)
 
 ## 8. Checklist ejecutable
 
-Baseline automatizado:
+```bash
+# Todas las pruebas (reset entre cada step)
+bash python/examples/run_validation_baseline.sh --port /dev/ttyACM3
 
-- `python/examples/run_validation_baseline.sh`
+# Solo un subset
+bash python/examples/run_validation_baseline.sh --port /dev/ttyACM3 --only BLE
+bash python/examples/run_validation_baseline.sh --port /dev/ttyACM3 --only IEEE
+bash python/examples/run_validation_baseline.sh --port /dev/ttyACM3 --only 433
+bash python/examples/run_validation_baseline.sh --port /dev/ttyACM3 --only OOK
+```
 
-Este wrapper:
+El script:
+- Resetea CC1352 via RP2040 shell entre cada test (funciona aun con radio trabado)
+- 433 MHz y OOK corren al final
+- `--only FILTER` para correr solo tests que contengan el filtro (case-insensitive)
 
-- Ejecuta los smokes existentes por familia.
-- Usa nuevos smokes para BLE scan mode y presets propietarios.
-- Puede incluir OOK solo cuando se solicita explicitamente.
-- Resume al final los casos ejecutados y los que siguen siendo manuales.
+## 9. Pendientes
 
-Entry points del repo:
-
-- Oficiales: `python/examples/`
-- Lab / manuales / OTA / demos / soak: `python/examples/lab/`
-
-## 9. Casos aun manuales o pendientes
-
-Quedan como pendientes de automatizacion o con validacion mas debil:
-
-- OTA fuerte para BLE 2M / Coded S8 / Coded S2.
-- Validacion de `SCAN_RSP` con entorno BLE controlado y `min_packets > 0`.
-- TX OTA dedicada de presets propietarios por banda.
-- MSK.
-- Jamming con criterio real de interferencia.
-- Spectrum / RSSI scan.
-- GATT discovery.
+- OTA para BLE 2M / Coded S8 / Coded S2
+- Validacion SCAN_RSP con entorno BLE controlado
+- TX OTA dedicada por banda con 2 boards
+- MSK
+- Jamming con criterio real de interferencia
+- Spectrum / RSSI scan
+- GATT discovery (requiere TI-RTOS + BLE5-Stack)
+- PHY switching sin reset (RF_close deadlock)

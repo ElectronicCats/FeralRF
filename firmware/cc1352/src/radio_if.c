@@ -1818,10 +1818,16 @@ void RadioIF_setPropConfig(const RadioIF_PropConfig *config) {
 
     /* Select overrides by modulation type and frequency band */
     if (config->mod_type == 2u) {
-        /* OOK: use genook patches — same overrides for all frequencies */
-        Prop0_cmdPropRadioDivSetup.pRegOverride = Prop0_pOverridesOok;
-        Prop0_cmdPropRadioDivSetup.pRegOverrideTxStd = Prop0_pOverridesOokTxStd;
-        Prop0_cmdPropRadioDivSetup.pRegOverrideTx20 = Prop0_pOverridesOokTx20;
+        /* OOK: use genook patches + band-specific RF tuning */
+        if (freq_mhz < 861u) {
+            Prop0_cmdPropRadioDivSetup.pRegOverride = Prop0_pOverridesOok433;
+            Prop0_cmdPropRadioDivSetup.pRegOverrideTxStd = Prop0_pOverridesOok433TxStd;
+            Prop0_cmdPropRadioDivSetup.pRegOverrideTx20 = Prop0_pOverridesOok433Tx20;
+        } else {
+            Prop0_cmdPropRadioDivSetup.pRegOverride = Prop0_pOverridesOok;
+            Prop0_cmdPropRadioDivSetup.pRegOverrideTxStd = Prop0_pOverridesOokTxStd;
+            Prop0_cmdPropRadioDivSetup.pRegOverrideTx20 = Prop0_pOverridesOokTx20;
+        }
         s_prop_ook_active = true;
     } else if (freq_mhz < 250u) {
         /* 169 MHz band */

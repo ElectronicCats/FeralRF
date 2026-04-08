@@ -32,5 +32,8 @@ extern RF_Mode Prop0_modeOok;
 extern uint32_t Prop0_pOverridesOok[];
 extern uint32_t Prop0_pOverridesOokTxStd[];
 extern uint32_t Prop0_pOverridesOokTx20[];
+extern uint32_t Prop0_pOverridesOok433[];
+extern uint32_t Prop0_pOverridesOok433TxStd[];
+extern uint32_t Prop0_pOverridesOok433Tx20[];
 
 #endif /* SMARTRF_PROP_0_H */

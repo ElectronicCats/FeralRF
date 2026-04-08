@@ -152,6 +152,40 @@ uint32_t Prop0_pOverridesOokTx20[] = {
     (uint32_t)0xFFFFFFFF,
 };
 
+/* OOK overrides for 433 MHz — OOK patches + 433-band RF tuning.
+ * Merges OOK-specific (MCE_RFE, duty cycle, Viterbi) with 433-band
+ * (AGC ref 0x1C, RSSI -6dB) from tc112. */
+uint32_t Prop0_pOverridesOok433[] = {
+    MCE_RFE_OVERRIDE(1, 0, 0, 1, 0, 0), /* Enable MCE+RFE genook patches */
+    ADI_2HALFREG_OVERRIDE(0, 16, 0x8, 0x8, 17, 0x1, 0x1),
+    HW_REG_OVERRIDE(0x609C, 0x001C),       /* AGC ref level (433 band) */
+    (uint32_t)0x000688A3,                  /* RSSI offset -6dB (433 band) */
+    ADI_HALFREG_OVERRIDE(0, 61, 0xF, 0xF), /* Anti-aliasing filter (OOK wide) */
+    HW32_ARRAY_OVERRIDE(0x405C, 1),        /* FSCA divider bias */
+    (uint32_t)0x08141131,
+    HW_REG_OVERRIDE(0x51E4, 0x80AF), /* OOK duty cycle compensation */
+    HW_REG_OVERRIDE(0x5270, 0x0002), /* Viterbi k=7 */
+    HW_REG_OVERRIDE(0x6028, 0x001A), /* PA ramp timing */
+    (uint32_t)0x00F788D3,            /* DC/DC regulator */
+    (uint32_t)0xFFFFFFFF,
+};
+
+uint32_t Prop0_pOverridesOok433TxStd[] = {
+    TX_STD_POWER_OVERRIDE(0x013F),   /* 433 band value */
+    (uint32_t)0x11310703,
+    HW_REG_OVERRIDE(0x6028, 0x001A),
+    HW_REG_OVERRIDE(0x60A8, 0x0401), /* TXRX pin (433 band) */
+    (uint32_t)0xFFFFFFFF,
+};
+
+uint32_t Prop0_pOverridesOok433Tx20[] = {
+    TX20_POWER_OVERRIDE(0x001B8ED2), /* 433 band value */
+    (uint32_t)0x11C10703,
+    HW_REG_OVERRIDE(0x6028, 0x001F),
+    HW_REG_OVERRIDE(0x60A8, 0x0001), /* TXRX pin (433 band) */
+    (uint32_t)0xFFFFFFFF,
+};
+
 rfc_CMD_PROP_RADIO_DIV_SETUP_PA_t Prop0_cmdPropRadioDivSetup = {
     .commandNo = 0x3807,
     .status = 0x0000,

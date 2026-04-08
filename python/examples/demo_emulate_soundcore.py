@@ -33,7 +33,7 @@ radio.set_phy(PHY.BLE_1M, channel=37)
 
 print(f"Emulating Soundcore Boom 2 on {PORT}")
 print(f"MAC: {MAC}")
-print(f"Fast Pair Model ID: 0x8F95F8")
+print("Fast Pair Model ID: 0x8F95F8")
 print("Alternating Anker + Fast Pair discoverable payloads")
 print("Press Ctrl+C to stop")
 print()

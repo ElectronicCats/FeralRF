@@ -107,9 +107,9 @@ def main():
     tx.disconnect()
     rx.disconnect()
 
-    print(f"\n{'='*55}")
+    print(f"\n{'=' * 55}")
     print("PHY SWITCHING SUMMARY (no reset between steps)")
-    print(f"{'='*55}")
+    print(f"{'=' * 55}")
     for name, tx_ok, rx_count, status in results:
         print(f"  {name:20s}: TX {tx_ok}/{COUNT}, RX {rx_count}/{COUNT} [{status}]")
 

@@ -35,10 +35,10 @@ for i in range(COUNT):
     try:
         radio.transmit(bytes(pkt))
         ok += 1
-        print(f"  TX {i+1}/{COUNT} OK")
+        print(f"  TX {i + 1}/{COUNT} OK")
     except Exception as e:
         fail += 1
-        print(f"  TX {i+1}/{COUNT} FAIL: {e}")
+        print(f"  TX {i + 1}/{COUNT} FAIL: {e}")
     time.sleep(INTERVAL)
 
 print(f"Result: {ok}/{COUNT} OK, {fail} FAIL")

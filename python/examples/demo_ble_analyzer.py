@@ -32,6 +32,7 @@ import json
 import sys
 import time
 from collections import defaultdict
+from typing import Any, Dict
 
 from feralrf import PHY, Radio
 
@@ -341,9 +342,9 @@ def analyze_device(mac, info, start_time):
 
 def print_device(dev, index):
     """Pretty-print device analysis."""
-    print(f"\n{'='*70}")
+    print(f"\n{'=' * 70}")
     print(f"  DEVICE #{index}: {dev['mac_display']}")
-    print(f"{'='*70}")
+    print(f"{'=' * 70}")
     print(f"  MAC (raw):      {dev['mac_raw']}")
     print(f"  Address Type:   {dev['address_type']}")
     print(f"  Name:           {dev['device_name'] or '(none)'}")
@@ -401,7 +402,7 @@ def print_device(dev, index):
             print(line)
 
     if dev["vulnerabilities"]:
-        print(f"\n  --- Vulnerabilities ---")
+        print("\n  --- Vulnerabilities ---")
         for v in dev["vulnerabilities"]:
             print(f"    ⚠ {v}")
 
@@ -442,7 +443,7 @@ print(f"Baseline: {len(baseline)} ambient devices")
 wait("Turn ON the target device. Press Enter to scan...")
 print("Scanning with target (30s)...")
 radio.start_rx()
-devices = defaultdict(
+devices: Dict[str, Dict[str, Any]] = defaultdict(
     lambda: {
         "count": 0,
         "rssi_min": 0,
@@ -503,7 +504,7 @@ report = {
 with open(OUTPUT, "w") as f:
     json.dump(report, f, indent=2, default=str)
 
-print(f"\n{'='*70}")
+print(f"\n{'=' * 70}")
 print(f"  Report saved to: {OUTPUT}")
 print(f"  Devices analyzed: {len(analyzed)}")
-print(f"{'='*70}")
+print(f"{'=' * 70}")

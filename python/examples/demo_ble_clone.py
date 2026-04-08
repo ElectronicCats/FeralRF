@@ -12,6 +12,7 @@ import os
 import sys
 import time
 from collections import defaultdict
+from typing import List, Optional, Tuple
 
 from feralrf import PHY, Radio
 
@@ -115,7 +116,7 @@ sorted_new = sorted(new_macs, key=lambda m: target_devs[m]["rssi_max"], reverse=
 for i, mac in enumerate(sorted_new[:5]):
     d = target_devs[mac]
     ms = ":".join(mac[j : j + 2] for j in range(0, 12, 2)).upper()
-    print(f"  {i+1}. {ms}  RSSI={d['rssi_max']:3d}dBm  pkts={d['count']}")
+    print(f"  {i + 1}. {ms}  RSSI={d['rssi_max']:3d}dBm  pkts={d['count']}")
 
 # Auto-pick strongest
 target_mac = sorted_new[0]
@@ -160,7 +161,8 @@ company_name = (
 )
 print(f"  Name: {device_name or '(none)'}")
 print(f"  Manufacturer: {company_name}")
-print(f"  Fast Pair: {'Yes (prefix=' + fastpair_prefix + ')' if has_fastpair else 'No'}")
+fp_info = f"Yes (prefix={fastpair_prefix})" if has_fastpair and fastpair_prefix else "No"
+print(f"  Fast Pair: {fp_info}")
 print(f"  Payloads: {len(target_payloads)}")
 for p, c in target_payloads:
     print(f"    ({c}x, {len(p)}B): {p.hex()[:60]}")
@@ -169,7 +171,7 @@ for p, c in target_payloads:
 wait("Turn OFF the real device to avoid interference, then press Enter...")
 
 # Build all strategies
-strategies = []
+strategies: List[Tuple[str, str, Optional[bytes]]] = []
 
 # A) Exact clone
 primary = max(target_payloads, key=lambda x: x[1])
@@ -195,7 +197,7 @@ if len(payload_b) > 3:
 
 # C) With device name
 guess_name = device_name or {0x2BF4: "Soundcore Boom 2", 0x004C: "iPhone"}.get(
-    manufacturer_company, "Device"
+    manufacturer_company or 0, "Device"
 )
 payload_c = bytearray([0x02, 0x01, 0x06])
 nb = guess_name.encode("utf-8")[:20]
@@ -218,7 +220,7 @@ for p, _ in target_payloads:
         i += al + 1
     break
 if len(payload_d) > len(payload_c):
-    strategies.append((f"Name + manufacturer data", mac_str, bytes(payload_d)))
+    strategies.append(("Name + manufacturer data", mac_str, bytes(payload_d)))
 
 # E) Fast Pair discoverable
 if has_fastpair and fastpair_prefix:
@@ -232,7 +234,7 @@ if has_fastpair and fastpair_prefix:
 rmac = bytearray(os.urandom(6))
 rmac[5] |= 0xC0
 rmac_str = ":".join(f"{b:02X}" for b in rmac)
-strategies.append((f"Random MAC + name", rmac_str, bytes(payload_c)))
+strategies.append(("Random MAC + name", rmac_str, bytes(payload_c)))
 
 # G) All payloads alternating
 if len(target_payloads) > 1:
@@ -242,8 +244,8 @@ if len(target_payloads) > 1:
 for idx, strategy in enumerate(strategies):
     name, smac, payload = strategy
 
-    print(f"\n{'='*60}")
-    print(f"Strategy {idx+1}/{len(strategies)}: {name}")
+    print(f"\n{'=' * 60}")
+    print(f"Strategy {idx + 1}/{len(strategies)}: {name}")
     print(f"MAC: {smac}")
     if payload:
         print(f"Payload ({len(payload)}B): {payload.hex()}")
@@ -265,7 +267,7 @@ for idx, strategy in enumerate(strategies):
                     try:
                         radio.transmit(p, power_dbm=5)
                         count[0] += 1
-                    except:
+                    except Exception:
                         pass
                     time.sleep(0.02)
 

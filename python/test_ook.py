@@ -81,9 +81,9 @@ def main():
         try:
             tx.transmit(bytes(pkt))
             tx_ok += 1
-            print(f"  [TX] {i+1}/{COUNT} OK")
+            print(f"  [TX] {i + 1}/{COUNT} OK")
         except Exception as e:
-            print(f"  [TX] {i+1}/{COUNT} FAIL: {e}")
+            print(f"  [TX] {i + 1}/{COUNT} FAIL: {e}")
         time.sleep(1.5)
 
     print("[TX] Resetting device (OOK recovery)...")

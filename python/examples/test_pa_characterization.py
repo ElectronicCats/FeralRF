@@ -99,8 +99,6 @@ def run_sweep(
     rx_settle_s: float,
 ) -> ConfigResult:
     """Run a full power sweep for one PA configuration."""
-    from feralrf import PHY
-
     result = ConfigResult(name=config_name)
 
     step(f"Sweep for '{config_name}'")
@@ -161,7 +159,7 @@ def run_sweep(
 
 def compute_gain(baseline: ConfigResult, pa: ConfigResult) -> List[Optional[float]]:
     """Compute gain (dB) per power level: PA_rssi - baseline_rssi."""
-    gains = []
+    gains: List[Optional[float]] = []
     for bl, pl in zip(baseline.levels, pa.levels):
         if math.isnan(bl.rssi_mean) or math.isnan(pl.rssi_mean):
             gains.append(None)
@@ -351,13 +349,13 @@ def main() -> int:
         all_results: List[ConfigResult] = []
 
         for config_name in args.configs:
-            print(f"\n{'='*60}")
+            print(f"\n{'=' * 60}")
             print(f"  Configure: {config_name}")
             if config_name.lower() == "baseline":
                 print("  Connect TX board directly to antenna (no PA)")
             else:
                 print(f"  Connect PA '{config_name}' between TX and antenna")
-            print(f"{'='*60}")
+            print(f"{'=' * 60}")
             # input("  Press ENTER when ready...")  # disabled for automated run
 
             result = run_sweep(

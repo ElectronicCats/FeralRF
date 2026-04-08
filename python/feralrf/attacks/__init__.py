@@ -7,4 +7,4 @@ Usage:
     ble.apple_popup_spam(radio, device='airpods_pro')
 """
 
-from feralrf.attacks import ble
+from feralrf.attacks import ble  # noqa: F401

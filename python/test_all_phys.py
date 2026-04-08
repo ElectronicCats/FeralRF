@@ -140,15 +140,15 @@ def main():
             reset_boards()
         except RuntimeError as e:
             print(f"  RESET FAILED: {e}")
-            results.append((name, 0, 0, COUNT, f"ERROR: reset failed"))
+            results.append((name, 0, 0, COUNT, "ERROR: reset failed"))
             continue
         r = test_phy(name, phy, ch, freq)
         print(f"  {r[0]:20s}: TX {r[1]}/{r[3]}, RX {r[2]}/{r[3]} (DEADBEEF) [{r[4]}]")
         results.append(r)
 
-    print(f"\n{'='*55}")
+    print(f"\n{'=' * 55}")
     print("SUMMARY")
-    print(f"{'='*55}")
+    print(f"{'=' * 55}")
     for name, tx, rx, cnt, status in results:
         print(f"  {name:20s}: TX {tx}/{cnt}, RX {rx}/{cnt} [{status}]")
 

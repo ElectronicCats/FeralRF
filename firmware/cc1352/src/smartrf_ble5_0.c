@@ -365,3 +365,79 @@ rfc_CMD_BLE5_ADV_NC_t Ble5_0_cmdBle5AdvNc = {
     .pOutput = 0,
     .tx20Power = 0x00000000,
 };
+
+/* Extended Advertising: ADV_EXT_IND (primary channel, 1M) — base for BLE 5.0 attacks */
+static rfc_ble5AdvExtPar_t s_ble5AdvExtPar = {
+    .advConfig.deviceAddrType = 0x1, /* random address */
+    .auxPtrTargetType = TRIG_REL_START,
+    .auxPtrTargetTime = 0,
+    .pAdvPkt = 0,
+    .pDeviceAddress = s_bleScannerDevAddr,
+};
+
+rfc_CMD_BLE5_ADV_EXT_t Ble5_0_cmdBle5AdvExt = {
+    .commandNo = CMD_BLE5_ADV_EXT,
+    .status = 0x0000,
+    .pNextOp = 0,
+    .startTime = 0x00000000,
+    .startTrigger.triggerType = TRIG_NOW,
+    .startTrigger.pastTrig = 0x1,
+    .condition.rule = COND_NEVER,
+    .channel = 0x25,
+    .whitening.init = 0x0,
+    .whitening.bOverride = 0x0,
+    .phyMode.mainMode = 0x0, /* 1M for primary */
+    .phyMode.coding = 0x0,
+    .rangeDelay = 0x00,
+    .txPower = 0x0000,
+    .pParams = &s_ble5AdvExtPar,
+    .pOutput = 0,
+    .tx20Power = 0x00000000,
+};
+
+/* Extended Advertising: AUX_ADV_IND (secondary channel, 2M) — used for BLE 2M TX */
+static rfc_ble5AdvAuxPar_t s_ble5AdvAuxPar = {
+    .pRxQ = 0,
+    .rxConfig.bAutoFlushIgnored = 0x0,
+    .rxConfig.bAutoFlushCrcErr = 0x0,
+    .rxConfig.bAutoFlushEmpty = 0x0,
+    .rxConfig.bIncludeLenByte = 0x0,
+    .rxConfig.bIncludeCrc = 0x0,
+    .rxConfig.bAppendRssi = 0x0,
+    .rxConfig.bAppendStatus = 0x0,
+    .rxConfig.bAppendTimestamp = 0x0,
+    .advConfig.advFilterPolicy = 0x0,
+    .advConfig.deviceAddrType = 0x1,
+    .advConfig.targetAddrType = 0x0,
+    .advConfig.bStrictLenFilter = 0x0,
+    .advConfig.bDirected = 0x0,
+    .advConfig.privIgnMode = 0x0,
+    .advConfig.rpaMode = 0x0,
+    .behConfig.scanRspEndType = 0x0,
+    .auxPtrTargetType = 0,
+    .auxPtrTargetTime = 0,
+    .pAdvPkt = 0,
+    .pRspPkt = 0,
+    .pDeviceAddress = s_bleScannerDevAddr,
+    .pWhiteList = 0,
+};
+
+rfc_CMD_BLE5_ADV_AUX_t Ble5_0_cmdBle5AdvAux = {
+    .commandNo = CMD_BLE5_ADV_AUX,
+    .status = 0x0000,
+    .pNextOp = 0,
+    .startTime = 0x00000000,
+    .startTrigger.triggerType = TRIG_NOW,
+    .startTrigger.pastTrig = 0x1,
+    .condition.rule = COND_NEVER,
+    .channel = 0x09, /* data channel 9 (default for 2M) */
+    .whitening.init = 0x0,
+    .whitening.bOverride = 0x0,
+    .phyMode.mainMode = 0x1, /* 2M */
+    .phyMode.coding = 0x0,
+    .rangeDelay = 0x00,
+    .txPower = 0x0000,
+    .pParams = &s_ble5AdvAuxPar,
+    .pOutput = 0,
+    .tx20Power = 0x00000000,
+};

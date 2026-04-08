@@ -47,6 +47,31 @@ set(CMAKE_C_FLAGS "-mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16 -W
 set(CMAKE_ASM_FLAGS "-mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16 -g -x assembler-with-cpp" CACHE INTERNAL "")
 set(CMAKE_EXE_LINKER_FLAGS "-T ${LINKER_SCRIPT} -nostartfiles -Wl,--gc-sections -Wl,-Map=${CMAKE_PROJECT_NAME}.map" CACHE INTERNAL "")
 
+# ─── GCC 13+ workaround for TI SDK POSIX headers ───
+# TI SDK's ti/posix/gcc/time.h does #include <../include/time.h> expecting
+# the compiler's newlib time.h at posix/include/time.h. TI's bundled GCC has
+# this layout, but system arm-none-eabi-gcc 13.x does not. Create a symlink
+# from posix/include → newlib's include dir so the relative path resolves.
+get_filename_component(_POSIX_DIR "${TI_SDK_PATH}/source/ti/posix" REALPATH)
+set(POSIX_INCLUDE_LINK ${_POSIX_DIR}/include)
+if(NOT EXISTS ${POSIX_INCLUDE_LINK})
+    # Find newlib include directory
+    foreach(_candidate
+        /usr/lib/arm-none-eabi/include
+        /usr/arm-none-eabi/include
+    )
+        if(EXISTS ${_candidate}/time.h)
+            file(CREATE_LINK ${_candidate} ${POSIX_INCLUDE_LINK} SYMBOLIC)
+            message(STATUS "Created POSIX include symlink: ${POSIX_INCLUDE_LINK} → ${_candidate}")
+            break()
+        endif()
+    endforeach()
+    if(NOT EXISTS ${POSIX_INCLUDE_LINK})
+        message(WARNING "Could not find newlib includes for POSIX symlink. "
+                        "Build may fail with: fatal error: ../include/time.h: No such file")
+    endif()
+endif()
+
 # TI-RTOS kernel paths
 set(TIRTOS7_PATH ${TI_SDK_PATH}/kernel/tirtos7)
 set(SYSBIOS_PATH ${TIRTOS7_PATH}/packages/ti/sysbios)

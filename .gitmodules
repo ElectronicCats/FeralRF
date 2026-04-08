@@ -1,3 +1,4 @@
 [submodule "firmware/sdk/simplelink_cc13xx_cc26xx_sdk_8_30_01_01"]
 	path = firmware/sdk/simplelink_cc13xx_cc26xx_sdk_8_30_01_01
 	url = https://github.com/TexasInstruments/simplelink-lowpower-f2-sdk.git
+	ignore = untracked

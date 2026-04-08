@@ -1,7 +1,7 @@
 # FeralRF Validation Matrix
 
-Ultima actualizacion: 2026-04-07
-Branch: `feature/ti-rtos-migration` (commit b80b38f)
+Ultima actualizacion: 2026-04-08
+Branch: `feature/ti-rtos-migration` (commit 3998b0b)
 
 Este documento define el baseline de validacion del firmware FeralRF sobre CC1352P7 + RP2040 (CatSniffer).
 
@@ -64,8 +64,8 @@ Se ejecuta CC1352 reset via RP2040 shell entre cada step.
 
 | Test | Markers | Estado | Notas |
 |------|---------|--------|-------|
-| BLE 1M | — | **ERROR** | Reset timing issue, needs longer wait |
-| BLE 2M | — | **ERROR** | Reset timing issue |
+| BLE 1M | 10/10 | **PASS** | Reset wait 3.5s (fixed 2026-04-08) |
+| BLE 2M | 8/10 | **PASS** | Extended ADV: ADV_EXT(1M,ch37)→ADV_AUX(2M,ch9). Requiere bt5 patch |
 | BLE Coded S8 | 10/10 | **PASS** | |
 | BLE Coded S2 | 10/10 | **PASS** | |
 | IEEE 802.15.4 | 10/10 | **PASS** | |
@@ -202,7 +202,7 @@ El script:
 |---|---|---|---|---|---|---|
 | **BLE** | si (PHY nativo) | n/a | n/a | n/a | n/a | n/a |
 | **IEEE 802.15.4** | si (O-QPSK nativo) | n/a | n/a | n/a | n/a | n/a |
-| **Prop Sub-1G 868** | si | si | si | si | falta | falta |
+| **Prop Sub-1G 868** | si | si | si | si | si (10/10) | si (10/10) |
 | **Prop Sub-1G 915** | si | parcial | parcial | parcial | falta | falta |
 | **Prop Sub-1G 433** | si (marginal) | si | ctrl (hw lim) | si | falta | falta |
 | **Prop 2.4 GHz** | si | parcial | n/a | parcial | falta | falta |
@@ -227,12 +227,29 @@ Leyenda:
 - **no**: requiere stack completo no implementado
 - **n/a**: combinacion no valida fisicamente
 
-## 10. Pendientes
+## 10. Notas tecnicas
 
-- BLE 1M/2M OTA: falla por timing de reset (necesita mayor wait post-reset)
-- BLE Coded S8/S2 OTA: validado 10/10 pero es gate nuevo, no cobertura asentada
+### BLE 2M Extended Advertising (commit 3998b0b)
+
+BLE spec prohibe 2M PHY en canales primarios de advertising (37/38/39). BLE 2M TX usa cadena extendida:
+
+1. `CMD_BLE5_ADV_EXT` (1M, ch37) — transmite ADV_EXT_IND con AuxPtr
+2. `CMD_BLE5_ADV_AUX` (2M, ch9) — transmite AUX_ADV_IND con payload
+
+Requisitos firmware:
+- **rf_patch_cpe_bt5 + rf_patch_mce_bt5** obligatorio (multi_protocol NO soporta CMD_BLE5_ADV_AUX)
+- `RF_runCmd` para la cadena (no RF_postCmd)
+- `COND_ALWAYS` en ADV_EXT para garantizar ejecucion de ADV_AUX
+- RX de BLE 2M: GENERIC_RX en ch9 a 2M
+
+### Hardware: 868 MHz TX debil en device #2
+
+Device #2 (IEEE ...82:3C) tiene TX debil a 868 MHz (0/5 OTA). Issue de hardware (antena/SMA), no firmware. Para tests OTA a 868/Sub-1GHz, usar device #1 como TX.
+
+## 11. Pendientes
+
 - ASK como modo separado de OOK (mismo mod_type=2, sin test dedicado)
-- 4-FSK / 4-GFSK (necesita campo formatConf en firmware)
+- 4-FSK / 4-GFSK 433 MHz OTA (hardware-limited)
 - W-MBus N-mode OTA a 169 MHz
 - Parsers/tooling de protocolo: Zigbee, Thread, 6LoWPAN, W-MBus
 - Jamming con criterio real de interferencia

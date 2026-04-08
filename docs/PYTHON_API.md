@@ -1,6 +1,6 @@
 # FeralRF Python API
 
-Fecha: 2026-04-07
+Fecha: 2026-04-08
 
 Este documento resume la API publica recomendada del paquete `feralrf` y su estado actual.
 
@@ -94,7 +94,8 @@ Comandos reservados o pendientes hoy:
 
 - Para modo propietario (GFSK/FSK/OOK/MSK):
 - `set_phy(PHY.PROPRIETARY_GFSK)` seguido de `configure_prop(frequency_hz, mod_type, ...)`
-- `mod_type`: 0=FSK, 1=GFSK, 2=OOK/ASK, 4=MSK
+- `mod_type`: 0=FSK, 1=GFSK, 2=OOK/ASK, 4=MSK, 5=4-FSK, 6=4-GFSK
+- `format_conf`: bitfield para 4-FSK/4-GFSK (0 = restaura defaults SysConfig)
 - O usar presets: `radio.configure_prop(**PROP_PRESETS['gfsk_868_50k'])`
 
 ### Presets disponibles (`PROP_PRESETS`)
@@ -120,6 +121,26 @@ Comandos reservados o pendientes hoy:
 | `gfsk_902_50k` | 902.2 MHz | GFSK | 50k | — |
 | `gfsk_2440_250k` | 2440 MHz | GFSK | 250k | — |
 | `gfsk_2440_50k` | 2440 MHz | GFSK | 50k | 10/10 |
+| `4fsk_868_50k` | 868 MHz | 4-FSK | 50k | 10/10 |
+| `4gfsk_868_50k` | 868 MHz | 4-GFSK | 50k | 10/10 |
+| `4fsk_433_50k` | 433.92 MHz | 4-FSK | 50k | — (hw lim) |
+| `4gfsk_433_50k` | 433.92 MHz | 4-GFSK | 50k | — (hw lim) |
+
+### BLE 2M TX
+
+BLE 2M usa extended advertising internamente. El firmware maneja todo transparentemente:
+
+```python
+radio.set_phy(PHY.BLE_2M, channel=37)  # channel ignorado para TX — usa ch37→ch9 internamente
+radio.transmit(payload)                  # ADV_EXT_IND(1M,ch37) → AUX_ADV_IND(2M,ch9)
+```
+
+Para RX de BLE 2M, escuchar en ch9:
+
+```python
+radio.set_phy(PHY.BLE_2M, channel=9)
+radio.start_rx()
+```
 
 ### `reset_device()`
 

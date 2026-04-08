@@ -92,9 +92,34 @@ Comandos reservados o pendientes hoy:
 - Para BLE active scan:
 - llamar `set_ble_scan_mode(active=True)` antes de `start_rx()`
 
-- Para modo propietario (GFSK/FSK/OOK):
+- Para modo propietario (GFSK/FSK/OOK/MSK):
 - `set_phy(PHY.PROPRIETARY_GFSK)` seguido de `configure_prop(frequency_hz, mod_type, ...)`
 - `mod_type`: 0=FSK, 1=GFSK, 2=OOK/ASK, 4=MSK
+- O usar presets: `radio.configure_prop(**PROP_PRESETS['gfsk_868_50k'])`
+
+### Presets disponibles (`PROP_PRESETS`)
+
+| Preset | Freq | Mod | Rate | OTA |
+|--------|------|-----|------|-----|
+| `gfsk_433_50k` | 433.92 MHz | GFSK | 50k | 6-10/10 |
+| `gfsk_433_10k` | 433.92 MHz | GFSK | 10k | — |
+| `fsk_433_50k` | 433.92 MHz | FSK | 50k | 1/10 |
+| `msk_433_50k` | 433.92 MHz | MSK | 50k | 1/10 |
+| `ook_433_4k8` | 433.92 MHz | OOK | 4.8k | 0/10 (hw) |
+| `ook_433_2k4` | 433.92 MHz | OOK | 2.4k | — |
+| `gfsk_868_50k` | 868 MHz | GFSK | 50k | 10/10 |
+| `gfsk_868_100k` | 868 MHz | GFSK | 100k | — |
+| `msk_868_50k` | 868 MHz | MSK | 50k | 10/10 |
+| `ook_868_4k8` | 868 MHz | OOK | 4.8k | 10/10 |
+| `wireless_mbus_s_868` | 868.3 MHz | GFSK | 32.7k | 10/10 |
+| `wireless_mbus_t_868` | 868.95 MHz | GFSK | 100k | 10/10 |
+| `wireless_mbus_c_868` | 868.95 MHz | GFSK | 100k | 10/10 |
+| `wireless_mbus_n_169_2k4` | 169.45 MHz | GFSK | 2.4k | — |
+| `wireless_mbus_n_169_4k8` | 169.45 MHz | GFSK | 4.8k | — |
+| `gfsk_915_50k` | 915 MHz | GFSK | 50k | 10/10 |
+| `gfsk_902_50k` | 902.2 MHz | GFSK | 50k | — |
+| `gfsk_2440_250k` | 2440 MHz | GFSK | 250k | — |
+| `gfsk_2440_50k` | 2440 MHz | GFSK | 50k | 10/10 |
 
 ### `reset_device()`
 

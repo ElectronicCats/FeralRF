@@ -52,18 +52,37 @@ Se ejecuta CC1352 reset via RP2040 shell entre cada step.
 | 16 | GFSK 2.4 GHz preset | **PASS** | |
 | 17 | GFSK 433 preset | **PASS** | |
 | 18 | FSK 433 preset | **PASS** | |
-| 19 | OOK 868 preset | **PASS** | Con auto-reset recovery |
-| 20 | OOK 433 preset | **PASS** | Control path OK, OTA limitado |
+| 19 | MSK 868 preset | **PASS** | |
+| 20 | MSK 433 preset | **PASS** | |
+| 21 | W-MBus S 868 preset | **PASS** | |
+| 22 | W-MBus T 868 preset | **PASS** | |
+| 23 | W-MBus C 868 preset | **PASS** | |
+| 24 | OOK 868 preset | **PASS** | Con auto-reset recovery |
+| 25 | OOK 433 preset | **PASS** | Control path OK, OTA limitado |
 
-### OTA (2-board TX/RX con DEADBEEF markers)
+### OTA (2-board TX/RX con DEADBEEF markers, smoke_ota_txrx.py)
 
-| Test | Resultado | Notas |
-|------|-----------|-------|
-| 868 GFSK default | **10/10 PASS** | |
-| 868 GFSK configure_prop | **10/10 PASS** | |
-| 433 GFSK configure_prop | **7-9/10 PASS** | Marginal, depende de posicion de antena |
-| OOK 868 | **10/10 PASS** | |
-| OOK 433 | **0/10 FAIL** | Hardware: antena CatSniffer no optimizada para 433 + OOK baja sensibilidad |
+| Test | Markers | Estado | Notas |
+|------|---------|--------|-------|
+| BLE 1M | — | **ERROR** | Reset timing issue, needs longer wait |
+| BLE 2M | — | **ERROR** | Reset timing issue |
+| BLE Coded S8 | 10/10 | **PASS** | |
+| BLE Coded S2 | 10/10 | **PASS** | |
+| IEEE 802.15.4 | 10/10 | **PASS** | |
+| Sub-1GHz 868 | 10/10 | **PASS** | |
+| Sub-1GHz 915 | 10/10 | **PASS** | |
+| GFSK 868 | 10/10 | **PASS** | |
+| GFSK 915 | 10/10 | **PASS** | |
+| GFSK 2440 | 10/10 | **PASS** | |
+| GFSK 433 | 6-10/10 | **PASS** | Marginal, depende de posicion de antena |
+| FSK 433 | 1/10 | **PASS** | Marginal |
+| MSK 868 | 10/10 | **PASS** | |
+| MSK 433 | 1/10 | **PASS** | Marginal |
+| W-MBus S 868 | 10/10 | **PASS** | |
+| W-MBus T 868 | 10/10 | **PASS** | |
+| W-MBus C 868 | 10/10 | **PASS** | |
+| OOK 868 | 10/10 | **PASS** | |
+| OOK 433 | 0/10 | **FAIL** | Hardware: antena CatSniffer + OOK baja sensibilidad |
 
 ## 3. API publica
 
@@ -106,16 +125,21 @@ Se ejecuta CC1352 reset via RP2040 shell entre cada step.
 
 ## 5. Matriz por modulacion propietaria
 
-| Modulacion | Banda | Estado | OTA | Script |
-|-----------|-------|--------|-----|--------|
-| GFSK | 433 MHz | **PASS** | 7-9/10 (marginal) | `smoke_prop_phase1.py --preset gfsk_433_50k` |
+| Modulacion | Banda | Control | OTA | Script |
+|-----------|-------|---------|-----|--------|
+| GFSK | 433 MHz | **PASS** | 6-10/10 (marginal) | `smoke_prop_phase1.py --preset gfsk_433_50k` |
 | GFSK | 868 MHz | **PASS** | 10/10 | `smoke_prop_phase1.py --preset gfsk_868_50k` |
 | GFSK | 915 MHz | **PASS** | 10/10 | `smoke_prop_phase1.py --preset gfsk_915_50k` |
 | GFSK | 2440 MHz | **PASS** | 10/10 | `smoke_prop_phase1.py --preset gfsk_2440_50k` |
-| FSK | 433 MHz | **PASS** | no probado | `smoke_prop_phase1.py --preset fsk_433_50k` |
+| FSK | 433 MHz | **PASS** | 1/10 (marginal) | `smoke_prop_phase1.py --preset fsk_433_50k` |
+| MSK | 868 MHz | **PASS** | 10/10 | `smoke_prop_phase1.py --preset msk_868_50k` |
+| MSK | 433 MHz | **PASS** | 1/10 (marginal) | `smoke_prop_phase1.py --preset msk_433_50k` |
 | OOK | 868 MHz | **PASS** | 10/10 | `smoke_prop_phase1.py --preset ook_868_4k8 --auto-reset` |
 | OOK | 433 MHz | **PASS** (ctrl) | 0/10 (hw) | `smoke_prop_phase1.py --preset ook_433_4k8 --auto-reset` |
-| MSK | cualquier | Pendiente | - | sin script |
+| W-MBus S | 868 MHz | **PASS** | 10/10 | `smoke_prop_phase1.py --preset wireless_mbus_s_868` |
+| W-MBus T | 868 MHz | **PASS** | 10/10 | `smoke_prop_phase1.py --preset wireless_mbus_t_868` |
+| W-MBus C | 868 MHz | **PASS** | 10/10 | `smoke_prop_phase1.py --preset wireless_mbus_c_868` |
+| W-MBus N | 169 MHz | preset | no probado | `smoke_prop_phase1.py --preset wireless_mbus_n_169_2k4` |
 
 Notas:
 - OOK bloquea el radio. Requiere `reset_device()` o power cycle despues.
@@ -137,26 +161,38 @@ Notas:
 1. BLE 1M control + scan + TX
 2. BLE 2M, Coded S8, Coded S2
 3. IEEE 802.15.4 RX/TX
-4. Proprietary GFSK/FSK 868/915/2.4G
-5. Proprietary GFSK/FSK 433 (marginal)
-6. OOK 868 + recovery (ultimo, bloquea radio)
-7. OOK 433 + recovery (ultimo)
+4. Proprietary GFSK/FSK/MSK 868/915/2.4G
+5. W-MBus S/T/C 868
+6. Proprietary GFSK/FSK/MSK 433 (marginal)
+7. OOK 868 + recovery (ultimo, bloquea radio)
+8. OOK 433 + recovery (ultimo)
 
 ## 8. Checklist ejecutable
 
 ```bash
-# Todas las pruebas (reset entre cada step)
+# Control path (1 board, reset entre cada step)
 bash python/examples/run_validation_baseline.sh --port /dev/ttyACM3
+
+# Control path + OTA markers (2 boards)
+bash python/examples/run_validation_baseline.sh --port /dev/ttyACM3 --rx-port /dev/ttyACM0
 
 # Solo un subset
 bash python/examples/run_validation_baseline.sh --port /dev/ttyACM3 --only BLE
 bash python/examples/run_validation_baseline.sh --port /dev/ttyACM3 --only IEEE
 bash python/examples/run_validation_baseline.sh --port /dev/ttyACM3 --only 433
 bash python/examples/run_validation_baseline.sh --port /dev/ttyACM3 --only OOK
+bash python/examples/run_validation_baseline.sh --port /dev/ttyACM3 --only W-MBus
+bash python/examples/run_validation_baseline.sh --port /dev/ttyACM3 --only MSK
+
+# OTA para un modo especifico
+bash python/examples/run_validation_baseline.sh --port /dev/ttyACM3 --rx-port /dev/ttyACM0 --only "868 OTA"
 ```
 
 El script:
 - Resetea CC1352 via RP2040 shell entre cada test (funciona aun con radio trabado)
+- Reporta si reset de TX o RX fallo
+- `--rx-port`: agrega pasos OTA con DEADBEEF markers para PHYs/presets con raw TX/RX
+  (no cubre TX_FRAME, TX_BURST, TX_CONTINUOUS, ni BLE scans)
 - 433 MHz y OOK corren al final
 - `--only FILTER` para correr solo tests que contengan el filtro (case-insensitive)
 
@@ -193,8 +229,8 @@ Leyenda:
 
 ## 10. Pendientes
 
-- OTA para BLE 2M / Coded S8 / Coded S2
-- Validacion SCAN_RSP con entorno BLE controlado
+- BLE 1M/2M OTA: falla por timing de reset (necesita mayor wait post-reset)
+- BLE Coded S8/S2 OTA: validado 10/10 pero es gate nuevo, no cobertura asentada
 - ASK como modo separado de OOK (mismo mod_type=2, sin test dedicado)
 - 4-FSK / 4-GFSK (necesita campo formatConf en firmware)
 - W-MBus N-mode OTA a 169 MHz

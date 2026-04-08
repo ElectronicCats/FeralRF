@@ -372,7 +372,7 @@ static rfc_ble5AdvExtPar_t s_ble5AdvExtPar = {
     .auxPtrTargetType = TRIG_REL_START,
     .auxPtrTargetTime = 0,
     .pAdvPkt = 0,
-    .pDeviceAddress = s_bleScannerDevAddr,
+    .pDeviceAddress = 0,
 };
 
 rfc_CMD_BLE5_ADV_EXT_t Ble5_0_cmdBle5AdvExt = {
@@ -418,7 +418,7 @@ static rfc_ble5AdvAuxPar_t s_ble5AdvAuxPar = {
     .auxPtrTargetTime = 0,
     .pAdvPkt = 0,
     .pRspPkt = 0,
-    .pDeviceAddress = s_bleScannerDevAddr,
+    .pDeviceAddress = 0,
     .pWhiteList = 0,
 };
 

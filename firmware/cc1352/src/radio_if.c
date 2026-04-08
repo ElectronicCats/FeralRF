@@ -1115,6 +1115,7 @@ static void RadioIF_stopRfBackend(void) {
             RF_cancelCmd(s_rf_handle, s_rf_rx_cmd, 0);
         }
         RF_flushCmd(s_rf_handle, RF_CMDHANDLE_FLUSH_ALL, 0);
+        s_rx_running = false;
         if (s_prop_ook_active) {
             RF_yield(s_rf_handle);
             ClockP_usleep(50000);

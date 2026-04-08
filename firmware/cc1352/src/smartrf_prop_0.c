@@ -171,7 +171,7 @@ uint32_t Prop0_pOverridesOok433[] = {
 };
 
 uint32_t Prop0_pOverridesOok433TxStd[] = {
-    TX_STD_POWER_OVERRIDE(0x013F),   /* 433 band value */
+    TX_STD_POWER_OVERRIDE(0x013F), /* 433 band value */
     (uint32_t)0x11310703,
     HW_REG_OVERRIDE(0x6028, 0x001A),
     HW_REG_OVERRIDE(0x60A8, 0x0401), /* TXRX pin (433 band) */

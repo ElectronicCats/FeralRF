@@ -214,9 +214,9 @@ BLE→IEEE→868→IEEE→868 = todo PASS. Solo la vuelta a BLE desde 868 falla.
 #### 3b. BLE Analysis Tools — COMPLETADO ✅
 | Herramienta | Estado |
 |-------------|--------|
-| demo_ble_analyzer.py | ✅ Analisis completo + export JSON |
-| demo_ble_clone.py | ✅ 6 estrategias interactivas |
-| demo_emulate_soundcore.py | ✅ Popup Fast Pair funcional |
+| python/examples/lab/demo_ble_analyzer.py | ✅ Analisis completo + export JSON |
+| python/examples/lab/demo_ble_clone.py | ✅ 6 estrategias interactivas |
+| python/examples/lab/demo_emulate_soundcore.py | ✅ Popup Fast Pair funcional |
 
 #### 3c. BLE Scanner (firmware) — PENDIENTE
 - CMD_BLE5_SCANNER disponible en SDK pero no implementado

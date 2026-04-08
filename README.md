@@ -54,11 +54,33 @@ cd firmware/cc1352 && mkdir build && cd build
 cmake .. && make
 ```
 
+## Examples
+
+Official entrypoints in `python/examples/`:
+
+- `ble_sniffer.py`
+- `smoke_phase2.py`
+- `smoke_ble_scan_mode.py`
+- `smoke_phy4_ieee154.py`
+- `smoke_prop_phase1.py`
+- `smoke_tx_phase1.py`
+- `smoke_tx_frame_phase1.py`
+- `smoke_tx_burst_phase1.py`
+- `smoke_tx_continuous_phase1.py`
+- `smoke_tx_ble_phase1.py`
+- `release_gate_ble.py`
+- `release_gate_multi_phy.py`
+- `run_validation_baseline.sh`
+
+Manual, OTA, soak, demo, and characterization workflows now live under `python/examples/lab/`.
+
 ## Documentation
 
-- [Plan Maestro](PLAN_MAESTRO.md) - Architecture and development phases
+- [Validation Matrix](docs/VALIDATION_MATRIX.md) - Baseline matrix and recommended validation flow
+- [Python API](docs/PYTHON_API.md) - Public API status and usage guidance
+- [Protocol](docs/protocol.md) - Host/firmware command contract
+- [Plan Maestro](docs/PLAN_MAESTRO.md) - Architecture and development phases
 - [Hardware Pinout](hardware/PINOUT.md) - CatSniffer pinout reference
-- [Context for AI](propuesta_contexto.md) - Resources for AI-assisted development
 
 ## Requirements
 

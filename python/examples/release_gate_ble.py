@@ -174,7 +174,7 @@ def main() -> int:
 
     examples_dir = Path(__file__).resolve().parent
     smoke_script = examples_dir / "smoke_phase2.py"
-    canary_script = examples_dir / "canary_regression.py"
+    canary_script = examples_dir / "lab" / "canary_regression.py"
 
     active_port = args.port
 

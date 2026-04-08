@@ -163,6 +163,11 @@ Este wrapper:
 - Puede incluir OOK solo cuando se solicita explicitamente.
 - Resume al final los casos ejecutados y los que siguen siendo manuales.
 
+Entry points del repo:
+
+- Oficiales: `python/examples/`
+- Lab / manuales / OTA / demos / soak: `python/examples/lab/`
+
 ## 9. Casos aun manuales o pendientes
 
 Quedan como pendientes de automatizacion o con validacion mas debil:

@@ -9,6 +9,11 @@ Relacion con otros documentos:
 - Contrato wire-format: `docs/protocol.md`
 - Baseline y matriz de validacion: `docs/VALIDATION_MATRIX.md`
 
+Entry points recomendados:
+
+- Oficiales: `python/examples/`
+- Manuales, OTA, demos y caracterizacion: `python/examples/lab/`
+
 ## 1. API publica estable
 
 Objetos exportados:

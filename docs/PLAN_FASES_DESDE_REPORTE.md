@@ -189,9 +189,9 @@ Dejar base lista para Zigbee/Sub-1GHz, jamming y spectrum.
 2. Tarea 2 (cierre tecnico Fase 5 - multi-PHY real):
    1. `OK`: validar en hardware el backend RF real para `IEEE_802_15_4` (RX) ya integrado (sin timeouts de cierre).
    2. `OK`: captura real con emisor Zigbee/Thread activo (ej.: canal 25 con `packets>0`, `delta_ok>0`).
-   3. `OK`: barrido `11..26` operativo (`python/examples/sweep_phy4_ieee154.py`) con deteccion en canales activos.
+   3. `OK`: barrido `11..26` operativo (`python/examples/lab/sweep_phy4_ieee154.py`) con deteccion en canales activos.
 3. Tarea 3 (avance Fase 7 - regresion automatizada):
-   1. `OK`: agregar script canario que ejecute smoke + soak corto + validacion de stats LL (`python/examples/canary_regression.py`).
+   1. `OK`: agregar script canario que ejecute smoke + soak corto + validacion de stats LL (`python/examples/lab/canary_regression.py`).
    2. `OK`: umbrales de aceptacion implementados (sin timeout, `RX_STOP ACK`, contadores monotonos, `min_packets` configurable + perfiles `lab/ci_manual/quiet`).
    3. `OK`: validacion HW base completada (`CANARY PASS`, 60s, `packets_total=8150`).
 4. Tarea 4 (documentacion de contrato):
@@ -207,7 +207,7 @@ Dejar base lista para Zigbee/Sub-1GHz, jamming y spectrum.
    6. pendiente: abrir Zigbee/Sub-1GHz/TX/jamming manteniendo gate BLE como no-regresion.
 6. Tarea 6 (arranque vertical TX):
    1. `OK`: `CMD_TX_RAW` integrado en firmware con ruta no bloqueante (ACK inmediato) y smoke host `python/examples/smoke_tx_phase1.py`.
-   2. `OK`: validación RF over-the-air para PHY4 completada (receptor externo confirma trama emitida; `ota_rx_probe.py`, marcador `a1b2c3d4`, `marker_hits=80`).
+   2. `OK`: validación RF over-the-air para PHY4 completada (receptor externo confirma trama emitida; `python/examples/lab/ota_rx_probe.py`, marcador `a1b2c3d4`, `marker_hits=80`).
    3. `OK`: extensión `TX_RAW` a PHY BLE (PHY 0) con smoke equivalente (`python/examples/smoke_tx_ble_phase1.py`, `TX BLE SMOKE PASS`).
    4. `OK`: validación RF over-the-air para BLE completada (receptor externo confirma advertising emitido; marcador `beef01`, `marker_hits=24`).
    5. `OK`: canario multi-PHY formalizado en comando único (`python/examples/release_gate_multi_phy.py`) para BLE gate + PHY4 RX/TX smoke + BLE TX smoke.
@@ -215,7 +215,7 @@ Dejar base lista para Zigbee/Sub-1GHz, jamming y spectrum.
    7. `OK`: `CMD_TX_BURST` integrado y validado en hardware (`TX_BURST ACK`, `TX BURST SMOKE PASS`, paso burst en `release_gate_multi_phy.py`).
    8. `OK`: `CMD_TX_CONTINUOUS` + `CMD_TX_STOP` integrados y validados en hardware (`TX_CONTINUOUS ACK`, `TX_STOP ACK`, `TX CONTINUOUS SMOKE PASS`, paso continuous en `release_gate_multi_phy.py`).
    9. `OK`: `CMD_TX_FRAME` integrado y validado en hardware (`TX_FRAME ACK`, `TX FRAME SMOKE PASS` en PHY4 y BLE, paso `PHY4 TX frame smoke` + `BLE TX frame smoke` en `release_gate_multi_phy.py`).
-   10. `OK`: evidencia OTA dedicada de `TX_FRAME` cerrada (`ota_tx_frame.py` + `ota_rx_probe.py`): PHY4 CH25 `marker_hits=40`, BLE CH37 `marker_hits=14`.
+   10. `OK`: evidencia OTA dedicada de `TX_FRAME` cerrada (`python/examples/lab/ota_tx_frame.py` + `python/examples/lab/ota_rx_probe.py`): PHY4 CH25 `marker_hits=40`, BLE CH37 `marker_hits=14`.
    11. siguiente: robustecer estabilidad post-switch PHY/TX y formalizar contrato final de `TX_FRAME` manteniendo el gate multi-PHY obligatorio.
 
 Este orden prioriza mantener baseline BLE estable mientras se abre Zigbee/Sub-1GHz/TX por incrementos.

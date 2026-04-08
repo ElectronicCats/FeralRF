@@ -160,12 +160,45 @@ El script:
 - 433 MHz y OOK corren al final
 - `--only FILTER` para correr solo tests que contengan el filtro (case-insensitive)
 
-## 9. Pendientes
+## 9. Protocolo x Modulacion
+
+| | 2-GFSK | 2-FSK | OOK/ASK | MSK | 4-FSK | 4-GFSK |
+|---|---|---|---|---|---|---|
+| **BLE** | si (PHY nativo) | n/a | n/a | n/a | n/a | n/a |
+| **IEEE 802.15.4** | si (O-QPSK nativo) | n/a | n/a | n/a | n/a | n/a |
+| **Prop Sub-1G 868** | si | si | si | si | falta | falta |
+| **Prop Sub-1G 915** | si | parcial | parcial | parcial | falta | falta |
+| **Prop Sub-1G 433** | si (marginal) | si | ctrl (hw lim) | si | falta | falta |
+| **Prop 2.4 GHz** | si | parcial | n/a | parcial | falta | falta |
+| **W-MBus S** | si (868.3) | n/a | n/a | n/a | n/a | n/a |
+| **W-MBus T** | si (868.95) | n/a | n/a | n/a | n/a | n/a |
+| **W-MBus C** | si (868.95) | n/a | n/a | n/a | n/a | n/a |
+| **W-MBus N** | preset (169) | n/a | n/a | n/a | n/a | n/a |
+| **Zigbee** | parcial (PHY) | n/a | n/a | n/a | n/a | n/a |
+| **Thread** | parcial (PHY) | n/a | n/a | n/a | n/a | n/a |
+| **6LoWPAN** | parcial (PHY) | n/a | n/a | n/a | n/a | n/a |
+| **Matter** | no | n/a | n/a | n/a | n/a | n/a |
+| **Wi-SUN** | no | falta | n/a | n/a | falta | n/a |
+| **Amazon Sidewalk** | no | falta | n/a | n/a | n/a | n/a |
+| **MIOTY** | no | n/a | n/a | n/a | n/a | n/a |
+
+Leyenda:
+- **si**: validado OTA o control path PASS
+- **parcial**: PHY funciona pero sin stack/parser de protocolo, o sin test dedicado en esa banda
+- **ctrl**: control path PASS pero OTA falla por limitacion hardware
+- **preset**: preset Python existe pero sin validacion OTA
+- **falta**: el chip lo soporta pero no esta implementado/validado
+- **no**: requiere stack completo no implementado
+- **n/a**: combinacion no valida fisicamente
+
+## 10. Pendientes
 
 - OTA para BLE 2M / Coded S8 / Coded S2
 - Validacion SCAN_RSP con entorno BLE controlado
-- TX OTA dedicada por banda con 2 boards
-- MSK
+- ASK como modo separado de OOK (mismo mod_type=2, sin test dedicado)
+- 4-FSK / 4-GFSK (necesita campo formatConf en firmware)
+- W-MBus N-mode OTA a 169 MHz
+- Parsers/tooling de protocolo: Zigbee, Thread, 6LoWPAN, W-MBus
 - Jamming con criterio real de interferencia
 - Spectrum / RSSI scan
 - GATT discovery (requiere TI-RTOS + BLE5-Stack)

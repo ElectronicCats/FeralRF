@@ -19,6 +19,8 @@ extern rfc_CMD_BLE5_ADV_NC_t Ble5_0_cmdBle5AdvNc;
 extern rfc_CMD_BLE_ADV_NC_t Ble5_0_cmdBleAdvNc;
 extern rfc_CMD_BLE5_ADV_EXT_t Ble5_0_cmdBle5AdvExt;
 extern rfc_CMD_BLE5_ADV_AUX_t Ble5_0_cmdBle5AdvAux;
+extern rfc_CMD_BLE5_INITIATOR_t Ble5_0_cmdBle5Initiator;
+extern rfc_CMD_BLE5_MASTER_t Ble5_0_cmdBle5Master;
 
 extern uint32_t Ble5_0_pOverridesCommon[];
 extern uint32_t Ble5_0_pOverrides1Mbps[];

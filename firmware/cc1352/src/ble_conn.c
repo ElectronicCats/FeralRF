@@ -156,7 +156,7 @@ BleConn_Result BleConn_initiate(const uint8_t *peerAddr, uint8_t peerAddrType,
     Ble5_0_cmdBle5Initiator.pParams->rxConfig.bAppendStatus = 1;
     Ble5_0_cmdBle5Initiator.pParams->rxConfig.bAppendTimestamp = 1;
 
-    Ble5_0_cmdBle5Initiator.pParams->initConfig.bUseWhiteList = 1; /* filter on peer addr */
+    Ble5_0_cmdBle5Initiator.pParams->initConfig.bUseWhiteList = 0; /* pWhiteList = peer addr */
     Ble5_0_cmdBle5Initiator.pParams->initConfig.bDynamicWinOffset = 1;
     Ble5_0_cmdBle5Initiator.pParams->initConfig.deviceAddrType = 1; /* random */
     Ble5_0_cmdBle5Initiator.pParams->initConfig.peerAddrType = peerAddrType;

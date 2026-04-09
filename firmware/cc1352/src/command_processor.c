@@ -8,6 +8,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "ble_conn.h"
 #include "control_task.h"
 #include "ll_manager.h"
 #include "output_if.h"
@@ -36,11 +37,20 @@
 #define CMD_JAM_CONTINUOUS 0x30u
 #define CMD_JAM_STOP 0x33u
 
+/* BLE Connection commands */
+#define CMD_CONNECT 0x40u
+#define CMD_DISCONNECT 0x41u
+#define CMD_CONN_STATUS 0x42u
+
 /* Responses (match python/feralrf/enums.py) */
 #define RSP_ACK 0x80u
 #define RSP_ERROR 0x81u
 #define RSP_STATS 0x93u
 #define RSP_INFO 0x94u
+
+/* BLE Connection responses */
+#define RSP_CONN_RESULT 0xA0u
+#define RSP_CONN_STATUS_R 0xA1u
 
 /* Error codes */
 #define ERR_INVALID_CMD 0x01u
@@ -352,6 +362,48 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
         ControlTask_onJamStop();
         send_ack(seq);
         return;
+
+    case CMD_CONNECT: {
+        /* Payload: addr[6] + addr_type(1) = 7 bytes */
+        if (payload_len != 7u) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            return;
+        }
+        if (BleConn_isConnected() || BleConn_isInitiating()) {
+            send_error(seq, ERR_INVALID_STATE);
+            return;
+        }
+        /* Default: interval=24 (30ms), timeout=100 (1000ms) */
+        BleConn_Result res = BleConn_initiate(payload, payload[6], 24u, 100u);
+        uint8_t rsp[1] = {(uint8_t)res};
+        send_response(RSP_CONN_RESULT, seq, rsp, sizeof(rsp));
+        return;
+    }
+
+    case CMD_DISCONNECT:
+        if (payload_len != 0u) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            return;
+        }
+        BleConn_disconnect();
+        send_ack(seq);
+        return;
+
+    case CMD_CONN_STATUS: {
+        if (payload_len != 0u) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            return;
+        }
+        const BleConn_State *st = BleConn_getState();
+        uint8_t rsp[5];
+        rsp[0] = st->connected ? 1u : 0u;
+        rsp[1] = (uint8_t)(st->connInterval & 0xFFu);
+        rsp[2] = (uint8_t)((st->connInterval >> 8) & 0xFFu);
+        rsp[3] = (uint8_t)(st->supervTimeout & 0xFFu);
+        rsp[4] = (uint8_t)((st->supervTimeout >> 8) & 0xFFu);
+        send_response(RSP_CONN_STATUS_R, seq, rsp, sizeof(rsp));
+        return;
+    }
 
     default:
         send_error(seq, ERR_INVALID_CMD);

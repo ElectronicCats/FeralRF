@@ -15,6 +15,7 @@
 #include DeviceFamily_constructPath(driverlib/systick.h)
 /* clang-format on */
 
+#include "ble_conn.h"
 #include "config.h"
 #include "ll_manager.h"
 #include "phy_manager.h"
@@ -219,6 +220,7 @@ void ControlTask_onRadioInit(void) {
     RadioIF_stopRx();
     RadioIF_resetMetrics();
     LLManager_resetStats();
+    BleConn_init();
 }
 
 bool ControlTask_onSetPhy(uint8_t phy, uint16_t channel, uint32_t frequency_hz) {

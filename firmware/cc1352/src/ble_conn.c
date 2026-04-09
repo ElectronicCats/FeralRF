@@ -150,7 +150,7 @@ BleConn_Result BleConn_initiate(const uint8_t *peerAddr, uint8_t peerAddrType,
     Ble5_0_cmdBle5Initiator.pParams->rxConfig.bAppendStatus = 1;
     Ble5_0_cmdBle5Initiator.pParams->rxConfig.bAppendTimestamp = 1;
 
-    Ble5_0_cmdBle5Initiator.pParams->initConfig.bUseWhiteList = 0;
+    Ble5_0_cmdBle5Initiator.pParams->initConfig.bUseWhiteList = 1; /* filter on peer addr */
     Ble5_0_cmdBle5Initiator.pParams->initConfig.bDynamicWinOffset = 1;
     Ble5_0_cmdBle5Initiator.pParams->initConfig.deviceAddrType = 1; /* random */
     Ble5_0_cmdBle5Initiator.pParams->initConfig.peerAddrType = peerAddrType;
@@ -163,12 +163,15 @@ BleConn_Result BleConn_initiate(const uint8_t *peerAddr, uint8_t peerAddrType,
     Ble5_0_cmdBle5Initiator.pParams->pDeviceAddress = s_own_addr_u16;
     Ble5_0_cmdBle5Initiator.pParams->pWhiteList = (rfc_bleWhiteListEntry_t *)s_peer_addr_u16;
 
-    Ble5_0_cmdBle5Initiator.pParams->connectTime = RF_getCurrentTime() + 4000u; /* ~1ms from now */
     Ble5_0_cmdBle5Initiator.pParams->maxWaitTimeForAuxCh = 0xFFFFu;
 
-    /* Run forever until we connect or host cancels */
-    Ble5_0_cmdBle5Initiator.pParams->endTrigger.triggerType = TRIG_NEVER;
-    Ble5_0_cmdBle5Initiator.pParams->endTime = 0;
+    /* connectTime set by RadioIF_bleInitiate() just before RF_runCmd to avoid
+     * stale timestamp after mode-switch delays. */
+
+    /* 5-second timeout — prevents deadlocking the UART task.
+     * RAT clock is 4 MHz, so 5s = 20,000,000 ticks. */
+    Ble5_0_cmdBle5Initiator.pParams->endTrigger.triggerType = TRIG_REL_START;
+    Ble5_0_cmdBle5Initiator.pParams->endTime = 20000000u; /* 5 seconds */
     Ble5_0_cmdBle5Initiator.pParams->timeoutTrigger.triggerType = TRIG_NEVER;
     Ble5_0_cmdBle5Initiator.pParams->timeoutTime = 0;
 

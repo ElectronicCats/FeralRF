@@ -206,6 +206,7 @@ void ControlTask_init(void) {
     ControlTask_resetTxJamState(false);
     ControlTask_resetTxPowerState();
     memset(s_jam_payload, 0xFF, sizeof(s_jam_payload));
+    BleConn_init();
 }
 
 void ControlTask_onRadioInit(void) {

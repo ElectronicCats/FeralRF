@@ -2241,6 +2241,10 @@ int RadioIF_bleInitiate(void) {
     /* Point initiator RX queue to our data queue */
     Ble5_0_cmdBle5Initiator.pParams->pRxQ = &s_rf_data_queue;
 
+    /* Set connectTime just before RF_runCmd — avoids stale timestamp
+     * if mode-switch or RX-stop took several ms above. */
+    Ble5_0_cmdBle5Initiator.pParams->connectTime = RF_getCurrentTime() + 4000u;
+
     /* Reset command status */
     Ble5_0_cmdBle5Initiator.status = 0;
 

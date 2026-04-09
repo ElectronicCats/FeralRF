@@ -39,6 +39,7 @@
 #endif
 
 /* FeralRF app */
+#include "ble_conn_mgr.h"
 #include "command_processor.h"
 #include "config.h"
 #include "control_task.h"
@@ -163,7 +164,11 @@ static void RfTask_taskFxn(UArg a0, UArg a1) {
 
     DataTask_init();
     while (1) {
-        DataTask_poll();
+        if (BleConnMgr_isRunning()) {
+            BleConnMgr_poll();
+        } else {
+            DataTask_poll();
+        }
         Task_yield();
     }
 }

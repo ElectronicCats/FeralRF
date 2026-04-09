@@ -7,6 +7,7 @@
  */
 
 #include "ble_conn.h"
+#include "ble_conn_mgr.h"
 #include "radio_if.h"
 #include "smartrf_ble5_0.h"
 
@@ -119,6 +120,8 @@ void BleConn_init(void) {
     s_state.ownAddr[3] = 0xCCu;
     s_state.ownAddr[4] = 0xBBu;
     s_state.ownAddr[5] = 0xAAu;
+
+    BleConnMgr_init();
 }
 
 BleConn_Result BleConn_initiate(const uint8_t *peerAddr, uint8_t peerAddrType,
@@ -190,6 +193,7 @@ BleConn_Result BleConn_initiate(const uint8_t *peerAddr, uint8_t peerAddrType,
         s_state.connected = true;
         s_state.useCsa2 = (result >= 1);
         s_state.connTime = Ble5_0_cmdBle5Initiator.pParams->connectTime;
+        BleConnMgr_start();
         return BLE_CONN_OK;
     }
 
@@ -203,6 +207,7 @@ BleConn_Result BleConn_initiate(const uint8_t *peerAddr, uint8_t peerAddrType,
 }
 
 void BleConn_disconnect(void) {
+    BleConnMgr_stop();
     if (s_state.initiating) {
         RadioIF_stopRx();
     }

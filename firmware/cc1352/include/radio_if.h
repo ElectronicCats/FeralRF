@@ -84,6 +84,7 @@ int RadioIF_bleCentral(uint8_t chan, uint32_t accessAddr, uint32_t crcInit,
 
 /* Reset seqStat for initiator→central transition */
 void RadioIF_bleResetSeqStat(void);
+void RadioIF_bleResetRxQueue(void);
 
 /* RF debug diagnostics */
 typedef struct {

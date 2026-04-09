@@ -9,6 +9,7 @@
 #include <stdint.h>
 
 #include "ble_conn.h"
+#include "ble_conn_mgr.h"
 #include "control_task.h"
 #include "ll_manager.h"
 #include "output_if.h"
@@ -395,12 +396,18 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
             return;
         }
         const BleConn_State *st = BleConn_getState();
-        uint8_t rsp[5];
+        uint16_t evts = BleConnMgr_getEventCount();
+        int last_st = BleConnMgr_getLastStatus();
+        uint8_t rsp[9];
         rsp[0] = st->connected ? 1u : 0u;
         rsp[1] = (uint8_t)(st->connInterval & 0xFFu);
         rsp[2] = (uint8_t)((st->connInterval >> 8) & 0xFFu);
         rsp[3] = (uint8_t)(st->supervTimeout & 0xFFu);
         rsp[4] = (uint8_t)((st->supervTimeout >> 8) & 0xFFu);
+        rsp[5] = (uint8_t)(evts & 0xFFu);
+        rsp[6] = (uint8_t)((evts >> 8) & 0xFFu);
+        rsp[7] = (uint8_t)(last_st & 0xFFu);
+        rsp[8] = (uint8_t)((last_st >> 8) & 0xFFu);
         send_response(RSP_CONN_STATUS_R, seq, rsp, sizeof(rsp));
         return;
     }

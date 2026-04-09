@@ -40,6 +40,7 @@
 
 /* ── Static state ── */
 static bool s_running;
+static int s_last_status;
 static uint32_t s_hop_interval_ticks;
 static uint32_t s_superv_timeout_ticks;
 static uint32_t s_next_hop_time;
@@ -147,17 +148,16 @@ void BleConnMgr_start(void) {
         return;
     }
 
-    s_running = true;
     s_event_counter = 0;
 
     s_hop_interval_ticks = CONN_INTERVAL_TO_TICKS(st->connInterval);
     s_superv_timeout_ticks = SUPERV_TO_TICKS(st->supervTimeout);
 
-    /* First anchor point: connTime + transmitWindowDelay + one interval */
-    s_next_hop_time = st->connTime + TRANSMIT_WINDOW_DELAY + s_hop_interval_ticks;
+    /* First anchor: connTime + interval (with bDynamicWinOffset=1,
+     * connectTime already includes TWD + WinOffset) */
+    s_next_hop_time = st->connTime + s_hop_interval_ticks;
     s_last_rx_time = RF_getCurrentTime();
 
-    /* Initialize CSA#2 channel mapping if negotiated */
     if (st->useCsa2) {
         uint64_t map = 0;
         for (uint8_t i = 0; i < 5; i++) {
@@ -168,9 +168,10 @@ void BleConnMgr_start(void) {
 
     TXQueue_init();
     RadioIF_bleResetSeqStat();
+    RadioIF_bleResetRxQueue();
 
-    /* First TX: empty PDU keepalive */
-    TXQueue_insert(0, TX_QUEUE_LLID_DATA_CONT, NULL);
+    /* Set running LAST so poll() sees fully initialized state */
+    s_running = true;
 }
 
 void BleConnMgr_stop(void) {
@@ -189,62 +190,46 @@ bool BleConnMgr_poll(void) {
         return false;
     }
 
-    /* Check if it's time for the next connection event */
+    /* Wait until anchor point (sleep until ~100us before) */
     uint32_t now = RF_getCurrentTime();
-    uint32_t remaining = s_next_hop_time - ANCHOR_OFFSET - now;
-    if (remaining < 0x80000000u && remaining > 2000u) {
-        /* Not yet time — yield to RTOS scheduler.
-         * RAT runs at 4MHz, Task_sleep uses BIOS ticks (~10us each). */
-        Task_sleep(remaining / 40u);
-        return false;
+    uint32_t wait = s_next_hop_time - 400u - now; /* 400 ticks = 100us anchor offset */
+    if (wait < 0x80000000u && wait > 400u) {
+        Task_sleep(wait / 40u);
     }
 
     /* Check supervision timeout */
+    now = RF_getCurrentTime();
     if (now - s_last_rx_time > s_superv_timeout_ticks) {
         BleConnMgr_stop();
         BleConn_disconnect();
         return false;
     }
 
-    /* Compute data channel for this event */
-    uint8_t chan;
-    if (st->useCsa2) {
-        chan = csa2_computeChannel(s_event_counter);
-    } else {
-        chan = (st->hopIncrement * s_event_counter) % 37;
-    }
+    uint8_t chan = csa2_computeChannel(s_event_counter);
 
-    /* Prepare TX queue — ensure at least one entry (keepalive) */
+    TXQueue_insert(0, TX_QUEUE_LLID_DATA_CONT, NULL);
     dataQueue_t txq;
     TXQueue_take(&txq);
 
-    if (txq.pCurrEntry == NULL) {
-        TXQueue_insert(0, TX_QUEUE_LLID_DATA_CONT, NULL);
-        TXQueue_take(&txq);
-    }
-
-    /* Run CMD_BLE5_MASTER for this connection event */
-    uint32_t endTime = s_next_hop_time + s_hop_interval_ticks - ANCHOR_OFFSET;
+    /* Use ABSTIME: start slightly before anchor, end at anchor + interval */
+    uint32_t startTime = s_next_hop_time - 400u; /* 100us before anchor */
+    uint32_t endTime = s_next_hop_time + s_hop_interval_ticks;
     uint32_t numSent = 0;
 
     int status = RadioIF_bleCentral(chan, st->accessAddr, st->crcInit, &txq,
-                                    s_next_hop_time - ANCHOR_OFFSET, endTime, &numSent);
-
+                                    startTime, endTime, &numSent);
+    s_last_status = status;
     TXQueue_flush(numSent);
+    RadioIF_poll();
 
-    /* Process received data */
-    bool got_data = process_rx_packets();
-
-    if (got_data || status == 0) {
+    /* BLE_DONE_OK=0x1400, BLE_DONE_ENDED=0x1403, BLE_DONE_STOPPED=0x1404 */
+    if (status == 0x1400 || status == 0x1403 || status == 0x1404) {
         s_last_rx_time = RF_getCurrentTime();
     }
 
-    /* Advance to next connection event */
+    /* Advance to next anchor */
     s_event_counter++;
     s_next_hop_time += s_hop_interval_ticks;
-
-    /* Queue keepalive for next event */
-    TXQueue_insert(0, TX_QUEUE_LLID_DATA_CONT, NULL);
 
     return true;
 }
@@ -258,4 +243,12 @@ bool BleConnMgr_queueTx(uint8_t llid, const uint8_t *data, uint8_t len) {
         return false;
     }
     return TXQueue_insert(len, llid, data);
+}
+
+uint16_t BleConnMgr_getEventCount(void) {
+    return s_event_counter;
+}
+
+int BleConnMgr_getLastStatus(void) {
+    return s_last_status;
 }

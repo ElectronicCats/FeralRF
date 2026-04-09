@@ -19,6 +19,10 @@
 #include DeviceFamily_constructPath(driverlib/rf_ble_mailbox.h)
 /* clang-format on */
 #include <ti/drivers/rf/RF.h>
+#include <ti/sysbios/knl/Task.h>
+
+#include "csa2.h"
+#include "tx_queue.h"
 
 /* ── Static state (single connection) ── */
 static BleConn_State s_state;
@@ -101,6 +105,7 @@ static void ble_conn_build_ll_data(uint16_t interval, uint16_t timeout) {
     s_state.crcInit = crc;
     memcpy(s_state.channelMap, &s_ll_data[16], 5);
     s_state.hopIncrement = hop;
+    s_state.winOffset = win_offset;
     s_state.connInterval = interval;
     s_state.supervTimeout = timeout;
     s_state.peripheralLatency = 0;
@@ -193,6 +198,7 @@ BleConn_Result BleConn_initiate(const uint8_t *peerAddr, uint8_t peerAddrType,
         s_state.connected = true;
         s_state.useCsa2 = (result >= 1);
         s_state.connTime = Ble5_0_cmdBle5Initiator.pParams->connectTime;
+
         BleConnMgr_start();
         return BLE_CONN_OK;
     }

@@ -17,5 +17,7 @@ void BleConnMgr_stop(void);
 bool BleConnMgr_poll(void);
 bool BleConnMgr_isRunning(void);
 bool BleConnMgr_queueTx(uint8_t llid, const uint8_t *data, uint8_t len);
+uint16_t BleConnMgr_getEventCount(void);
+int BleConnMgr_getLastStatus(void);
 
 #endif /* BLE_CONN_MGR_H */

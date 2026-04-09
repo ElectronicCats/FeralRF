@@ -120,10 +120,16 @@ static void UartTask_taskFxn(UArg a0, UArg a1) {
     CommandProcessor_init();
     HostIFTask_init();
 
-    /* UART polling loop — always responsive */
+    /* UART polling loop — also runs BLE central mode when connected.
+     * BLE connection events run here (same task context as initiator)
+     * because the RF handle is opened from this task. */
     uint32_t led_counter = 0;
     while (1) {
         HostIFTask_poll();
+
+        if (BleConnMgr_isRunning()) {
+            BleConnMgr_poll();
+        }
 
         /* LED blink */
         led_counter++;
@@ -164,11 +170,7 @@ static void RfTask_taskFxn(UArg a0, UArg a1) {
 
     DataTask_init();
     while (1) {
-        if (BleConnMgr_isRunning()) {
-            BleConnMgr_poll();
-        } else {
-            DataTask_poll();
-        }
+        DataTask_poll();
         Task_yield();
     }
 }

@@ -49,8 +49,9 @@ typedef struct {
     uint8_t ownAddr[6];
     bool connected;
     bool initiating;
-    bool useCsa2;      /* true if CSA#2 negotiated */
-    uint32_t connTime; /* RAT timestamp of connection event */
+    uint16_t winOffset; /* 1.25ms units, from CONNECT_IND LLData */
+    bool useCsa2;       /* true if CSA#2 negotiated */
+    uint32_t connTime;  /* RAT timestamp of connection event */
 } BleConn_State;
 
 void BleConn_init(void);

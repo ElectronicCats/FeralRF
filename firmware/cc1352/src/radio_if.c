@@ -2346,14 +2346,8 @@ int RadioIF_bleCentral(uint8_t chan, uint32_t accessAddr, uint32_t crcInit,
 
     *pNumSent = output.nTxEntryDone;
 
-    switch (Ble5_0_cmdBle5Master.status) {
-    case BLE_DONE_OK:
-    case BLE_DONE_ENDED:
-    case BLE_DONE_STOPPED:
-        return 0;
-    default:
-        return -1;
-    }
+    /* Return raw status for debugging. Caller checks for success codes. */
+    return (int)Ble5_0_cmdBle5Master.status;
 }
 
 void RadioIF_bleResetSeqStat(void) {
@@ -2365,6 +2359,10 @@ void RadioIF_bleResetSeqStat(void) {
     Ble5_0_cmdBle5Master.pParams->seqStat.bLlCtrlTx = 0;
     Ble5_0_cmdBle5Master.pParams->seqStat.bLlCtrlAckRx = 0;
     Ble5_0_cmdBle5Master.pParams->seqStat.bLlCtrlAckPending = 0;
+}
+
+void RadioIF_bleResetRxQueue(void) {
+    RadioIF_resetRfDataQueue();
 }
 
 bool RadioIF_startJamSession(uint8_t phy, uint8_t channel, int8_t power_dbm) {

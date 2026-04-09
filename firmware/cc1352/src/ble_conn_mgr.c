@@ -231,6 +231,7 @@ bool BleConnMgr_poll(void) {
     /* BLE_DONE_OK=0x1400, BLE_DONE_ENDED=0x1403, BLE_DONE_STOPPED=0x1404 */
     if (status == 0x1400 || status == 0x1403 || status == 0x1404) {
         s_last_rx_time = RF_getCurrentTime();
+        process_rx_packets();
     }
 
     /* Advance to next anchor */

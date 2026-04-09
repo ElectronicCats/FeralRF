@@ -2225,32 +2225,49 @@ static bool RadioIF_executeJamTx(RF_Handle rf_handle, uint8_t phy, uint8_t chann
 }
 
 int RadioIF_bleInitiate(void) {
-    /* Ensure RF is in BLE mode */
-    if (s_rf_mode != RADIO_IF_RF_MODE_BLE) {
-        if (!RadioIF_switchRfMode(&Ble5_0_mode, (RF_RadioSetup *)&Ble5_0_cmdBle5RadioSetup)) {
+    /* Use startBleRfBackend to get into a known-good BLE state,
+     * then cancel the GenericRX and post the Initiator. This works
+     * around potential issues with RF_open → Initiator directly. */
+
+    /* If not already in BLE RX mode, start it to initialize RF core */
+    if (s_rf_mode != RADIO_IF_RF_MODE_BLE || s_rf_handle == NULL) {
+        if (!RadioIF_startBleRfBackend()) {
             return -3;
         }
-        s_rf_mode = RADIO_IF_RF_MODE_BLE;
     }
 
-    /* Stop any active RX */
-    if (s_rx_running) {
-        RadioIF_stopRx();
+    /* Cancel any active RX command (GenericRX/Scanner) */
+    if (s_rf_rx_cmd >= 0) {
+        RF_cancelCmd(s_rf_handle, s_rf_rx_cmd, 0);
+        RF_flushCmd(s_rf_handle, RF_CMDHANDLE_FLUSH_ALL, 0);
+        s_rf_rx_cmd = RF_SCHEDULE_CMD_ERROR;
+    }
+    s_rx_running = false;
+
+    /* Re-create data queue for the initiator */
+    if (!RadioIF_createRfDataQueue(&s_rf_data_queue, s_rf_rx_data_buffer,
+                                   (uint16_t)sizeof(s_rf_rx_data_buffer), RF_QUEUE_NUM_DATA_ENTRIES,
+                                   RF_QUEUE_ENTRY_PAYLOAD_LEN)) {
+        return -3;
     }
 
     /* Point initiator RX queue to our data queue */
     Ble5_0_cmdBle5Initiator.pParams->pRxQ = &s_rf_data_queue;
 
-    /* Set connectTime just before RF_runCmd — avoids stale timestamp
-     * if mode-switch or RX-stop took several ms above. */
-    Ble5_0_cmdBle5Initiator.pParams->connectTime = RF_getCurrentTime() + 4000u;
+    /* Set connectTime and endTime just before RF_runCmd — avoids stale
+     * timestamps if mode-switch or RX-stop took several ms above.
+     * RAT clock is 4 MHz, so 5s = 20,000,000 ticks. */
+    {
+        uint32_t now = RF_getCurrentTime();
+        Ble5_0_cmdBle5Initiator.pParams->connectTime = now + 4000u;
+        Ble5_0_cmdBle5Initiator.pParams->endTime = now + 20000000u; /* 5s absolute */
+    }
 
     /* Reset command status */
     Ble5_0_cmdBle5Initiator.status = 0;
 
-    /* Run CMD_BLE5_INITIATOR — blocks until CONNECT_IND sent or cancelled.
-     * NO CMD_FS needed for BLE (channel field handles frequency).
-     * Uses RF_runCmd per Sniffle pattern (RadioWrapper.c:707). */
+    /* Run CMD_BLE5_INITIATOR — blocks until CONNECT_IND sent, timeout, or cancel.
+     * NO CMD_FS needed for BLE (channel field handles frequency). */
     RF_runCmd(s_rf_handle, (RF_Op *)&Ble5_0_cmdBle5Initiator, RF_PriorityNormal,
               &RadioIF_rfCallback, RF_EventRxEntryDone);
 

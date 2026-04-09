@@ -16,7 +16,6 @@
 /* clang-format off */
 #include DeviceFamily_constructPath(driverlib/rf_ble_cmd.h)
 #include DeviceFamily_constructPath(driverlib/rf_ble_mailbox.h)
-#include DeviceFamily_constructPath(driverlib/trng.h)
 /* clang-format on */
 #include <ti/drivers/rf/RF.h>
 
@@ -27,14 +26,21 @@ static uint16_t s_own_addr_u16[3];  /* 16-bit aligned for RF core */
 static uint16_t s_peer_addr_u16[3]; /* 16-bit aligned for RF core */
 
 /* ── Random number helpers ── */
+/* Simple xorshift32 PRNG seeded from RF_getCurrentTime().
+ * TRNG hangs because PERIPH power domain is not enabled in our TI-RTOS config.
+ * For connection parameters, a PRNG seeded from the RAT timer is sufficient. */
+static uint32_t s_prng_state;
+
 static uint32_t ble_conn_rand32(void) {
-    TRNGEnable();
-    while (!(TRNGStatusGet() & TRNG_NUMBER_READY)) {
-        /* spin — TRNG produces a number in ~1us */
+    if (s_prng_state == 0) {
+        s_prng_state = RF_getCurrentTime() ^ 0xDEADBEEFu;
     }
-    uint32_t val = (uint32_t)TRNGNumberGet(TRNG_LOW_WORD);
-    TRNGDisable();
-    return val;
+    uint32_t x = s_prng_state;
+    x ^= x << 13;
+    x ^= x >> 17;
+    x ^= x << 5;
+    s_prng_state = x;
+    return x;
 }
 
 static uint8_t ble_conn_rand_hop(void) {
@@ -168,10 +174,10 @@ BleConn_Result BleConn_initiate(const uint8_t *peerAddr, uint8_t peerAddrType,
     /* connectTime set by RadioIF_bleInitiate() just before RF_runCmd to avoid
      * stale timestamp after mode-switch delays. */
 
-    /* 5-second timeout — prevents deadlocking the UART task.
-     * RAT clock is 4 MHz, so 5s = 20,000,000 ticks. */
-    Ble5_0_cmdBle5Initiator.pParams->endTrigger.triggerType = TRIG_REL_START;
-    Ble5_0_cmdBle5Initiator.pParams->endTime = 20000000u; /* 5 seconds */
+    /* endTrigger + endTime set by RadioIF_bleInitiate() just before RF_runCmd
+     * using TRIG_ABSTIME (TRIG_REL_START doesn't work for initiator pParams). */
+    Ble5_0_cmdBle5Initiator.pParams->endTrigger.triggerType = TRIG_ABSTIME;
+    Ble5_0_cmdBle5Initiator.pParams->endTime = 0; /* set by RadioIF */
     Ble5_0_cmdBle5Initiator.pParams->timeoutTrigger.triggerType = TRIG_NEVER;
     Ble5_0_cmdBle5Initiator.pParams->timeoutTime = 0;
 

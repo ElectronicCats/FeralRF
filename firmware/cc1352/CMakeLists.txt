@@ -123,6 +123,7 @@ set(SYSBIOS_LIB ${TI_SDK_FULL}/kernel/tirtos7/packages/ti/sysbios/lib/gcc/m4f/sy
 
 set(APP_SOURCES
     ccfg.c
+    src/ble_conn.c
     src/command_processor.c
     src/control_task.c
     src/data_task.c

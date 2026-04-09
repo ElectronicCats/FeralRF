@@ -38,6 +38,8 @@ void RadioIF_init(void);
 
 /* 433 MHz boot handle — opened once at boot, never closed */
 #include <ti/drivers/rf/RF.h>
+#include <ti/devices/DeviceFamily.h>
+#include DeviceFamily_constructPath(driverlib/rf_mailbox.h)
 RF_Object *RadioIF_get433Object(void);
 void RadioIF_set433Handle(RF_Handle h);
 RF_Handle RadioIF_get433Handle(void);
@@ -74,6 +76,14 @@ void RadioIF_setBleAdvAddress(const uint8_t *addr);
 
 /* BLE connection initiation — runs CMD_BLE5_INITIATOR (blocking) */
 int RadioIF_bleInitiate(void);
+
+/* BLE central mode — run CMD_BLE5_MASTER for one connection event. */
+int RadioIF_bleCentral(uint8_t chan, uint32_t accessAddr, uint32_t crcInit,
+                       dataQueue_t *pTxQueue, uint32_t startTime,
+                       uint32_t endTime, uint32_t *pNumSent);
+
+/* Reset seqStat for initiator→central transition */
+void RadioIF_bleResetSeqStat(void);
 
 /* RF debug diagnostics */
 typedef struct {

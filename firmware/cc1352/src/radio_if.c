@@ -2295,6 +2295,78 @@ int RadioIF_bleInitiate(void) {
     }
 }
 
+int RadioIF_bleCentral(uint8_t chan, uint32_t accessAddr, uint32_t crcInit,
+                       dataQueue_t *pTxQueue, uint32_t startTime,
+                       uint32_t endTime, uint32_t *pNumSent) {
+    rfc_bleMasterSlaveOutput_t output = {0};
+
+    if (s_rf_handle == NULL || chan >= 37) {
+        return -2;
+    }
+
+    Ble5_0_cmdBle5Master.channel = chan;
+    Ble5_0_cmdBle5Master.whitening.init = 0x40 + chan;
+    Ble5_0_cmdBle5Master.whitening.bOverride = 1;
+    Ble5_0_cmdBle5Master.phyMode.mainMode = 0; /* 1M */
+    Ble5_0_cmdBle5Master.phyMode.coding = 0;
+    Ble5_0_cmdBle5Master.pOutput = &output;
+
+    Ble5_0_cmdBle5Master.pParams->pRxQ = &s_rf_data_queue;
+    Ble5_0_cmdBle5Master.pParams->pTxQ = pTxQueue;
+    Ble5_0_cmdBle5Master.pParams->accessAddress = accessAddr;
+    Ble5_0_cmdBle5Master.pParams->crcInit0 = crcInit & 0xFF;
+    Ble5_0_cmdBle5Master.pParams->crcInit1 = (crcInit >> 8) & 0xFF;
+    Ble5_0_cmdBle5Master.pParams->crcInit2 = (crcInit >> 16) & 0xFF;
+    Ble5_0_cmdBle5Master.pParams->maxRxPktLen = 0xFF;
+
+    Ble5_0_cmdBle5Master.pParams->rxConfig.bAutoFlushIgnored = 1;
+    Ble5_0_cmdBle5Master.pParams->rxConfig.bAutoFlushCrcErr = 1;
+    Ble5_0_cmdBle5Master.pParams->rxConfig.bAutoFlushEmpty = 0;
+    Ble5_0_cmdBle5Master.pParams->rxConfig.bIncludeLenByte = 1;
+    Ble5_0_cmdBle5Master.pParams->rxConfig.bIncludeCrc = 0;
+    Ble5_0_cmdBle5Master.pParams->rxConfig.bAppendRssi = 1;
+    Ble5_0_cmdBle5Master.pParams->rxConfig.bAppendStatus = 1;
+    Ble5_0_cmdBle5Master.pParams->rxConfig.bAppendTimestamp = 1;
+
+    if (startTime == 0) {
+        Ble5_0_cmdBle5Master.startTrigger.triggerType = TRIG_NOW;
+    } else {
+        Ble5_0_cmdBle5Master.startTrigger.triggerType = TRIG_ABSTIME;
+        Ble5_0_cmdBle5Master.startTrigger.pastTrig = 1;
+        Ble5_0_cmdBle5Master.startTime = startTime;
+    }
+
+    Ble5_0_cmdBle5Master.pParams->endTrigger.triggerType = TRIG_ABSTIME;
+    Ble5_0_cmdBle5Master.pParams->endTime = endTime;
+
+    Ble5_0_cmdBle5Master.status = 0;
+
+    RF_runCmd(s_rf_handle, (RF_Op *)&Ble5_0_cmdBle5Master, RF_PriorityNormal,
+              &RadioIF_rfCallback, RF_EventRxEntryDone);
+
+    *pNumSent = output.nTxEntryDone;
+
+    switch (Ble5_0_cmdBle5Master.status) {
+    case BLE_DONE_OK:
+    case BLE_DONE_ENDED:
+    case BLE_DONE_STOPPED:
+        return 0;
+    default:
+        return -1;
+    }
+}
+
+void RadioIF_bleResetSeqStat(void) {
+    Ble5_0_cmdBle5Master.pParams->seqStat.lastRxSn = 1;
+    Ble5_0_cmdBle5Master.pParams->seqStat.lastTxSn = 1;
+    Ble5_0_cmdBle5Master.pParams->seqStat.nextTxSn = 0;
+    Ble5_0_cmdBle5Master.pParams->seqStat.bFirstPkt = 1;
+    Ble5_0_cmdBle5Master.pParams->seqStat.bAutoEmpty = 0;
+    Ble5_0_cmdBle5Master.pParams->seqStat.bLlCtrlTx = 0;
+    Ble5_0_cmdBle5Master.pParams->seqStat.bLlCtrlAckRx = 0;
+    Ble5_0_cmdBle5Master.pParams->seqStat.bLlCtrlAckPending = 0;
+}
+
 bool RadioIF_startJamSession(uint8_t phy, uint8_t channel, int8_t power_dbm) {
     RF_Params rf_params;
     RF_Mode *mode;

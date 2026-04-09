@@ -124,6 +124,7 @@ set(SYSBIOS_LIB ${TI_SDK_FULL}/kernel/tirtos7/packages/ti/sysbios/lib/gcc/m4f/sy
 set(APP_SOURCES
     ccfg.c
     src/ble_conn.c
+    src/csa2.c
     src/command_processor.c
     src/control_task.c
     src/data_task.c
@@ -139,6 +140,7 @@ set(APP_SOURCES
     src/smartrf_ieee_15_4_0.c
     src/smartrf_prop_0.c
     src/task_event.c
+    src/tx_queue.c
 )
 
 # ─── TI Driver sources (common) ───

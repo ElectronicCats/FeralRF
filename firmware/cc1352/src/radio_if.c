@@ -19,6 +19,7 @@
 
 #include <ti/devices/DeviceFamily.h>
 /* clang-format off */
+#include DeviceFamily_constructPath(driverlib/rf_ble_mailbox.h)
 #include DeviceFamily_constructPath(driverlib/rf_common_cmd.h)
 #include DeviceFamily_constructPath(driverlib/rf_data_entry.h)
 #include DeviceFamily_constructPath(driverlib/sys_ctrl.h)
@@ -2221,6 +2222,56 @@ static bool RadioIF_executeJamTx(RF_Handle rf_handle, uint8_t phy, uint8_t chann
     }
 
     return false;
+}
+
+int RadioIF_bleInitiate(void) {
+    /* Ensure RF is in BLE mode */
+    if (s_rf_mode != RADIO_IF_RF_MODE_BLE) {
+        if (!RadioIF_switchRfMode(&Ble5_0_mode, (RF_RadioSetup *)&Ble5_0_cmdBle5RadioSetup)) {
+            return -3;
+        }
+        s_rf_mode = RADIO_IF_RF_MODE_BLE;
+    }
+
+    /* Stop any active RX */
+    if (s_rx_running) {
+        RadioIF_stopRx();
+    }
+
+    /* Point initiator RX queue to our data queue */
+    Ble5_0_cmdBle5Initiator.pParams->pRxQ = &s_rf_data_queue;
+
+    /* Reset command status */
+    Ble5_0_cmdBle5Initiator.status = 0;
+
+    /* Run CMD_BLE5_INITIATOR — blocks until CONNECT_IND sent or cancelled.
+     * NO CMD_FS needed for BLE (channel field handles frequency).
+     * Uses RF_runCmd per Sniffle pattern (RadioWrapper.c:707). */
+    RF_runCmd(s_rf_handle, (RF_Op *)&Ble5_0_cmdBle5Initiator, RF_PriorityNormal,
+              &RadioIF_rfCallback, RF_EventRxEntryDone);
+
+    /* Map status to result code (Sniffle RadioWrapper.c:719-736) */
+    switch (Ble5_0_cmdBle5Initiator.status) {
+    case BLE_DONE_CONNECT:
+        if (Ble5_0_cmdBle5Initiator.pParams->rxListenTime != 0) {
+            return 2; /* AUX connect */
+        }
+        return 1; /* CSA#2 legacy connect */
+
+    case BLE_DONE_CONNECT_CHSEL0:
+        return 0; /* CSA#1 connect */
+
+    case BLE_DONE_RXTIMEOUT:
+    case BLE_DONE_ENDED:
+    case BLE_DONE_STOPPED:
+        return -1; /* timeout / cancelled */
+
+    case BLE_DONE_NOSYNC:
+        return -2; /* no sync */
+
+    default:
+        return -3; /* RF error */
+    }
 }
 
 bool RadioIF_startJamSession(uint8_t phy, uint8_t channel, int8_t power_dbm) {

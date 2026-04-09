@@ -72,6 +72,9 @@ void RadioIF_setActiveScan(bool enabled);
 void RadioIF_getScannerStats(uint16_t *tx_req, uint16_t *rx_adv_ok, uint16_t *rx_rsp_ok);
 void RadioIF_setBleAdvAddress(const uint8_t *addr);
 
+/* BLE connection initiation — runs CMD_BLE5_INITIATOR (blocking) */
+int RadioIF_bleInitiate(void);
+
 /* RF debug diagnostics */
 typedef struct {
     uint8_t rf_handle_ok;     /* 1 if RF_open succeeded */

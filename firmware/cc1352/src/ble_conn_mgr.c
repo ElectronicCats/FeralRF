@@ -36,7 +36,7 @@
 #define CONN_INTERVAL_TO_TICKS(x) ((uint32_t)(x) * 5000u) /* 1.25ms * 4MHz */
 #define SUPERV_TO_TICKS(x) ((uint32_t)(x) * 40000u)       /* 10ms * 4MHz */
 #define TRANSMIT_WINDOW_DELAY 5000u                       /* 1.25ms in RAT ticks */
-#define ANCHOR_OFFSET 800u                                /* 200us guard before anchor */
+#define AO_TARG 2000u                                     /* 500us anchor offset (matches Sniffle) */
 
 /* ── Static state ── */
 static bool s_running;
@@ -153,9 +153,11 @@ void BleConnMgr_start(void) {
     s_hop_interval_ticks = CONN_INTERVAL_TO_TICKS(st->connInterval);
     s_superv_timeout_ticks = SUPERV_TO_TICKS(st->supervTimeout);
 
-    /* First anchor: connTime + interval (with bDynamicWinOffset=1,
-     * connectTime already includes TWD + WinOffset) */
-    s_next_hop_time = st->connTime + s_hop_interval_ticks;
+    /* Sniffle formula (RadioTask.c L467):
+     * nextHopTime = connTime - AO_TARG + hopIntervalTicks
+     * connTime = RAT time of CONNECT_IND TX from initiator output.
+     * First MASTER starts at curHopTime = connTime, ends at nextHopTime. */
+    s_next_hop_time = st->connTime - AO_TARG + s_hop_interval_ticks;
     s_last_rx_time = RF_getCurrentTime();
 
     if (st->useCsa2) {
@@ -190,10 +192,15 @@ bool BleConnMgr_poll(void) {
         return false;
     }
 
-    /* Wait until anchor point (sleep until ~100us before) */
+    /* Sniffle formula (RadioTask.c L481):
+     * curHopTime = nextHopTime - hopInterval + AO_TARG
+     * MASTER startTime = curHopTime, endTime = nextHopTime */
+    uint32_t curHopTime = s_next_hop_time - s_hop_interval_ticks + AO_TARG;
+
+    /* Wait until anchor point (sleep until ~500us before) */
     uint32_t now = RF_getCurrentTime();
-    uint32_t wait = s_next_hop_time - 400u - now; /* 400 ticks = 100us anchor offset */
-    if (wait < 0x80000000u && wait > 400u) {
+    uint32_t wait = curHopTime - now;
+    if (wait < 0x80000000u && wait > 2000u) {
         Task_sleep(wait / 40u);
     }
 
@@ -211,9 +218,8 @@ bool BleConnMgr_poll(void) {
     dataQueue_t txq;
     TXQueue_take(&txq);
 
-    /* Use ABSTIME: start slightly before anchor, end at anchor + interval */
-    uint32_t startTime = s_next_hop_time - 400u; /* 100us before anchor */
-    uint32_t endTime = s_next_hop_time + s_hop_interval_ticks;
+    uint32_t startTime = curHopTime;
+    uint32_t endTime = s_next_hop_time;
     uint32_t numSent = 0;
 
     int status = RadioIF_bleCentral(chan, st->accessAddr, st->crcInit, &txq,

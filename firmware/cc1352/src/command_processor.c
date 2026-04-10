@@ -8,6 +8,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "att_client.h"
 #include "ble_conn.h"
 #include "ble_conn_mgr.h"
 #include "control_task.h"
@@ -42,6 +43,9 @@
 #define CMD_CONNECT 0x40u
 #define CMD_DISCONNECT 0x41u
 #define CMD_CONN_STATUS 0x42u
+#define CMD_GATT_DISCOVER 0x43u
+#define CMD_GATT_READ 0x45u
+#define CMD_GATT_WRITE 0x46u
 
 /* Responses (match python/feralrf/enums.py) */
 #define RSP_ACK 0x80u
@@ -52,6 +56,12 @@
 /* BLE Connection responses */
 #define RSP_CONN_RESULT 0xA0u
 #define RSP_CONN_STATUS_R 0xA1u
+
+/* GATT responses */
+#define RSP_GATT_SERVICE 0xA2u
+#define RSP_GATT_CHAR 0xA3u
+#define RSP_GATT_READ_R 0xA4u
+#define RSP_GATT_DONE 0xA5u
 
 /* Error codes */
 #define ERR_INVALID_CMD 0x01u
@@ -110,6 +120,64 @@ static void send_ack(uint8_t seq) {
 static void send_error(uint8_t seq, uint8_t error_code) {
     uint8_t payload[1] = {error_code};
     send_response(RSP_ERROR, seq, payload, sizeof(payload));
+}
+
+/* ── GATT ATT callbacks ── */
+static uint8_t s_gatt_seq;
+
+static void gatt_on_service(uint16_t startHandle, uint16_t endHandle,
+                             const uint8_t *uuid, uint8_t uuidLen) {
+    uint8_t rsp[4 + 16]; /* max: 4 handles + 16-byte UUID */
+    rsp[0] = (uint8_t)(startHandle & 0xFF);
+    rsp[1] = (uint8_t)(startHandle >> 8);
+    rsp[2] = (uint8_t)(endHandle & 0xFF);
+    rsp[3] = (uint8_t)(endHandle >> 8);
+    if (uuidLen > 16) uuidLen = 16;
+    for (uint8_t i = 0; i < uuidLen; i++) rsp[4 + i] = uuid[i];
+    send_response(RSP_GATT_SERVICE, s_gatt_seq, rsp, 4u + uuidLen);
+}
+
+static void gatt_on_char(uint16_t handle, uint8_t properties,
+                          uint16_t valueHandle,
+                          const uint8_t *uuid, uint8_t uuidLen) {
+    uint8_t rsp[5 + 16];
+    rsp[0] = (uint8_t)(handle & 0xFF);
+    rsp[1] = (uint8_t)(handle >> 8);
+    rsp[2] = properties;
+    rsp[3] = (uint8_t)(valueHandle & 0xFF);
+    rsp[4] = (uint8_t)(valueHandle >> 8);
+    if (uuidLen > 16) uuidLen = 16;
+    for (uint8_t i = 0; i < uuidLen; i++) rsp[5 + i] = uuid[i];
+    send_response(RSP_GATT_CHAR, s_gatt_seq, rsp, 5u + uuidLen);
+}
+
+static void gatt_on_read(uint16_t handle, const uint8_t *data, uint8_t len) {
+    uint8_t rsp[2 + 23];
+    rsp[0] = (uint8_t)(handle & 0xFF);
+    rsp[1] = (uint8_t)(handle >> 8);
+    if (len > 23) len = 23;
+    for (uint8_t i = 0; i < len; i++) rsp[2 + i] = data[i];
+    send_response(RSP_GATT_READ_R, s_gatt_seq, rsp, 2u + len);
+}
+
+static void gatt_on_done(uint8_t status) {
+    uint8_t rsp[1] = {status};
+    send_response(RSP_GATT_DONE, s_gatt_seq, rsp, 1);
+}
+
+static bool gatt_callbacks_installed = false;
+
+static void ensure_gatt_callbacks(void) {
+    if (!gatt_callbacks_installed) {
+        AttClient_Callbacks cb = {
+            .onService = gatt_on_service,
+            .onChar = gatt_on_char,
+            .onRead = gatt_on_read,
+            .onDone = gatt_on_done,
+        };
+        AttClient_setCallbacks(&cb);
+        gatt_callbacks_installed = true;
+    }
 }
 
 static void send_info(uint8_t seq) {
@@ -398,7 +466,10 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
         const BleConn_State *st = BleConn_getState();
         uint16_t evts = BleConnMgr_getEventCount();
         int last_st = BleConnMgr_getLastStatus();
-        uint8_t rsp[9];
+        uint16_t l2cap_rx = BleConnMgr_getL2capRxCount();
+        uint8_t att_state = (uint8_t)AttClient_getState();
+        uint16_t total_rx = BleConnMgr_getTotalRxCount();
+        uint8_t rsp[14];
         rsp[0] = st->connected ? 1u : 0u;
         rsp[1] = (uint8_t)(st->connInterval & 0xFFu);
         rsp[2] = (uint8_t)((st->connInterval >> 8) & 0xFFu);
@@ -408,7 +479,75 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
         rsp[6] = (uint8_t)((evts >> 8) & 0xFFu);
         rsp[7] = (uint8_t)(last_st & 0xFFu);
         rsp[8] = (uint8_t)((last_st >> 8) & 0xFFu);
+        uint32_t tx_done = 0;
+        { extern uint32_t BleConnMgr_getTotalTxDone(void); tx_done = BleConnMgr_getTotalTxDone(); }
+        rsp[9] = (uint8_t)(tx_done & 0xFFu);
+        rsp[10] = (uint8_t)((tx_done >> 8) & 0xFFu);
+        rsp[11] = att_state;
+        rsp[12] = (uint8_t)(total_rx & 0xFFu);
+        rsp[13] = (uint8_t)((total_rx >> 8) & 0xFFu);
         send_response(RSP_CONN_STATUS_R, seq, rsp, sizeof(rsp));
+        return;
+    }
+
+    case CMD_GATT_DISCOVER: {
+        if (payload_len != 0u) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            return;
+        }
+        if (!BleConn_isConnected()) {
+            send_error(seq, ERR_INVALID_STATE);
+            return;
+        }
+        ensure_gatt_callbacks();
+        s_gatt_seq = seq;
+        if (!AttClient_startDiscover()) {
+            send_error(seq, ERR_INVALID_STATE);
+            return;
+        }
+        send_ack(seq);
+        return;
+    }
+
+    case CMD_GATT_READ: {
+        /* Payload: handle[2] */
+        if (payload_len != 2u) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            return;
+        }
+        if (!BleConn_isConnected()) {
+            send_error(seq, ERR_INVALID_STATE);
+            return;
+        }
+        ensure_gatt_callbacks();
+        s_gatt_seq = seq;
+        uint16_t handle = read_u16_le(payload);
+        if (!AttClient_startRead(handle)) {
+            send_error(seq, ERR_INVALID_STATE);
+            return;
+        }
+        send_ack(seq);
+        return;
+    }
+
+    case CMD_GATT_WRITE: {
+        /* Payload: handle[2] + data[N] */
+        if (payload_len < 3u) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            return;
+        }
+        if (!BleConn_isConnected()) {
+            send_error(seq, ERR_INVALID_STATE);
+            return;
+        }
+        ensure_gatt_callbacks();
+        s_gatt_seq = seq;
+        uint16_t handle = read_u16_le(payload);
+        if (!AttClient_startWrite(handle, &payload[2], (uint8_t)(payload_len - 2u))) {
+            send_error(seq, ERR_INVALID_STATE);
+            return;
+        }
+        send_ack(seq);
         return;
     }
 

@@ -10,6 +10,7 @@
  */
 
 #include "ble_conn_mgr.h"
+#include "att_client.h"
 #include "ble_conn.h"
 #include "csa2.h"
 #include "radio_if.h"
@@ -46,6 +47,9 @@ static uint32_t s_superv_timeout_ticks;
 static uint32_t s_next_hop_time;
 static uint32_t s_last_rx_time;
 static uint16_t s_event_counter;
+static uint16_t s_dbg_l2cap_rx_count;
+static uint16_t s_dbg_total_rx_count;
+static uint32_t s_dbg_total_tx_done;
 
 /* ── LL Control PDU handling ── */
 
@@ -116,6 +120,7 @@ static bool process_rx_packets(void) {
 
     while (RadioIF_popRxPacket(&pkt)) {
         got_data = true;
+        s_dbg_total_rx_count++;
 
         if (pkt.data_len < 2) {
             continue;
@@ -126,8 +131,11 @@ static bool process_rx_packets(void) {
         if (llid == 3 && pdu_len > 0) {
             /* LL Control PDU */
             handle_ll_ctrl(&pkt.data[2], pdu_len);
+        } else if ((llid == 1 || llid == 2) && pdu_len > 0) {
+            /* L2CAP data — route to ATT client */
+            s_dbg_l2cap_rx_count++;
+            AttClient_onL2capRx(&pkt.data[2], pdu_len);
         }
-        /* llid 1 or 2 = L2CAP data — Phase 3 will handle */
     }
 
     return got_data;
@@ -139,6 +147,19 @@ void BleConnMgr_init(void) {
     s_running = false;
     s_event_counter = 0;
     TXQueue_init();
+    AttClient_init();
+}
+
+uint16_t BleConnMgr_getL2capRxCount(void) {
+    return s_dbg_l2cap_rx_count;
+}
+
+uint16_t BleConnMgr_getTotalRxCount(void) {
+    return s_dbg_total_rx_count;
+}
+
+uint32_t BleConnMgr_getTotalTxDone(void) {
+    return s_dbg_total_tx_done;
 }
 
 void BleConnMgr_start(void) {
@@ -149,6 +170,9 @@ void BleConnMgr_start(void) {
     }
 
     s_event_counter = 0;
+    s_dbg_l2cap_rx_count = 0;
+    s_dbg_total_rx_count = 0;
+    s_dbg_total_tx_done = 0;
 
     s_hop_interval_ticks = CONN_INTERVAL_TO_TICKS(st->connInterval);
     s_superv_timeout_ticks = SUPERV_TO_TICKS(st->supervTimeout);
@@ -179,6 +203,7 @@ void BleConnMgr_start(void) {
 void BleConnMgr_stop(void) {
     s_running = false;
     s_event_counter = 0;
+    AttClient_reset();
 }
 
 bool BleConnMgr_poll(void) {
@@ -214,6 +239,9 @@ bool BleConnMgr_poll(void) {
 
     uint8_t chan = csa2_computeChannel(s_event_counter);
 
+    /* Queue pending ATT requests before building TX queue */
+    AttClient_poll();
+
     TXQueue_insert(0, TX_QUEUE_LLID_DATA_CONT, NULL);
     dataQueue_t txq;
     TXQueue_take(&txq);
@@ -225,8 +253,15 @@ bool BleConnMgr_poll(void) {
     int status = RadioIF_bleCentral(chan, st->accessAddr, st->crcInit, &txq,
                                     startTime, endTime, &numSent);
     s_last_status = status;
+    s_dbg_total_tx_done += numSent;
     TXQueue_flush(numSent);
-    RadioIF_poll();
+
+    /* Drain RF data queue into software RX queue, then reset for next event.
+     * RadioIF_poll() skips processing when s_rx_running=false (central mode).
+     * MUST reset queue after drain — RF core's pCurrEntry advances past consumed
+     * entries and won't re-check them even if we set status=PENDING. */
+    RadioIF_bleDrainRxQueue();
+    RadioIF_bleResetRxQueue();
 
     /* BLE_DONE_OK=0x1400, BLE_DONE_ENDED=0x1403, BLE_DONE_STOPPED=0x1404 */
     if (status == 0x1400 || status == 0x1403 || status == 0x1404) {

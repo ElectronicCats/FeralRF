@@ -2321,7 +2321,7 @@ int RadioIF_bleCentral(uint8_t chan, uint32_t accessAddr, uint32_t crcInit,
 
     Ble5_0_cmdBle5Master.pParams->rxConfig.bAutoFlushIgnored = 1;
     Ble5_0_cmdBle5Master.pParams->rxConfig.bAutoFlushCrcErr = 1;
-    Ble5_0_cmdBle5Master.pParams->rxConfig.bAutoFlushEmpty = 0;
+    Ble5_0_cmdBle5Master.pParams->rxConfig.bAutoFlushEmpty = 1;
     Ble5_0_cmdBle5Master.pParams->rxConfig.bIncludeLenByte = 1;
     Ble5_0_cmdBle5Master.pParams->rxConfig.bIncludeCrc = 0;
     Ble5_0_cmdBle5Master.pParams->rxConfig.bAppendRssi = 1;
@@ -2363,6 +2363,13 @@ void RadioIF_bleResetSeqStat(void) {
 
 void RadioIF_bleResetRxQueue(void) {
     RadioIF_resetRfDataQueue();
+}
+
+void RadioIF_bleDrainRxQueue(void) {
+    /* Process any pending RX entries from CMD_BLE5_MASTER.
+     * Called from BleConnMgr_poll() — s_rx_running is false during
+     * central mode, so RadioIF_poll() skips processing. */
+    RadioIF_processBlePackets();
 }
 
 bool RadioIF_startJamSession(uint8_t phy, uint8_t channel, int8_t power_dbm) {

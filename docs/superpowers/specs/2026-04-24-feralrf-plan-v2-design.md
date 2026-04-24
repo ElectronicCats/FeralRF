@@ -693,8 +693,8 @@ Preguntas que este plan deja abiertas. Se resuelven en la fase indicada.
 
 | # | Decisión | Resuelto en | Responsable |
 |---|----------|-------------|-------------|
-| D1 | Qué peripheral real usar para validar GATT (móvil / ESP32 / Pi) | F8 | Sabas |
-| D2 | Si `test_connect.py` vive en raíz del repo o en `python/examples/lab/` | F8 | Sabas |
+| D1 | ~~Qué peripheral real usar para validar GATT~~ **Resuelto 2026-04-24:** smartphone como primario (T12), ESP32/nRF52840 como segundo peripheral (T13). | F8 ✅ | Sabas |
+| D2 | ~~Ubicación final de `test_connect.py`~~ **Resuelto 2026-04-24:** `python/examples/lab/demo_ble_connect_gatt.py` (consistente con `demo_ble_analyzer.py`, `demo_ble_clone.py`). | F8 ✅ | Sabas |
 | D3 | Si BLE Scanner (F12) va antes o después de los ports (F10 / F11) | F8 (al arrancar F11 o F12) | Sabas |
 | D4 | VID / PID del dispositivo USB (cambiar para distinguir v2.0 o mantener) | F19 | Sabas |
 | D5 | Versionado Python package (`feralrf` 0.2.0 → 1.0.0 con firmware v2.0?) | F19 | Sabas |

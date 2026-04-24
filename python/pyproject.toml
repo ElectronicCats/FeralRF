@@ -53,6 +53,10 @@ include = ["feralrf*"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "hardware: hardware-in-the-loop test (requires a FeralRF device)",
+    "hardware_ble: integration test requires a FeralRF device and a real BLE peripheral",
+]
 
 [tool.black]
 line-length = 100

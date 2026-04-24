@@ -150,3 +150,41 @@ class CommandBuilder:
     def spectrum_stop() -> bytes:
         """No payload for SPECTRUM_STOP"""
         return b""
+
+    @staticmethod
+    def ble_connect(addr_le: bytes, addr_type: int) -> bytes:
+        """Payload for CMD_CONNECT: 6-byte LE address + 1-byte address type.
+
+        Args:
+            addr_le: Peer address in little-endian wire order
+                (reversed of AA:BB:CC:DD:EE:FF).
+            addr_type: 0 for public, 1 for random.
+        """
+        if len(addr_le) != 6:
+            raise ValueError("addr_le must be exactly 6 bytes")
+        return bytes(addr_le) + bytes([addr_type & 0xFF])
+
+    @staticmethod
+    def ble_disconnect() -> bytes:
+        """No payload for CMD_DISCONNECT."""
+        return b""
+
+    @staticmethod
+    def conn_status() -> bytes:
+        """No payload for CMD_CONN_STATUS."""
+        return b""
+
+    @staticmethod
+    def gatt_discover() -> bytes:
+        """No payload for CMD_GATT_DISCOVER."""
+        return b""
+
+    @staticmethod
+    def gatt_read(handle: int) -> bytes:
+        """Payload for CMD_GATT_READ: 2-byte LE attribute handle."""
+        return struct.pack("<H", handle & 0xFFFF)
+
+    @staticmethod
+    def gatt_write(handle: int, data: bytes) -> bytes:
+        """Payload for CMD_GATT_WRITE: 2-byte LE handle + value bytes."""
+        return struct.pack("<H", handle & 0xFFFF) + bytes(data)

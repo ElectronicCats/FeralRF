@@ -257,3 +257,49 @@ def test_conn_status_parses_extended_payload():
     assert status.tx_done == 7
     assert status.att_state == 3
     assert status.total_rx == 12
+
+
+def test_gatt_discover_collects_services_and_chars_until_done():
+    radio, fake = _radio_with_fake_serial()
+
+    # Firmware echoes the request's seq on every stream frame
+    # (s_gatt_seq = seq). First command uses seq=0.
+    fake.queue_response(Response.ACK, seq=0)
+    fake.queue_response(
+        Response.GATT_SERVICE,
+        seq=0,
+        payload=struct.pack("<HH", 0x0001, 0x0005) + b"\x00\x18",
+    )
+    fake.queue_response(
+        Response.GATT_CHAR,
+        seq=0,
+        payload=struct.pack("<HBH", 0x0002, 0x02, 0x0003) + b"\x00\x2A",
+    )
+    fake.queue_response(
+        Response.GATT_SERVICE,
+        seq=0,
+        payload=struct.pack("<HH", 0x0010, 0x0014) + b"\x0F\x18",
+    )
+    fake.queue_response(
+        Response.GATT_CHAR,
+        seq=0,
+        payload=struct.pack("<HBH", 0x0011, 0x10, 0x0012) + b"\x19\x2A",
+    )
+    fake.queue_response(Response.GATT_DONE, seq=0, payload=b"\x00")
+
+    result = radio.gatt_discover(timeout=5.0)
+
+    assert isinstance(result, GattDiscoveryResult)
+    assert len(result.services) == 2
+    assert len(result.characteristics) == 2
+    assert result.services[0].start_handle == 0x0001
+    assert result.services[0].uuid == b"\x00\x18"
+    assert result.characteristics[0].properties == 0x02
+    assert result.status == 0
+
+
+def test_gatt_discover_raises_on_error_before_done():
+    radio, fake = _radio_with_fake_serial()
+    fake.queue_response(Response.ERROR, seq=0, payload=b"\x05")
+    with pytest.raises(CommandError):
+        radio.gatt_discover(timeout=1.0)

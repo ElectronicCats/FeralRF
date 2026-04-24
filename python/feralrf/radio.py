@@ -604,6 +604,79 @@ class Radio:
             total_rx=total_rx,
         )
 
+    def gatt_discover(self, timeout: float = 15.0) -> "GattDiscoveryResult":
+        """Issue CMD_GATT_DISCOVER and collect the streamed services + chars.
+
+        Firmware responds with:
+            1. RSP_ACK (acknowledge discovery started)
+            2. Interleaved RSP_GATT_SERVICE / RSP_GATT_CHAR
+            3. RSP_GATT_DONE with status byte
+        All stream frames carry the original request's seq
+        (firmware sets s_gatt_seq = seq).
+        """
+        self._send_command(Command.GATT_DISCOVER, CommandBuilder.gatt_discover())
+
+        cmd_id, _seq, payload = self._read_response(
+            timeout=min(timeout, 3.0),
+            expected={Response.ACK, Response.ERROR},
+        )
+        if cmd_id == Response.ERROR:
+            raise CommandError("GATT_DISCOVER failed", payload[0] if payload else 0)
+        if cmd_id != Response.ACK:
+            raise ProtocolError(f"Unexpected response to GATT_DISCOVER: 0x{cmd_id:02X}")
+
+        services: list = []
+        characteristics: list = []
+        status = 0xFF
+        deadline = time.monotonic() + timeout
+
+        while time.monotonic() < deadline:
+            remaining = deadline - time.monotonic()
+            cmd_id, _seq, payload = self._read_response(
+                timeout=remaining,
+                expected={
+                    Response.GATT_SERVICE,
+                    Response.GATT_CHAR,
+                    Response.GATT_DONE,
+                    Response.CONN_STATUS,
+                    Response.ERROR,
+                },
+            )
+
+            if cmd_id == Response.GATT_SERVICE:
+                if len(payload) < 6:
+                    raise ProtocolError(f"GATT_SERVICE payload too short: {len(payload)}")
+                start_h = int.from_bytes(payload[0:2], "little")
+                end_h = int.from_bytes(payload[2:4], "little")
+                services.append(
+                    GattService(start_handle=start_h, end_handle=end_h, uuid=bytes(payload[4:]))
+                )
+            elif cmd_id == Response.GATT_CHAR:
+                if len(payload) < 7:
+                    raise ProtocolError(f"GATT_CHAR payload too short: {len(payload)}")
+                handle = int.from_bytes(payload[0:2], "little")
+                props = payload[2]
+                val_handle = int.from_bytes(payload[3:5], "little")
+                characteristics.append(
+                    GattCharacteristic(
+                        handle=handle,
+                        properties=props,
+                        value_handle=val_handle,
+                        uuid=bytes(payload[5:]),
+                    )
+                )
+            elif cmd_id == Response.GATT_DONE:
+                status = payload[0] if payload else 0xFF
+                break
+            elif cmd_id == Response.CONN_STATUS:
+                continue
+            elif cmd_id == Response.ERROR:
+                raise CommandError("GATT_DISCOVER stream error", payload[0] if payload else 0)
+
+        return GattDiscoveryResult(
+            services=services, characteristics=characteristics, status=status,
+        )
+
     def set_ble_scan_mode(self, active: bool = True) -> None:
         """Set BLE scan mode: passive or active.
 

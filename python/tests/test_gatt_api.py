@@ -215,3 +215,45 @@ def test_ble_disconnect_sends_cmd_disconnect_and_accepts_ack():
     assert len(frames) == 1
     assert frames[0][0] == Command.DISCONNECT
     assert frames[0][2] == b""
+
+
+def test_conn_status_parses_short_payload():
+    radio, fake = _radio_with_fake_serial()
+    payload = (
+        bytes([1])
+        + struct.pack("<H", 40)
+        + b"\x00\x00"
+        + struct.pack("<H", 5)
+        + struct.pack("<H", 0x1400)
+    )
+    assert len(payload) == 9
+    fake.queue_response(Response.CONN_STATUS, seq=0, payload=payload)
+
+    status = radio.conn_status(timeout=1.0)
+    assert status.connected is True
+    assert status.interval == 40
+    assert status.events == 5
+    assert status.last_status == 0x1400
+    assert status.tx_done is None
+    assert status.att_state is None
+
+
+def test_conn_status_parses_extended_payload():
+    radio, fake = _radio_with_fake_serial()
+    payload = (
+        bytes([1])
+        + struct.pack("<H", 40)
+        + b"\x00\x00"
+        + struct.pack("<H", 5)
+        + struct.pack("<H", 0x1400)
+        + struct.pack("<H", 7)
+        + bytes([3])
+        + struct.pack("<H", 12)
+    )
+    assert len(payload) == 14
+    fake.queue_response(Response.CONN_STATUS, seq=0, payload=payload)
+
+    status = radio.conn_status(timeout=1.0)
+    assert status.tx_done == 7
+    assert status.att_state == 3
+    assert status.total_rx == 12

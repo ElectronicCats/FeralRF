@@ -564,6 +564,46 @@ class Radio:
         if cmd_id != Response.ACK:
             raise ProtocolError(f"Unexpected response to DISCONNECT: 0x{cmd_id:02X}")
 
+    def conn_status(self, timeout: float = 2.0) -> "ConnectionStatus":
+        """Issue CMD_CONN_STATUS and return the parsed ConnectionStatus.
+
+        The firmware always returns at least 9 bytes. The extra F7 debug
+        fields (tx_done, att_state, total_rx) are optional and populated
+        only when the firmware includes them.
+        """
+        self._send_command(Command.CONN_STATUS, CommandBuilder.conn_status())
+        cmd_id, _seq, payload = self._read_response(
+            timeout=timeout,
+            expected={Response.CONN_STATUS, Response.ERROR},
+        )
+        if cmd_id == Response.ERROR:
+            raise CommandError("CONN_STATUS failed", payload[0] if payload else 0)
+        if cmd_id != Response.CONN_STATUS:
+            raise ProtocolError(f"Unexpected response to CONN_STATUS: 0x{cmd_id:02X}")
+        if len(payload) < 9:
+            raise ProtocolError(f"CONN_STATUS payload too short: {len(payload)}")
+
+        connected = bool(payload[0])
+        interval = int.from_bytes(payload[1:3], "little")
+        events = int.from_bytes(payload[5:7], "little")
+        last_status = int.from_bytes(payload[7:9], "little")
+
+        tx_done = att_state = total_rx = None
+        if len(payload) >= 14:
+            tx_done = int.from_bytes(payload[9:11], "little")
+            att_state = payload[11]
+            total_rx = int.from_bytes(payload[12:14], "little")
+
+        return ConnectionStatus(
+            connected=connected,
+            interval=interval,
+            events=events,
+            last_status=last_status,
+            tx_done=tx_done,
+            att_state=att_state,
+            total_rx=total_rx,
+        )
+
     def set_ble_scan_mode(self, active: bool = True) -> None:
         """Set BLE scan mode: passive or active.
 

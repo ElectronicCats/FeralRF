@@ -677,6 +677,53 @@ class Radio:
             services=services, characteristics=characteristics, status=status,
         )
 
+    def gatt_read(self, handle: int, timeout: float = 5.0) -> bytes:
+        """Issue CMD_GATT_READ for the given attribute handle; return the value bytes."""
+        self._send_command(Command.GATT_READ, CommandBuilder.gatt_read(handle))
+
+        cmd_id, _seq, payload = self._read_response(
+            timeout=min(timeout, 3.0),
+            expected={Response.ACK, Response.ERROR},
+        )
+        if cmd_id == Response.ERROR:
+            raise CommandError("GATT_READ failed", payload[0] if payload else 0)
+        if cmd_id != Response.ACK:
+            raise ProtocolError(f"Unexpected response to GATT_READ: 0x{cmd_id:02X}")
+
+        cmd_id, _seq, payload = self._read_response(
+            timeout=timeout,
+            expected={Response.GATT_READ_VALUE, Response.GATT_DONE, Response.ERROR},
+        )
+        if cmd_id == Response.ERROR:
+            raise CommandError("GATT_READ value error", payload[0] if payload else 0)
+        if cmd_id == Response.GATT_DONE:
+            status = payload[0] if payload else 0xFF
+            raise CommandError("GATT_READ done without value", status)
+        if len(payload) < 2:
+            raise ProtocolError(f"GATT_READ_VALUE payload too short: {len(payload)}")
+        return bytes(payload[2:])
+
+    def gatt_write(self, handle: int, data: bytes, timeout: float = 5.0) -> int:
+        """Issue CMD_GATT_WRITE; return the firmware status byte (0 = OK)."""
+        self._send_command(Command.GATT_WRITE, CommandBuilder.gatt_write(handle, data))
+
+        cmd_id, _seq, payload = self._read_response(
+            timeout=min(timeout, 3.0),
+            expected={Response.ACK, Response.ERROR},
+        )
+        if cmd_id == Response.ERROR:
+            raise CommandError("GATT_WRITE failed", payload[0] if payload else 0)
+        if cmd_id != Response.ACK:
+            raise ProtocolError(f"Unexpected response to GATT_WRITE: 0x{cmd_id:02X}")
+
+        cmd_id, _seq, payload = self._read_response(
+            timeout=timeout,
+            expected={Response.GATT_DONE, Response.ERROR},
+        )
+        if cmd_id == Response.ERROR:
+            raise CommandError("GATT_WRITE ack error", payload[0] if payload else 0)
+        return payload[0] if payload else 0xFF
+
     def set_ble_scan_mode(self, active: bool = True) -> None:
         """Set BLE scan mode: passive or active.
 

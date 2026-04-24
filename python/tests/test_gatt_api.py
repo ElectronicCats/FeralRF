@@ -303,3 +303,23 @@ def test_gatt_discover_raises_on_error_before_done():
     fake.queue_response(Response.ERROR, seq=0, payload=b"\x05")
     with pytest.raises(CommandError):
         radio.gatt_discover(timeout=1.0)
+
+
+def test_gatt_read_returns_value_bytes():
+    radio, fake = _radio_with_fake_serial()
+    fake.queue_response(Response.ACK, seq=0)
+    fake.queue_response(
+        Response.GATT_READ_VALUE,
+        seq=0,
+        payload=struct.pack("<H", 0x0003) + b"Device42",
+    )
+    value = radio.gatt_read(0x0003, timeout=3.0)
+    assert value == b"Device42"
+
+
+def test_gatt_write_returns_status_byte():
+    radio, fake = _radio_with_fake_serial()
+    fake.queue_response(Response.ACK, seq=0)
+    fake.queue_response(Response.GATT_DONE, seq=0, payload=b"\x00")
+    status = radio.gatt_write(0x0010, b"\xDE\xAD", timeout=3.0)
+    assert status == 0

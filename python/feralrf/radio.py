@@ -195,7 +195,13 @@ class Radio:
         devices = []
         for port in serial.tools.list_ports.comports():
             # CatSniffer typically shows as USB serial
-            if port.vid in (0x2E8A, 0x2341, 0x1A86, 0x10C4):
+            # 0x1209 = CatSniffer v3 (Electronic Cats VID, Cat-Bridge)
+            if port.vid in (0x2E8A, 0x2341, 0x1A86, 0x10C4, 0x1209):
+                # For CatSniffer v3, only the Cat-Bridge CDC is the radio link.
+                if port.vid == 0x1209:
+                    desc = (port.description or "") + " " + (port.product or "")
+                    if "Bridge" not in desc:
+                        continue
                 devices.append(
                     {
                         "port": port.device,

@@ -55,6 +55,16 @@ class Command(IntEnum):
     JAM_CONTINUOUS = 0x30
     JAM_STOP = 0x33
 
+    # BLE Connection
+    CONNECT = 0x40
+    DISCONNECT = 0x41
+    CONN_STATUS = 0x42
+
+    # GATT
+    GATT_DISCOVER = 0x43
+    GATT_READ = 0x45
+    GATT_WRITE = 0x46
+
 
 class Response(IntEnum):
     """Response IDs"""
@@ -64,6 +74,16 @@ class Response(IntEnum):
     RX_PACKET = 0x90
     STATS = 0x93
     INFO = 0x94
+
+    # BLE Connection
+    CONN_RESULT = 0xA0
+    CONN_STATUS = 0xA1
+
+    # GATT
+    GATT_SERVICE = 0xA2
+    GATT_CHAR = 0xA3
+    GATT_READ_VALUE = 0xA4
+    GATT_DONE = 0xA5
 
 
 STABLE_COMMANDS = (

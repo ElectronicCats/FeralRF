@@ -524,6 +524,46 @@ class Radio:
         addr_bytes = bytes(int(p, 16) for p in reversed(parts))
         self.set_ble_addr(addr_bytes)
 
+    def ble_connect(
+        self, addr_le: bytes, addr_type: int, timeout: float = 8.0
+    ) -> "ConnectionResult":
+        """Issue CMD_CONNECT as BLE central; blocks until RSP_CONN_RESULT.
+
+        Args:
+            addr_le: 6-byte peer address in little-endian wire order
+                (reversed of AA:BB:CC:DD:EE:FF).
+            addr_type: 0 for public, 1 for random.
+            timeout: Seconds to wait for RSP_CONN_RESULT (firmware initiator
+                may block up to 5 s per connect attempt).
+        """
+        self._send_command(
+            Command.CONNECT,
+            CommandBuilder.ble_connect(addr_le, addr_type),
+        )
+        cmd_id, _seq, payload = self._read_response(
+            timeout=timeout,
+            expected={Response.CONN_RESULT, Response.ERROR},
+        )
+        if cmd_id == Response.ERROR:
+            raise CommandError("CONNECT failed", payload[0] if payload else 0)
+        if cmd_id != Response.CONN_RESULT:
+            raise ProtocolError(f"Unexpected response to CONNECT: 0x{cmd_id:02X}")
+        if not payload:
+            raise ProtocolError("CONN_RESULT payload empty")
+        return ConnectionResult(result=payload[0])
+
+    def ble_disconnect(self, timeout: float = 2.0) -> None:
+        """Issue CMD_DISCONNECT; firmware returns to idle."""
+        self._send_command(Command.DISCONNECT, CommandBuilder.ble_disconnect())
+        cmd_id, _seq, payload = self._read_response(
+            timeout=timeout,
+            expected={Response.ACK, Response.ERROR},
+        )
+        if cmd_id == Response.ERROR:
+            raise CommandError("DISCONNECT failed", payload[0] if payload else 0)
+        if cmd_id != Response.ACK:
+            raise ProtocolError(f"Unexpected response to DISCONNECT: 0x{cmd_id:02X}")
+
     def set_ble_scan_mode(self, active: bool = True) -> None:
         """Set BLE scan mode: passive or active.
 

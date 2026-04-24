@@ -109,3 +109,109 @@ def test_gatt_discovery_result_is_empty_by_default():
     assert res.services == []
     assert res.characteristics == []
     assert res.status == 0
+
+
+# --- Radio method tests with FakeSerial ---
+
+import struct  # noqa: E402
+from typing import List, Optional, Tuple  # noqa: E402
+
+from feralrf.exceptions import CommandError  # noqa: E402
+from feralrf.protocol import build_frame, cobs_decode, parse_frame  # noqa: E402
+from feralrf.radio import Radio  # noqa: E402
+
+
+class FakeSerial:
+    """Minimal serial stand-in for Radio unit tests.
+
+    Captures frames written by the Radio and plays back pre-canned
+    response frames on read. Each call to `queue_response()` adds one
+    COBS-delimited frame to the read buffer.
+    """
+
+    def __init__(self) -> None:
+        self.is_open = True
+        self.written: bytearray = bytearray()
+        self._read_buf: bytearray = bytearray()
+        self.timeout: Optional[float] = None
+
+    def write(self, data: bytes) -> int:
+        self.written.extend(data)
+        return len(data)
+
+    def flush(self) -> None:
+        pass
+
+    def read(self, n: int = 1) -> bytes:
+        if not self._read_buf:
+            return b""
+        out = bytes(self._read_buf[:n])
+        del self._read_buf[:n]
+        return out
+
+    def reset_input_buffer(self) -> None:
+        self._read_buf.clear()
+
+    def reset_output_buffer(self) -> None:
+        self.written.clear()
+
+    def close(self) -> None:
+        self.is_open = False
+
+    def queue_response(self, cmd_id: int, seq: int, payload: bytes = b"") -> None:
+        self._read_buf.extend(build_frame(cmd_id, seq, payload))
+
+    def written_frames(self) -> List[Tuple[int, int, bytes]]:
+        frames: List[Tuple[int, int, bytes]] = []
+        buf = bytearray()
+        for b in self.written:
+            if b == 0x00:
+                if buf:
+                    decoded = cobs_decode(bytes(buf))
+                    frames.append(parse_frame(decoded))
+                buf = bytearray()
+            else:
+                buf.append(b)
+        return frames
+
+
+def _radio_with_fake_serial() -> Tuple[Radio, FakeSerial]:
+    radio = Radio(port="/dev/null")
+    fake = FakeSerial()
+    radio._serial = fake  # type: ignore[assignment]
+    return radio, fake
+
+
+def test_ble_connect_sends_correct_frame_and_parses_result():
+    radio, fake = _radio_with_fake_serial()
+    addr_le = b"\x01\xEE\xDD\xCC\xBB\xAA"
+
+    fake.queue_response(Response.CONN_RESULT, seq=0, payload=b"\x00")
+
+    result = radio.ble_connect(addr_le, addr_type=1, timeout=1.0)
+
+    assert isinstance(result, ConnectionResult)
+    assert result.is_ok
+    frames = fake.written_frames()
+    assert len(frames) == 1
+    cmd_id, _seq, payload = frames[0]
+    assert cmd_id == Command.CONNECT
+    assert payload == addr_le + b"\x01"
+
+
+def test_ble_connect_returns_nonzero_on_timeout_code():
+    radio, fake = _radio_with_fake_serial()
+    fake.queue_response(Response.CONN_RESULT, seq=0, payload=b"\x01")
+    result = radio.ble_connect(b"\x01\xEE\xDD\xCC\xBB\xAA", addr_type=1, timeout=1.0)
+    assert result.result == 1
+    assert not result.is_ok
+
+
+def test_ble_disconnect_sends_cmd_disconnect_and_accepts_ack():
+    radio, fake = _radio_with_fake_serial()
+    fake.queue_response(Response.ACK, seq=0)
+    radio.ble_disconnect(timeout=1.0)
+    frames = fake.written_frames()
+    assert len(frames) == 1
+    assert frames[0][0] == Command.DISCONNECT
+    assert frames[0][2] == b""

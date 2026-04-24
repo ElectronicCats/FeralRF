@@ -323,3 +323,13 @@ def test_gatt_write_returns_status_byte():
     fake.queue_response(Response.GATT_DONE, seq=0, payload=b"\x00")
     status = radio.gatt_write(0x0010, b"\xDE\xAD", timeout=3.0)
     assert status == 0
+
+
+def test_gatt_methods_are_declared_stable():
+    assert "ble_connect" in Radio.STABLE_METHODS
+    assert "ble_disconnect" in Radio.STABLE_METHODS
+    assert "conn_status" in Radio.STABLE_METHODS
+    assert "gatt_discover" in Radio.STABLE_METHODS
+    assert "gatt_read" in Radio.STABLE_METHODS
+    assert "gatt_write" in Radio.STABLE_METHODS
+    assert "gatt_discovery" not in Radio.PENDING_FEATURES

@@ -132,11 +132,12 @@ class Radio:
             stop_rx, transmit, transmit_frame, transmit_burst,
             transmit_continuous, stop_transmit, get_stats, configure_prop,
             set_ble_addr, set_ble_addr_str, set_ble_scan_mode, set_adv_hop,
-            reset_device.
+            reset_device, ble_connect, ble_disconnect, conn_status,
+            gatt_discover, gatt_read, gatt_write.
         Experimental:
             start_jam, stop_jam.
         Pending:
-            spectrum helpers, GATT discovery, non-BLE attack helpers in host.
+            spectrum helpers, non-BLE attack helpers in host.
     """
 
     CAPABILITY_RX_STATS = 0x01
@@ -162,6 +163,12 @@ class Radio:
         "set_ble_scan_mode",
         "set_adv_hop",
         "reset_device",
+        "ble_connect",
+        "ble_disconnect",
+        "conn_status",
+        "gatt_discover",
+        "gatt_read",
+        "gatt_write",
     )
     EXPERIMENTAL_METHODS = (
         "start_jam",
@@ -169,8 +176,6 @@ class Radio:
     )
     PENDING_FEATURES = (
         "spectrum",
-        "gatt_discovery",
-        "initiator_mode",
     )
 
     def __init__(self, port: Optional[str] = None, baudrate: int = 921600):

@@ -20,7 +20,17 @@ from feralrf.enums import (
 )
 from feralrf.exceptions import CommandError, ConnectionError, FeralRFError, ProtocolError
 from feralrf.presets import PROP_PRESETS
-from feralrf.radio import DeviceInfo, DeviceStats, Packet, Radio
+from feralrf.radio import (
+    ConnectionResult,
+    ConnectionStatus,
+    DeviceInfo,
+    DeviceStats,
+    GattCharacteristic,
+    GattDiscoveryResult,
+    GattService,
+    Packet,
+    Radio,
+)
 
 __version__ = "0.2.0"
 __author__ = "Electronic Cats"
@@ -30,6 +40,11 @@ __all__ = [
     "Packet",
     "DeviceInfo",
     "DeviceStats",
+    "ConnectionResult",
+    "ConnectionStatus",
+    "GattService",
+    "GattCharacteristic",
+    "GattDiscoveryResult",
     "PHY",
     "Command",
     "Response",

@@ -54,6 +54,74 @@ class DeviceStats:
     ll_kind_data: Optional[int] = None
 
 
+@dataclass
+class ConnectionResult:
+    """Result of a BLE CMD_CONNECT attempt.
+
+    Result codes mirror the firmware:
+        0: OK
+        1: TIMEOUT
+        2: NO_SYNC
+        3: RF_ERR
+    """
+
+    result: int
+
+    @property
+    def is_ok(self) -> bool:
+        return self.result == 0
+
+
+@dataclass
+class ConnectionStatus:
+    """Snapshot of the current BLE central connection.
+
+    Fields after `last_status` are only populated when the firmware
+    includes the extended debug block (F7 telemetry; may be removed
+    after F8 validation).
+    """
+
+    connected: bool
+    interval: int
+    events: int
+    last_status: int
+    tx_done: Optional[int] = None
+    att_state: Optional[int] = None
+    total_rx: Optional[int] = None
+
+
+@dataclass
+class GattService:
+    """A GATT primary service discovered on the peer.
+
+    uuid is the raw LE bytes as reported by the peer: 2 bytes for a
+    16-bit UUID, 16 bytes for a full UUID.
+    """
+
+    start_handle: int
+    end_handle: int
+    uuid: bytes
+
+
+@dataclass
+class GattCharacteristic:
+    """A GATT characteristic discovered on the peer."""
+
+    handle: int
+    properties: int
+    value_handle: int
+    uuid: bytes
+
+
+@dataclass
+class GattDiscoveryResult:
+    """Aggregated output of a full gatt_discover() call."""
+
+    services: list
+    characteristics: list
+    status: int
+
+
 class Radio:
     """
     Synchronous Radio interface for FeralRF.

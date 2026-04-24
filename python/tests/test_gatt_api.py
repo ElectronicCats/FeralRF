@@ -61,3 +61,51 @@ def test_gatt_write_payload_is_handle_plus_data():
 
 def test_gatt_write_allows_empty_data():
     assert CommandBuilder.gatt_write(0x0010, b"") == b"\x10\x00"
+
+
+# --- Dataclass tests ---
+
+from feralrf.radio import (  # noqa: E402
+    ConnectionResult,
+    ConnectionStatus,
+    GattCharacteristic,
+    GattDiscoveryResult,
+    GattService,
+)
+
+
+def test_connection_result_dataclass():
+    r = ConnectionResult(result=0)
+    assert r.result == 0
+    assert r.is_ok
+
+
+def test_connection_result_is_ok_false_when_nonzero():
+    assert ConnectionResult(result=1).is_ok is False
+
+
+def test_connection_status_minimum_fields():
+    s = ConnectionStatus(connected=True, interval=40, events=3, last_status=0x1400)
+    assert s.connected is True
+    assert s.interval == 40
+
+
+def test_gatt_service_fields():
+    svc = GattService(start_handle=0x0001, end_handle=0x0005, uuid=b"\x00\x18")
+    assert svc.start_handle == 0x0001
+    assert svc.end_handle == 0x0005
+    assert svc.uuid == b"\x00\x18"
+
+
+def test_gatt_characteristic_fields():
+    ch = GattCharacteristic(handle=0x0002, properties=0x02, value_handle=0x0003, uuid=b"\x00\x2A")
+    assert ch.handle == 0x0002
+    assert ch.properties == 0x02
+    assert ch.value_handle == 0x0003
+
+
+def test_gatt_discovery_result_is_empty_by_default():
+    res = GattDiscoveryResult(services=[], characteristics=[], status=0)
+    assert res.services == []
+    assert res.characteristics == []
+    assert res.status == 0

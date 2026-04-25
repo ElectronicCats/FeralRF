@@ -230,9 +230,9 @@ Viven en `firmware/cc1352/smartrf_settings/` mezclados con configs generadas. En
 
 ---
 
-## 5. Plan por fases (F0 → F19)
+## 5. Plan por fases (F0 → F19, + F8A insertada 2026-04-24)
 
-**Leyenda estados:** ✅ completa · 🟡 construida sin validar · ⚠️ parcial (issues abiertos) · 🔜 pendiente
+**Leyenda estados:** ✅ completa · 🟡 construida sin validar / bloqueada por prereq · ⚠️ parcial (issues abiertos) · 🔜 pendiente
 
 **Plantilla por fase:**
 ```
@@ -348,16 +348,44 @@ Viven en `firmware/cc1352/smartrf_settings/` mezclados con configs generadas. En
 
 ### BLOQUE B — Consolidación TI-RTOS
 
-### F8 — Validar GATT end-to-end 🔜
+### F8A — BLE Central rewrite Sniffle-style 🔜 (BLOQUEA F8)
+
+**Agregada 2026-04-24** tras descubrir que el `CMD_BLE5_INITIATOR` de TI no entrega un `connTime` compatible con el anchor que el peripheral espera — la conexión se cae al primer master event (`BLE_DONE_NOSYNC = 0x1402`). Validado contra CH573 `DC:32:62:8D:E1:09`: Sniffle firmware conecta limpio en el mismo board; FeralRF falla incluso con sweep completo de WinOffset en 1.25 ms.
 
 **Prereq:** F7
+**Branch:** `feature/f8a-ble-central-sniffle`
+**Tag al cerrar:** `v2.0-f8a`
+
+**Entregables firmware:**
+- Reemplazar `RadioIF_bleInitiate` (CMD_BLE5_INITIATOR) con CONNECT_IND manual (CMD_BLE5_GENERIC_TX / ADV_NC con T_IFS 150 µs tras ADV_IND).
+- `connTime` = timestamp RAT de nuestra propia TX de CONNECT_IND.
+- Primer master event a `connTime + transmitWindowOffset + 1.25 ms` (valores que nosotros pusimos en CONNECT_IND → sin incertidumbre).
+- Mover `BleConnMgr_poll()` a `RfTask` (fix UART starvation — ya implementado como commit `f125473` en rama `fix/uart-starvation-during-conn`, re-aplicar).
+- Retirar ICall/BLE5-Stack residuos: `startup/osal_icall_ble.c`, `syscfg/ti_ble_config.c/h`.
+
+**Entregables Python:** ninguno (Python F8 ya está listo, se reutiliza tal cual).
+
+**Criterio de cierre:**
+- `demo_ble_connect_gatt.py DC:32:62:8D:E1:09 0 --read` conecta, discovery completa, read OK, disconnect limpio.
+- `conn_status` post-connect: `connected=True events>0 tx>0 rx>0 last_status=0x1400`.
+- Regression 8/8 PHYs OTA markers 10/10.
+
+**Plan de implementación:** `docs/superpowers/plans/2026-04-24-f8a-ble-central-sniffle-rewrite.md` (spec sólo — implementación en 2-3 sesiones futuras).
+
+**Referencia:** branch `fix/uart-starvation-during-conn` (commits `f125473` move + `5b7325a` sweep intento incompleto) — conservar como referencia histórica, no mergear.
+
+### F8 — Validar GATT end-to-end 🟡 BLOQUEADA por F8A
+
+**Prereq:** F7, **F8A**
 **Branch:** `feature/f8-gatt-validation`
 **Tag al cerrar:** `v2.0-f8`
 
+**Estado 2026-04-24:** código Python terminado (enum IDs, CommandBuilder, dataclasses, 6 métodos Radio, demo, integration test, 26 unit tests PASS, marker `hardware_ble`, fix VID 0x1209). **Pendiente:** checkpoint humano T12-T13, cierre docs T14, tag T15. **Bloqueado** porque el checkpoint requiere conexión GATT sostenida — fallaba con `BLE_DONE_NOSYNC` en el primer master event. F8A desbloquea.
+
 **Entregables firmware:** ninguno nuevo — solo debug / telemetría si hace falta.
 **Entregables Python:**
-- `test_connect.py` refactorizado a `python/examples/lab/demo_ble_connect_gatt.py` (D2).
-- Ajustes en `python/feralrf/radio.py` para exponer `connect(addr, addr_type)`, `gatt_discover()`, `gatt_read(handle)`, `gatt_write(handle, data)`, `disconnect()`.
+- `test_connect.py` refactorizado a `python/examples/lab/demo_ble_connect_gatt.py` (D2). ✅
+- Ajustes en `python/feralrf/radio.py` para exponer `ble_connect(addr, addr_type)`, `conn_status()`, `gatt_discover()`, `gatt_read(handle)`, `gatt_write(handle, data)`, `ble_disconnect()`. ✅
 
 **Criterio de cierre:**
 - Discovery completa de peripheral real devuelve ≥1 servicio y ≥1 characteristic.
@@ -366,7 +394,7 @@ Viven en `firmware/cc1352/smartrf_settings/` mezclados con configs generadas. En
 - No hay leaks: `att_state` vuelve a IDLE tras `RSP_GATT_DONE`.
 
 **Checkpoint humano:**
-- Peripheral real de tu elección (D1): smartphone con app BLE Peripheral Simulator / ESP32 con GATT server / Pi con bleno.
+- Peripheral real (D1 resuelto): smartphone primario (T12), ESP32/CH573 secundario (T13).
 - `demo_ble_connect_gatt.py` corrido al menos 2 veces sobre el mismo target sin reset intermedio.
 - Validar en 2+ peripherals distintos si es posible.
 
@@ -645,7 +673,7 @@ Mantener `.claude/skills/feralrf-fase-actual/SKILL.md` actualizado al arrancar c
 | # | Riesgo | Nivel | Mitigación | Se resuelve en |
 |---|--------|-------|-----------|----------------|
 | R1 | `868→BLE` PHY switch falla | Alto | Fase dedicada a root cause + fix | F9 |
-| R2 | GATT discovery no validado con peripheral real | Alto | Bloquea BLE Scanner y port attacks | F8 |
+| R2 | GATT discovery no validado con peripheral real | Alto | Bloquea BLE Scanner y port attacks. **Actualizado 2026-04-24:** causa raíz = CMD_BLE5_INITIATOR timing incompatible con peer. Requiere rewrite Sniffle-style. | F8A → F8 |
 | R3 | Port NoRTOS→TI-RTOS rompe features maduros | Medio | Validation matrix OTA en cada port, 10/10 markers como gate | F10/F11 |
 | R4 | High PA (+15–20 dBm) requiere fix DIO29 antenna switch | Bajo | Fuera de scope v2.0; abierto para v2.1. TX cap +14 dBm | — |
 | R5 | OOK bloquea radio (TI SDK bug) | Bajo | `reset_device()` via RP2040 ya validado en main; portar igual a TI-RTOS | F10 |

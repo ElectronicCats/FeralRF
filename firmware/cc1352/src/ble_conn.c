@@ -98,13 +98,19 @@ void BleConn_init(void) {
     memset(&s_state, 0, sizeof(s_state));
     memset(s_ll_data, 0, sizeof(s_ll_data));
 
-    /* Default own address: random static (matches radio_if default) */
+    /* Default own address: random static. The MSB (octet 5 in wire/LE order)
+     * MUST have its top 2 bits set to 0b11 — otherwise the address subtype is
+     * Reserved (0b10) / NRPA (0b00) / RPA (0b01), and a peer applying spec-
+     * compliant validation (e.g. CH573) silently drops our CONNECT_IND.
+     * BLE 5.0 Vol 6 Part B §1.3.2.1. Sniffle capture on 2026-04-24 confirmed
+     * the previous 0xAA value (top bits = 10 = RFU) caused every master event
+     * to NOSYNC: the peer never accepted the connection. */
     s_state.ownAddr[0] = 0x01u;
     s_state.ownAddr[1] = 0xEEu;
     s_state.ownAddr[2] = 0xDDu;
     s_state.ownAddr[3] = 0xCCu;
     s_state.ownAddr[4] = 0xBBu;
-    s_state.ownAddr[5] = 0xAAu;
+    s_state.ownAddr[5] = 0xCAu;  /* was 0xAA — top 2 bits now 11 (static random) */
 
     BleConnMgr_init();
 }

@@ -88,6 +88,7 @@ class ConnectionStatus:
     tx_done: Optional[int] = None
     att_state: Optional[int] = None
     total_rx: Optional[int] = None
+    conn_time: Optional[int] = None  # RAT-tick origin of the connection anchor
 
 
 @dataclass
@@ -599,11 +600,13 @@ class Radio:
         events = int.from_bytes(payload[5:7], "little")
         last_status = int.from_bytes(payload[7:9], "little")
 
-        tx_done = att_state = total_rx = None
+        tx_done = att_state = total_rx = conn_time = None
         if len(payload) >= 14:
             tx_done = int.from_bytes(payload[9:11], "little")
             att_state = payload[11]
             total_rx = int.from_bytes(payload[12:14], "little")
+        if len(payload) >= 18:
+            conn_time = int.from_bytes(payload[14:18], "little")
 
         return ConnectionStatus(
             connected=connected,
@@ -613,6 +616,7 @@ class Radio:
             tx_done=tx_done,
             att_state=att_state,
             total_rx=total_rx,
+            conn_time=conn_time,
         )
 
     def gatt_discover(self, timeout: float = 15.0) -> "GattDiscoveryResult":

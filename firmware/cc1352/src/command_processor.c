@@ -469,7 +469,7 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
         uint16_t l2cap_rx = BleConnMgr_getL2capRxCount();
         uint8_t att_state = (uint8_t)AttClient_getState();
         uint16_t total_rx = BleConnMgr_getTotalRxCount();
-        uint8_t rsp[14];
+        uint8_t rsp[18];
         rsp[0] = st->connected ? 1u : 0u;
         rsp[1] = (uint8_t)(st->connInterval & 0xFFu);
         rsp[2] = (uint8_t)((st->connInterval >> 8) & 0xFFu);
@@ -486,6 +486,14 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
         rsp[11] = att_state;
         rsp[12] = (uint8_t)(total_rx & 0xFFu);
         rsp[13] = (uint8_t)((total_rx >> 8) & 0xFFu);
+        /* connTime: RAT-tick origin of the connection anchor. Set by
+         * BleConn_initiate from CMD_BLE5_INITIATOR's connectTime field.
+         * Session 2 telemetry will correlate this with first MASTER event
+         * timing to diagnose any residual NOSYNC. */
+        rsp[14] = (uint8_t)(st->connTime & 0xFFu);
+        rsp[15] = (uint8_t)((st->connTime >> 8) & 0xFFu);
+        rsp[16] = (uint8_t)((st->connTime >> 16) & 0xFFu);
+        rsp[17] = (uint8_t)((st->connTime >> 24) & 0xFFu);
         send_response(RSP_CONN_STATUS_R, seq, rsp, sizeof(rsp));
         return;
     }

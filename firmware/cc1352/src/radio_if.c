@@ -2254,13 +2254,13 @@ int RadioIF_bleInitiate(void) {
     /* Point initiator RX queue to our data queue */
     Ble5_0_cmdBle5Initiator.pParams->pRxQ = &s_rf_data_queue;
 
-    /* Set connectTime and endTime just before RF_runCmd — avoids stale
-     * timestamps if mode-switch or RX-stop took several ms above.
-     * RAT clock is 4 MHz, so 5s = 20,000,000 ticks. */
+    /* Set connectTime just before RF_runCmd — avoids stale RAT timestamps
+     * if mode-switch or RX-stop took several ms above. RAT clock is 4 MHz.
+     * endTime / endTrigger are owned by ble_conn.c (Sniffle parity:
+     * TRIG_NEVER, endTime=0). */
     {
         uint32_t now = RF_getCurrentTime();
         Ble5_0_cmdBle5Initiator.pParams->connectTime = now + 4000u;
-        Ble5_0_cmdBle5Initiator.pParams->endTime = now + 20000000u; /* 5s absolute */
     }
 
     /* Reset command status */

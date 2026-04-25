@@ -8,6 +8,7 @@
 
 #include "ble_conn.h"
 #include "ble_conn_mgr.h"
+#include "ble_conn_pdu.h"
 #include "radio_if.h"
 #include "smartrf_ble5_0.h"
 
@@ -53,59 +54,38 @@ static uint8_t ble_conn_rand_hop(void) {
     return (uint8_t)(5u + (ble_conn_rand32() % 12u));
 }
 
-/* ── LLData builder ── */
+/* ── LLData builder ──
+ * Byte-level packing delegated to BleConnPdu_buildLlData (validated by
+ * Python contract test python/tests/test_connect_ind_pdu.py). This
+ * function still owns the *value* choice (random AA/CRC, all 37 data
+ * channels enabled, latency 0) and mirrors the chosen values into
+ * BleConn_State.
+ */
 static void ble_conn_build_ll_data(uint16_t interval, uint16_t timeout) {
-    uint32_t aa = ble_conn_rand32();
-    uint32_t crc = ble_conn_rand32() & 0x00FFFFFFu;
-    uint8_t hop = ble_conn_rand_hop();
-    uint16_t win_offset = (uint16_t)(5u + (ble_conn_rand32() % 11u));
+    BleConnIndFields fields = {
+        .initAddr = {0},
+        .initAddrRandom = true,
+        .advAddr = {0},
+        .advAddrRandom = false,
+        .accessAddr = ble_conn_rand32(),
+        .crcInit = ble_conn_rand32() & 0x00FFFFFFu,
+        .winSize = 3u,
+        .winOffset = (uint16_t)(5u + (ble_conn_rand32() % 11u)),
+        .interval = interval,
+        .latency = 0u,
+        .timeout = timeout,
+        .channelMap = {0xFFu, 0xFFu, 0xFFu, 0xFFu, 0x1Fu},
+        .hopIncrement = ble_conn_rand_hop(),
+        .sca = 0u,
+    };
 
-    /* Access Address (4 bytes LE) */
-    s_ll_data[0] = (uint8_t)(aa & 0xFFu);
-    s_ll_data[1] = (uint8_t)((aa >> 8) & 0xFFu);
-    s_ll_data[2] = (uint8_t)((aa >> 16) & 0xFFu);
-    s_ll_data[3] = (uint8_t)((aa >> 24) & 0xFFu);
+    BleConnPdu_buildLlData(&fields, s_ll_data);
 
-    /* CRC Init (3 bytes LE) */
-    s_ll_data[4] = (uint8_t)(crc & 0xFFu);
-    s_ll_data[5] = (uint8_t)((crc >> 8) & 0xFFu);
-    s_ll_data[6] = (uint8_t)((crc >> 16) & 0xFFu);
-
-    /* WinSize: 3 (3 * 1.25ms = 3.75ms) */
-    s_ll_data[7] = 3u;
-
-    /* WinOffset (1.25ms units) */
-    s_ll_data[8] = (uint8_t)(win_offset & 0xFFu);
-    s_ll_data[9] = (uint8_t)((win_offset >> 8) & 0xFFu);
-
-    /* Interval (1.25ms units) */
-    s_ll_data[10] = (uint8_t)(interval & 0xFFu);
-    s_ll_data[11] = (uint8_t)((interval >> 8) & 0xFFu);
-
-    /* Latency: 0 (no peripheral latency for discovery) */
-    s_ll_data[12] = 0u;
-    s_ll_data[13] = 0u;
-
-    /* Timeout (10ms units) */
-    s_ll_data[14] = (uint8_t)(timeout & 0xFFu);
-    s_ll_data[15] = (uint8_t)((timeout >> 8) & 0xFFu);
-
-    /* Channel Map: all 37 data channels enabled */
-    s_ll_data[16] = 0xFFu;
-    s_ll_data[17] = 0xFFu;
-    s_ll_data[18] = 0xFFu;
-    s_ll_data[19] = 0xFFu;
-    s_ll_data[20] = 0x1Fu;
-
-    /* Hop (bits 4:0) | SCA=0 (bits 7:5) */
-    s_ll_data[21] = hop & 0x1Fu;
-
-    /* Store in connection state */
-    s_state.accessAddr = aa;
-    s_state.crcInit = crc;
-    memcpy(s_state.channelMap, &s_ll_data[16], 5);
-    s_state.hopIncrement = hop;
-    s_state.winOffset = win_offset;
+    s_state.accessAddr = fields.accessAddr;
+    s_state.crcInit = fields.crcInit;
+    memcpy(s_state.channelMap, fields.channelMap, 5);
+    s_state.hopIncrement = fields.hopIncrement;
+    s_state.winOffset = fields.winOffset;
     s_state.connInterval = interval;
     s_state.supervTimeout = timeout;
     s_state.peripheralLatency = 0;
@@ -152,7 +132,7 @@ BleConn_Result BleConn_initiate(const uint8_t *peerAddr, uint8_t peerAddrType,
     Ble5_0_cmdBle5Initiator.channel = 37;
     Ble5_0_cmdBle5Initiator.whitening.init = 0x40 + 37;
     Ble5_0_cmdBle5Initiator.phyMode.mainMode = 0; /* 1M */
-    Ble5_0_cmdBle5Initiator.phyMode.coding = 0;
+    Ble5_0_cmdBle5Initiator.phyMode.coding = 4;   /* Sniffle parity for 1M */
 
     Ble5_0_cmdBle5Initiator.pParams->pRxQ = NULL; /* set by RadioIF */
     Ble5_0_cmdBle5Initiator.pParams->rxConfig.bAutoFlushIgnored = 1;
@@ -182,10 +162,13 @@ BleConn_Result BleConn_initiate(const uint8_t *peerAddr, uint8_t peerAddrType,
     /* connectTime set by RadioIF_bleInitiate() just before RF_runCmd to avoid
      * stale timestamp after mode-switch delays. */
 
-    /* endTrigger + endTime set by RadioIF_bleInitiate() just before RF_runCmd
-     * using TRIG_ABSTIME (TRIG_REL_START doesn't work for initiator pParams). */
-    Ble5_0_cmdBle5Initiator.pParams->endTrigger.triggerType = TRIG_ABSTIME;
-    Ble5_0_cmdBle5Initiator.pParams->endTime = 0; /* set by RadioIF */
+    /* Sniffle parity: forever-listen, no host-imposed end. The previous
+     * 5-second TRIG_ABSTIME endTime imposed a deadline that conflicted
+     * with bDynamicWinOffset's calibration window. See
+     * docs/investigations/2026-04-24-f8a-session-1/tx-mechanism-decision.md
+     * (Option A). Re-introduce a host-side timeout in Session 2 if needed. */
+    Ble5_0_cmdBle5Initiator.pParams->endTrigger.triggerType = TRIG_NEVER;
+    Ble5_0_cmdBle5Initiator.pParams->endTime = 0;
     Ble5_0_cmdBle5Initiator.pParams->timeoutTrigger.triggerType = TRIG_NEVER;
     Ble5_0_cmdBle5Initiator.pParams->timeoutTime = 0;
 

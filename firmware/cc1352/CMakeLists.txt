@@ -125,6 +125,7 @@ set(APP_SOURCES
     ccfg.c
     src/ble_conn.c
     src/ble_conn_mgr.c
+    src/ble_conn_pdu.c
     src/csa2.c
     src/command_processor.c
     src/control_task.c

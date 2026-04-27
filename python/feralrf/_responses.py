@@ -201,3 +201,91 @@ class DebugTimingResponse:
                 )
             )
         return cls(count=count, entries=entries)
+
+
+@dataclass
+class DebugConnParamsResponse:
+    """Parsed RSP_DEBUG_CONN_PARAMS payload (50 bytes).
+
+    Wire layout (matches command_processor.c CMD_DEBUG_CONN_PARAMS):
+        accessAddr      u32 LE   (4)   ← s_state, post-initiator re-snapshot
+        crcInit         u32 LE   (4)   ← s_state, post-initiator re-snapshot
+        channelMap[5]            (5)
+        hopIncrement    u8       (1)
+        winOffset       u16 LE   (2)
+        eventCounter    u16 LE   (2)
+        connTime        u32 LE   (4)
+        connInterval    u16 LE   (2)
+        supervTimeout   u16 LE   (2)
+        useCsa2         u8       (1)
+        connected       u8       (1)
+        ll_data[22]              (22)  ← raw bytes left in s_ll_data after
+                                         CMD_BLE5_INITIATOR returned.
+
+    The ll_data field is the gold reference: parse it with the BLE
+    CONNECT_IND LLData layout (Vol 6, Part B, 2.3.3.1) and compare to a
+    Sniffle on-air pcap to spot SDK-rewrite mismatches.
+    """
+
+    access_addr: int
+    crc_init: int
+    channel_map: bytes
+    hop_increment: int
+    win_offset: int
+    event_counter: int
+    conn_time: int
+    conn_interval: int
+    superv_timeout: int
+    use_csa2: bool
+    connected: bool
+    ll_data: bytes
+
+    @classmethod
+    def parse(cls, payload: bytes) -> "DebugConnParamsResponse":
+        if len(payload) != 50:
+            raise ValueError(
+                f"DEBUG_CONN_PARAMS payload size mismatch: "
+                f"got {len(payload)}, expected 50"
+            )
+        access_addr = int.from_bytes(payload[0:4], "little")
+        crc_init = int.from_bytes(payload[4:8], "little")
+        channel_map = bytes(payload[8:13])
+        hop_increment = payload[13]
+        win_offset = int.from_bytes(payload[14:16], "little")
+        event_counter = int.from_bytes(payload[16:18], "little")
+        conn_time = int.from_bytes(payload[18:22], "little")
+        conn_interval = int.from_bytes(payload[22:24], "little")
+        superv_timeout = int.from_bytes(payload[24:26], "little")
+        use_csa2 = bool(payload[26])
+        connected = bool(payload[27])
+        ll_data = bytes(payload[28:50])
+        return cls(
+            access_addr=access_addr,
+            crc_init=crc_init,
+            channel_map=channel_map,
+            hop_increment=hop_increment,
+            win_offset=win_offset,
+            event_counter=event_counter,
+            conn_time=conn_time,
+            conn_interval=conn_interval,
+            superv_timeout=superv_timeout,
+            use_csa2=use_csa2,
+            connected=connected,
+            ll_data=ll_data,
+        )
+
+    def ll_data_decoded(self) -> dict:
+        """Decode the 22-byte LLData buffer into named fields."""
+        ll = self.ll_data
+        return {
+            "wire_aa": int.from_bytes(ll[0:4], "little"),
+            "wire_crc_init": int.from_bytes(ll[4:7], "little"),
+            "wire_win_size": ll[7],
+            "wire_win_offset": int.from_bytes(ll[8:10], "little"),
+            "wire_interval": int.from_bytes(ll[10:12], "little"),
+            "wire_latency": int.from_bytes(ll[12:14], "little"),
+            "wire_timeout": int.from_bytes(ll[14:16], "little"),
+            "wire_chm": ll[16:21].hex(),
+            "wire_hop_increment": ll[21] & 0x1F,
+            "wire_sca": (ll[21] >> 5) & 0x07,
+        }

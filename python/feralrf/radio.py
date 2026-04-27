@@ -9,7 +9,7 @@ from typing import Iterator, Optional, Set
 import serial
 import serial.tools.list_ports
 
-from feralrf._responses import DebugTimingResponse
+from feralrf._responses import DebugConnParamsResponse, DebugTimingResponse
 from feralrf.commands import CommandBuilder
 from feralrf.enums import PHY, Command, Response
 from feralrf.exceptions import CommandError, ConnectionError, ProtocolError, TimeoutError
@@ -630,6 +630,24 @@ class Radio:
         if cmd_id != Response.DEBUG_TIMING:
             raise ProtocolError(f"Unexpected response to DEBUG_TIMING: 0x{cmd_id:02X}")
         return DebugTimingResponse.parse(payload)
+
+    def debug_conn_params(self, timeout: float = 2.0) -> DebugConnParamsResponse:
+        """Issue CMD_DEBUG_CONN_PARAMS; dumps post-initiator s_state + s_ll_data.
+
+        Used for Session 5 wire-vs-state diagnostics. Compare the returned
+        ``ll_data`` (or ``ll_data_decoded()``) against a Sniffle pcap of the
+        same CONNECT_IND on the wire to spot SDK-rewrite mismatches.
+        """
+        self._send_command(Command.DEBUG_CONN_PARAMS, CommandBuilder.debug_conn_params())
+        cmd_id, _seq, payload = self._read_response(
+            timeout=timeout,
+            expected={Response.DEBUG_CONN_PARAMS, Response.ERROR},
+        )
+        if cmd_id == Response.ERROR:
+            raise CommandError("DEBUG_CONN_PARAMS failed", payload[0] if payload else 0)
+        if cmd_id != Response.DEBUG_CONN_PARAMS:
+            raise ProtocolError(f"Unexpected response to DEBUG_CONN_PARAMS: 0x{cmd_id:02X}")
+        return DebugConnParamsResponse.parse(payload)
 
     def gatt_discover(self, timeout: float = 15.0) -> "GattDiscoveryResult":
         """Issue CMD_GATT_DISCOVER and collect the streamed services + chars.

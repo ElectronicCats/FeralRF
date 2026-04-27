@@ -67,6 +67,7 @@ class Command(IntEnum):
 
     # Diagnostics
     DEBUG_TIMING = 0x47
+    DEBUG_CONN_PARAMS = 0x48
 
 
 class Response(IntEnum):
@@ -90,6 +91,7 @@ class Response(IntEnum):
 
     # Diagnostics
     DEBUG_TIMING = 0xA8
+    DEBUG_CONN_PARAMS = 0xA9
 
 
 STABLE_COMMANDS = (

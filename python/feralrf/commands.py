@@ -190,6 +190,11 @@ class CommandBuilder:
         return b""
 
     @staticmethod
+    def debug_conn_params() -> bytes:
+        """No payload for CMD_DEBUG_CONN_PARAMS."""
+        return b""
+
+    @staticmethod
     def gatt_write(handle: int, data: bytes) -> bytes:
         """Payload for CMD_GATT_WRITE: 2-byte LE handle + value bytes."""
         return struct.pack("<H", handle & 0xFFFF) + bytes(data)

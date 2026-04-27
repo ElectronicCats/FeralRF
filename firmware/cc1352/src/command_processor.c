@@ -49,6 +49,7 @@
 
 /* Diagnostics */
 #define CMD_DEBUG_TIMING 0x47u
+#define CMD_DEBUG_CONN_PARAMS 0x48u
 
 /* Responses (match python/feralrf/enums.py) */
 #define RSP_ACK 0x80u
@@ -68,6 +69,7 @@
 
 /* Diagnostics */
 #define RSP_DEBUG_TIMING 0xA8u
+#define RSP_DEBUG_CONN_PARAMS 0xA9u
 
 /* Error codes */
 #define ERR_INVALID_CMD 0x01u
@@ -608,6 +610,61 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
             p[17] = entries[i].pktStatus;
         }
         send_response(RSP_DEBUG_TIMING, seq, rsp, (uint16_t)(1u + (uint16_t)n * 18u));
+        return;
+    }
+
+    case CMD_DEBUG_CONN_PARAMS: {
+        if (payload_len != 0u) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            return;
+        }
+        /* Wire layout (50 bytes total):
+         *   accessAddr      u32 LE   (4)   ← s_state, post-initiator re-snapshot
+         *   crcInit         u32 LE   (4)   ← s_state, post-initiator re-snapshot
+         *   channelMap[5]            (5)   ← s_state, post-initiator re-snapshot
+         *   hopIncrement    u8       (1)   ← s_state, post-initiator re-snapshot
+         *   winOffset       u16 LE   (2)   ← s_state, post-initiator re-snapshot
+         *   eventCounter    u16 LE   (2)   ← s_state, current
+         *   connTime        u32 LE   (4)   ← s_state, RAT @ end-of-CONNECT_IND
+         *   connInterval    u16 LE   (2)
+         *   supervTimeout   u16 LE   (2)
+         *   useCsa2         u8       (1)
+         *   connected       u8       (1)
+         *   ll_data[22]              (22)  ← raw bytes left in s_ll_data after
+         *                                    initiator returned. The single
+         *                                    most diagnostic field — bytes
+         *                                    here ARE what the slave decoded
+         *                                    (modulo SDK rewrites we know
+         *                                    about: WinOffset, WinSize). */
+        const BleConn_State *st = BleConn_getState();
+        const uint8_t *ll = BleConn_getLlData();
+        uint8_t rsp[50];
+        rsp[0]  = (uint8_t)(st->accessAddr & 0xFFu);
+        rsp[1]  = (uint8_t)((st->accessAddr >> 8) & 0xFFu);
+        rsp[2]  = (uint8_t)((st->accessAddr >> 16) & 0xFFu);
+        rsp[3]  = (uint8_t)((st->accessAddr >> 24) & 0xFFu);
+        rsp[4]  = (uint8_t)(st->crcInit & 0xFFu);
+        rsp[5]  = (uint8_t)((st->crcInit >> 8) & 0xFFu);
+        rsp[6]  = (uint8_t)((st->crcInit >> 16) & 0xFFu);
+        rsp[7]  = (uint8_t)((st->crcInit >> 24) & 0xFFu);
+        memcpy(&rsp[8], st->channelMap, 5);
+        rsp[13] = st->hopIncrement;
+        rsp[14] = (uint8_t)(st->winOffset & 0xFFu);
+        rsp[15] = (uint8_t)((st->winOffset >> 8) & 0xFFu);
+        rsp[16] = (uint8_t)(st->eventCounter & 0xFFu);
+        rsp[17] = (uint8_t)((st->eventCounter >> 8) & 0xFFu);
+        rsp[18] = (uint8_t)(st->connTime & 0xFFu);
+        rsp[19] = (uint8_t)((st->connTime >> 8) & 0xFFu);
+        rsp[20] = (uint8_t)((st->connTime >> 16) & 0xFFu);
+        rsp[21] = (uint8_t)((st->connTime >> 24) & 0xFFu);
+        rsp[22] = (uint8_t)(st->connInterval & 0xFFu);
+        rsp[23] = (uint8_t)((st->connInterval >> 8) & 0xFFu);
+        rsp[24] = (uint8_t)(st->supervTimeout & 0xFFu);
+        rsp[25] = (uint8_t)((st->supervTimeout >> 8) & 0xFFu);
+        rsp[26] = st->useCsa2 ? 1u : 0u;
+        rsp[27] = st->connected ? 1u : 0u;
+        memcpy(&rsp[28], ll, 22);
+        send_response(RSP_DEBUG_CONN_PARAMS, seq, rsp, 50u);
         return;
     }
 

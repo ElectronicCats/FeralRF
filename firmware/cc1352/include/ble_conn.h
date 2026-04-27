@@ -62,4 +62,9 @@ bool BleConn_isConnected(void);
 bool BleConn_isInitiating(void);
 const BleConn_State *BleConn_getState(void);
 
+/* Read-only view of the 22-byte CONNECT_IND LLData buffer that was
+ * actually transmitted by the SDK (after any bDynamicWinOffset-style
+ * SDK rewrites). Used for Session 5 wire-vs-state diagnostics. */
+const uint8_t *BleConn_getLlData(void);
+
 #endif /* BLE_CONN_H */

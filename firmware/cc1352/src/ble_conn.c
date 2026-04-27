@@ -196,12 +196,30 @@ BleConn_Result BleConn_initiate(const uint8_t *peerAddr, uint8_t peerAddrType,
         s_state.useCsa2 = false;
         s_state.connTime = Ble5_0_cmdBle5Initiator.pParams->connectTime;
 
-        /* With bDynamicWinOffset=1, the SDK overwrites s_ll_data[8..9] with the
-         * WinOffset it actually transmitted on air. Read it back so the central
-         * loop can compute the peer's first listen anchor (Session 3 telemetry
-         * showed TI's connectTime corresponds to end-of-CONNECT_IND, not to the
-         * peer's expected anchor). */
+        /* The SDK can rewrite fields in s_ll_data during CMD_BLE5_INITIATOR
+         * (Session 3 confirmed bDynamicWinOffset=1 rewrites WinOffset; the
+         * Session 5 wire capture showed WinSize was rewritten too). What
+         * actually goes on air is whatever ends up in s_ll_data after
+         * initiator returns. The slave decodes those values and from event 0
+         * computes its listen channel / accepts our AA / verifies our CRC
+         * with EXACTLY those bytes. If we keep the build_ll_data values in
+         * s_state and feed them to CMD_BLE5_MASTER for TX, our master uses
+         * pre-SDK values while the slave is using post-SDK values — every
+         * data-channel TX lands on the wrong AA/channel/CRC and the slave
+         * silently drops it. NOSYNC every event with nTx==1 (Session 4
+         * Task 2 evidence). Re-snapshot ALL fields the host loop consumes. */
+        s_state.accessAddr = (uint32_t)s_ll_data[0]
+                             | ((uint32_t)s_ll_data[1] << 8)
+                             | ((uint32_t)s_ll_data[2] << 16)
+                             | ((uint32_t)s_ll_data[3] << 24);
+        s_state.crcInit = (uint32_t)s_ll_data[4]
+                          | ((uint32_t)s_ll_data[5] << 8)
+                          | ((uint32_t)s_ll_data[6] << 16);
+        /* s_ll_data[7] = WinSize, [8..9] = WinOffset, [10..11] = Interval,
+         * [12..13] = Latency, [14..15] = Timeout, [16..20] = ChM, [21] = Hop|SCA. */
         s_state.winOffset = (uint16_t)((uint16_t)s_ll_data[8] | ((uint16_t)s_ll_data[9] << 8));
+        memcpy(s_state.channelMap, &s_ll_data[16], 5);
+        s_state.hopIncrement = s_ll_data[21] & 0x1Fu;
 
         BleConnMgr_start();
         return BLE_CONN_OK;
@@ -237,4 +255,8 @@ bool BleConn_isInitiating(void) {
 
 const BleConn_State *BleConn_getState(void) {
     return &s_state;
+}
+
+const uint8_t *BleConn_getLlData(void) {
+    return s_ll_data;
 }

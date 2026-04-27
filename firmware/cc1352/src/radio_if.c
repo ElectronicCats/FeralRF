@@ -2295,9 +2295,8 @@ int RadioIF_bleInitiate(void) {
     }
 }
 
-int RadioIF_bleCentral(uint8_t chan, uint32_t accessAddr, uint32_t crcInit,
-                       dataQueue_t *pTxQueue, uint32_t startTime,
-                       uint32_t endTime, uint32_t *pNumSent) {
+int RadioIF_bleCentral(uint8_t chan, uint32_t accessAddr, uint32_t crcInit, dataQueue_t *pTxQueue,
+                       uint32_t startTime, uint32_t endTime, uint32_t *pNumSent) {
     rfc_bleMasterSlaveOutput_t output = {0};
 
     if (s_rf_handle == NULL || chan >= 37) {
@@ -2321,7 +2320,7 @@ int RadioIF_bleCentral(uint8_t chan, uint32_t accessAddr, uint32_t crcInit,
 
     Ble5_0_cmdBle5Master.pParams->rxConfig.bAutoFlushIgnored = 1;
     Ble5_0_cmdBle5Master.pParams->rxConfig.bAutoFlushCrcErr = 1;
-    Ble5_0_cmdBle5Master.pParams->rxConfig.bAutoFlushEmpty = 1;
+    Ble5_0_cmdBle5Master.pParams->rxConfig.bAutoFlushEmpty = 0;
     Ble5_0_cmdBle5Master.pParams->rxConfig.bIncludeLenByte = 1;
     Ble5_0_cmdBle5Master.pParams->rxConfig.bIncludeCrc = 0;
     Ble5_0_cmdBle5Master.pParams->rxConfig.bAppendRssi = 1;
@@ -2341,8 +2340,8 @@ int RadioIF_bleCentral(uint8_t chan, uint32_t accessAddr, uint32_t crcInit,
 
     Ble5_0_cmdBle5Master.status = 0;
 
-    RF_runCmd(s_rf_handle, (RF_Op *)&Ble5_0_cmdBle5Master, RF_PriorityNormal,
-              &RadioIF_rfCallback, RF_EventRxEntryDone);
+    RF_runCmd(s_rf_handle, (RF_Op *)&Ble5_0_cmdBle5Master, RF_PriorityNormal, &RadioIF_rfCallback,
+              RF_EventRxEntryDone);
 
     *pNumSent = output.nTxEntryDone;
 

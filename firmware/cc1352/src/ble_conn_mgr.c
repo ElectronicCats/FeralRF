@@ -185,11 +185,24 @@ void BleConnMgr_start(void) {
     s_hop_interval_ticks = CONN_INTERVAL_TO_TICKS(st->connInterval);
     s_superv_timeout_ticks = SUPERV_TO_TICKS(st->supervTimeout);
 
-    /* Sniffle formula (RadioTask.c L467):
-     * nextHopTime = connTime - AO_TARG + hopIntervalTicks
-     * connTime = RAT time of CONNECT_IND TX from initiator output.
-     * First MASTER starts at curHopTime = connTime, ends at nextHopTime. */
-    s_next_hop_time = st->connTime - AO_TARG + s_hop_interval_ticks;
+    /* Anchor calibration (Session 3 telemetry against CH573 + Sniffle oracle):
+     *
+     * In SDK 8.30 with bDynamicWinOffset=1, pParams->connectTime corresponds to
+     * end-of-CONNECT_IND-on-air, NOT to the peer's expected first-anchor. The
+     * peer opens its first listen window at:
+     *
+     *     end_of_connect_ind + transmitWindowDelay + WinOffset * 1.25 ms
+     *
+     * So the corrected first anchor (where master TX must fire) is
+     * connTime + TRANSMIT_WINDOW_DELAY + winOffset*5000 ticks. The rest of the
+     * Sniffle-style formula (subtract AO_TARG, add hopInterval to get the
+     * end-of-event marker) is unchanged.
+     *
+     * winOffset is read back from s_ll_data[8..9] in BleConn_initiate after
+     * the SDK overwrites it (with bDynamicWinOffset=1), so this correction is
+     * dynamic across connections. */
+    uint32_t anchor_correction = TRANSMIT_WINDOW_DELAY + (uint32_t)st->winOffset * 5000u;
+    s_next_hop_time = st->connTime + anchor_correction - AO_TARG + s_hop_interval_ticks;
     s_last_rx_time = RF_getCurrentTime();
 
     if (st->useCsa2) {
@@ -245,7 +258,17 @@ bool BleConnMgr_poll(void) {
         return false;
     }
 
-    uint8_t chan = csa2_computeChannel(s_event_counter);
+    uint8_t chan;
+    if (st->useCsa2) {
+        chan = csa2_computeChannel(s_event_counter);
+    } else {
+        /* CSA#1 (legacy hop). BLE Core Spec Vol 6 Part B 4.5.8.1:
+         *   unmappedChannel(N) = (lastUnmapped + hopIncrement) mod 37
+         *   with lastUnmapped(0) = 0 → unmappedChannel(N) = (N+1)*hop mod 37.
+         * With our channelMap = 0x1F_FFFF_FFFF (all 37 enabled) the remap is
+         * identity, so channel == unmappedChannel. */
+        chan = (uint8_t)(((uint32_t)(s_event_counter + 1u) * st->hopIncrement) % 37u);
+    }
 
     /* Queue pending ATT requests before building TX queue */
     AttClient_poll();

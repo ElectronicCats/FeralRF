@@ -110,7 +110,7 @@ void BleConn_init(void) {
     s_state.ownAddr[2] = 0xDDu;
     s_state.ownAddr[3] = 0xCCu;
     s_state.ownAddr[4] = 0xBBu;
-    s_state.ownAddr[5] = 0xCAu;  /* was 0xAA — top 2 bits now 11 (static random) */
+    s_state.ownAddr[5] = 0xCAu; /* was 0xAA — top 2 bits now 11 (static random) */
 
     BleConnMgr_init();
 }
@@ -155,7 +155,8 @@ BleConn_Result BleConn_initiate(const uint8_t *peerAddr, uint8_t peerAddrType,
     Ble5_0_cmdBle5Initiator.pParams->initConfig.deviceAddrType = 1; /* random */
     Ble5_0_cmdBle5Initiator.pParams->initConfig.peerAddrType = peerAddrType;
     Ble5_0_cmdBle5Initiator.pParams->initConfig.bStrictLenFilter = 1;
-    Ble5_0_cmdBle5Initiator.pParams->initConfig.chSel = 1; /* CSA#2 */
+    Ble5_0_cmdBle5Initiator.pParams->initConfig.chSel =
+        0; /* CSA#1 — CH573/BLE 4.2 peers ignore CSA#2 */
 
     Ble5_0_cmdBle5Initiator.pParams->randomState = 0;
     Ble5_0_cmdBle5Initiator.pParams->connectReqLen = BLE_CONN_LLDATA_LEN;
@@ -185,8 +186,22 @@ BleConn_Result BleConn_initiate(const uint8_t *peerAddr, uint8_t peerAddrType,
 
     if (result >= 0) {
         s_state.connected = true;
-        s_state.useCsa2 = (result >= 1);
+        /* TI's BLE_DONE_CONNECT only confirms WE sent ChSel=1 — it doesn't say
+         * the peer accepted CSA#2. Peers running BLE <5.0 (e.g. CH573) ignore
+         * ChSel and follow the legacy hop. Without an over-the-air negotiation
+         * primitive in CONNECT_IND we cannot tell the two cases apart, so the
+         * firmware defaults to legacy hop. CSA#2 will need explicit feature
+         * exchange (LL_FEATURE_REQ → response with bit 27 set) before we flip
+         * useCsa2 on. */
+        s_state.useCsa2 = false;
         s_state.connTime = Ble5_0_cmdBle5Initiator.pParams->connectTime;
+
+        /* With bDynamicWinOffset=1, the SDK overwrites s_ll_data[8..9] with the
+         * WinOffset it actually transmitted on air. Read it back so the central
+         * loop can compute the peer's first listen anchor (Session 3 telemetry
+         * showed TI's connectTime corresponds to end-of-CONNECT_IND, not to the
+         * peer's expected anchor). */
+        s_state.winOffset = (uint16_t)((uint16_t)s_ll_data[8] | ((uint16_t)s_ll_data[9] << 8));
 
         BleConnMgr_start();
         return BLE_CONN_OK;

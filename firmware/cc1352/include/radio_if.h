@@ -77,10 +77,30 @@ void RadioIF_setBleAdvAddress(const uint8_t *addr);
 /* BLE connection initiation — runs CMD_BLE5_INITIATOR (blocking) */
 int RadioIF_bleInitiate(void);
 
-/* BLE central mode — run CMD_BLE5_MASTER for one connection event. */
+/* Per-event RF stats lifted from rfc_bleMasterSlaveOutput_t after the
+ * CMD_BLE5_MASTER mailbox finishes. Lives in radio_if so callers don't
+ * need to include rf_ble_cmd.h. Session 4 telemetry.
+ *
+ * The combination (nTx, pStats->nRxOk + nRxNok + nRxIgnored, pktStatus
+ * bTimeStampValid) lets the host distinguish:
+ *   - Master state machine never executed:  nTx==0, all RX counters==0.
+ *   - Master TX'd, slave silent:             nTx>=1, all RX counters==0.
+ *   - Master TX'd, slave RX'd:               nTx>=1, nRxOk>=1 (or nRxNok>=1
+ *                                            for CRC errors). */
+typedef struct {
+    uint8_t nTx;         /* pOutput->nTx — total TX incl. auto-empty + retrans */
+    uint8_t nRxOk;       /* pOutput->nRxOk */
+    uint8_t nRxNok;      /* pOutput->nRxNok */
+    uint8_t nRxIgnored;  /* pOutput->nRxIgnored */
+    uint8_t pktStatus;   /* packed pktStatus bitfield byte (see ble_conn_mgr.h) */
+} RadioIF_BleCentralStats;
+
+/* BLE central mode — run CMD_BLE5_MASTER for one connection event.
+ * pStats may be NULL if the caller doesn't need per-event RF stats. */
 int RadioIF_bleCentral(uint8_t chan, uint32_t accessAddr, uint32_t crcInit,
                        dataQueue_t *pTxQueue, uint32_t startTime,
-                       uint32_t endTime, uint32_t *pNumSent);
+                       uint32_t endTime, uint32_t *pNumSent,
+                       RadioIF_BleCentralStats *pStats);
 
 /* Reset seqStat for initiator→central transition */
 void RadioIF_bleResetSeqStat(void);

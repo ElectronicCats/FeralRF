@@ -2296,7 +2296,8 @@ int RadioIF_bleInitiate(void) {
 }
 
 int RadioIF_bleCentral(uint8_t chan, uint32_t accessAddr, uint32_t crcInit, dataQueue_t *pTxQueue,
-                       uint32_t startTime, uint32_t endTime, uint32_t *pNumSent) {
+                       uint32_t startTime, uint32_t endTime, uint32_t *pNumSent,
+                       RadioIF_BleCentralStats *pStats) {
     rfc_bleMasterSlaveOutput_t output = {0};
 
     if (s_rf_handle == NULL || chan >= 37) {
@@ -2344,6 +2345,24 @@ int RadioIF_bleCentral(uint8_t chan, uint32_t accessAddr, uint32_t crcInit, data
               RF_EventRxEntryDone);
 
     *pNumSent = output.nTxEntryDone;
+    if (pStats != NULL) {
+        pStats->nTx = output.nTx;
+        pStats->nRxOk = output.nRxOk;
+        pStats->nRxNok = output.nRxNok;
+        pStats->nRxIgnored = output.nRxIgnored;
+        /* Pack the 7 bitfield bits into one byte explicitly — C doesn't
+         * pin bitfield layout, and we want a wire-stable byte the Python
+         * parser can interpret unambiguously. Order matches
+         * DebugTimingEntry property bitmasks in _responses.py. */
+        pStats->pktStatus =
+            (uint8_t)((output.pktStatus.bTimeStampValid ? 0x01u : 0u) |
+                      (output.pktStatus.bLastCrcErr     ? 0x02u : 0u) |
+                      (output.pktStatus.bLastIgnored    ? 0x04u : 0u) |
+                      (output.pktStatus.bLastEmpty      ? 0x08u : 0u) |
+                      (output.pktStatus.bLastCtrl       ? 0x10u : 0u) |
+                      (output.pktStatus.bLastMd         ? 0x20u : 0u) |
+                      (output.pktStatus.bLastAck        ? 0x40u : 0u));
+    }
 
     /* Return raw status for debugging. Caller checks for success codes. */
     return (int)Ble5_0_cmdBle5Master.status;

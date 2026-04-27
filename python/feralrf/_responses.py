@@ -107,23 +107,66 @@ class InfoResponse:
 
 @dataclass
 class DebugTimingEntry:
-    """One captured master-event timing record (matches firmware ring entry)."""
+    """One captured master-event timing record (matches firmware ring entry).
 
-    event_idx: int  # u16 — BleConnMgr s_event_counter at capture time
-    start_rat: int  # u32 — curHopTime fed to RadioIF_bleCentral
-    end_rat: int  # u32 — s_next_hop_time fed to RadioIF_bleCentral
-    status: int  # u16 — RF status code (BLE_DONE_NOSYNC=0x1402, OK=0x1400, …)
-    num_sent: int  # u8  — nTxEntryDone returned by the command
+    Wire layout (18 bytes, Session 4):
+        u16 event_idx + u32 start_rat + u32 end_rat + u16 status
+        + u8 num_sent + u8 n_tx + u8 n_rx_ok + u8 n_rx_nok + u8 n_rx_ignored
+        + u8 pkt_status.
+    Session 3 was 13 bytes (the first five fields only). The (n_tx,
+    n_rx_*, pkt_status bTimeStampValid) tuple distinguishes "master state
+    machine never executed" (all zero) from "master TX'd but slave silent"
+    (n_tx>=1, n_rx_*==0).
+    """
+
+    event_idx: int       # u16 — BleConnMgr s_event_counter at capture time
+    start_rat: int       # u32 — curHopTime fed to RadioIF_bleCentral
+    end_rat: int         # u32 — s_next_hop_time fed to RadioIF_bleCentral
+    status: int          # u16 — RF status code (BLE_DONE_NOSYNC=0x1402, OK=0x1400, …)
+    num_sent: int        # u8  — pOutput.nTxEntryDone
+    n_tx: int            # u8  — pOutput.nTx (total TX incl. auto-empty + retrans)
+    n_rx_ok: int         # u8  — pOutput.nRxOk
+    n_rx_nok: int        # u8  — pOutput.nRxNok
+    n_rx_ignored: int    # u8  — pOutput.nRxIgnored
+    pkt_status: int      # u8  — packed pktStatus bitfield (see properties)
+
+    @property
+    def b_time_stamp_valid(self) -> bool:
+        return bool(self.pkt_status & 0x01)
+
+    @property
+    def b_last_crc_err(self) -> bool:
+        return bool(self.pkt_status & 0x02)
+
+    @property
+    def b_last_ignored(self) -> bool:
+        return bool(self.pkt_status & 0x04)
+
+    @property
+    def b_last_empty(self) -> bool:
+        return bool(self.pkt_status & 0x08)
+
+    @property
+    def b_last_ctrl(self) -> bool:
+        return bool(self.pkt_status & 0x10)
+
+    @property
+    def b_last_md(self) -> bool:
+        return bool(self.pkt_status & 0x20)
+
+    @property
+    def b_last_ack(self) -> bool:
+        return bool(self.pkt_status & 0x40)
 
 
 @dataclass
 class DebugTimingResponse:
-    """Parsed RSP_DEBUG_TIMING payload: 1-byte count + count×13-byte entries."""
+    """Parsed RSP_DEBUG_TIMING payload: 1-byte count + count×18-byte entries."""
 
     count: int
     entries: list
 
-    _ENTRY_SIZE = 13  # u16 + u32 + u32 + u16 + u8
+    _ENTRY_SIZE = 18  # u16 + u32 + u32 + u16 + u8*6
 
     @classmethod
     def parse(cls, payload: bytes) -> "DebugTimingResponse":
@@ -139,8 +182,9 @@ class DebugTimingResponse:
         entries = []
         for i in range(count):
             base = 1 + i * cls._ENTRY_SIZE
-            event_idx, start_rat, end_rat, status, num_sent = struct.unpack(
-                "<HIIHB", payload[base : base + cls._ENTRY_SIZE]
+            (event_idx, start_rat, end_rat, status, num_sent,
+             n_tx, n_rx_ok, n_rx_nok, n_rx_ignored, pkt_status) = struct.unpack(
+                "<HIIHBBBBBB", payload[base : base + cls._ENTRY_SIZE]
             )
             entries.append(
                 DebugTimingEntry(
@@ -149,6 +193,11 @@ class DebugTimingResponse:
                     end_rat=end_rat,
                     status=status,
                     num_sent=num_sent,
+                    n_tx=n_tx,
+                    n_rx_ok=n_rx_ok,
+                    n_rx_nok=n_rx_nok,
+                    n_rx_ignored=n_rx_ignored,
+                    pkt_status=pkt_status,
                 )
             )
         return cls(count=count, entries=entries)

@@ -578,29 +578,36 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
             send_error(seq, ERR_INVALID_PAYLOAD);
             return;
         }
-        /* Wire layout: count(u8) + count × { eventIdx(u16) startRAT(u32)
-         * endRAT(u32) status(u16) numSent(u8) }  →  1 + 16*13 = 209 bytes max. */
-        uint8_t rsp[1u + BLE_CONN_MGR_DBG_TIMING_DEPTH * 13u];
+        /* Wire layout: count(u8) + count × 18 bytes per entry, where the
+         * 18 bytes are: eventIdx(u16) startRAT(u32) endRAT(u32) status(u16)
+         * numSent(u8) nTx(u8) nRxOk(u8) nRxNok(u8) nRxIgnored(u8) pktStatus(u8).
+         * 1 + 14*18 = 253 bytes max (≤ PROTOCOL_MAX_PAYLOAD = 255). */
+        uint8_t rsp[1u + BLE_CONN_MGR_DBG_TIMING_DEPTH * 18u];
         BleConnMgr_DbgTimingEntry entries[BLE_CONN_MGR_DBG_TIMING_DEPTH];
         uint8_t n = BleConnMgr_getDebugTiming(entries, BLE_CONN_MGR_DBG_TIMING_DEPTH);
         rsp[0] = n;
         for (uint8_t i = 0; i < n; i++) {
-            uint8_t *p = &rsp[1u + (uint16_t)i * 13u];
-            p[0] = (uint8_t)(entries[i].eventIdx & 0xFFu);
-            p[1] = (uint8_t)(entries[i].eventIdx >> 8);
-            p[2] = (uint8_t)(entries[i].startRAT & 0xFFu);
-            p[3] = (uint8_t)((entries[i].startRAT >> 8) & 0xFFu);
-            p[4] = (uint8_t)((entries[i].startRAT >> 16) & 0xFFu);
-            p[5] = (uint8_t)((entries[i].startRAT >> 24) & 0xFFu);
-            p[6] = (uint8_t)(entries[i].endRAT & 0xFFu);
-            p[7] = (uint8_t)((entries[i].endRAT >> 8) & 0xFFu);
-            p[8] = (uint8_t)((entries[i].endRAT >> 16) & 0xFFu);
-            p[9] = (uint8_t)((entries[i].endRAT >> 24) & 0xFFu);
+            uint8_t *p = &rsp[1u + (uint16_t)i * 18u];
+            p[0]  = (uint8_t)(entries[i].eventIdx & 0xFFu);
+            p[1]  = (uint8_t)(entries[i].eventIdx >> 8);
+            p[2]  = (uint8_t)(entries[i].startRAT & 0xFFu);
+            p[3]  = (uint8_t)((entries[i].startRAT >> 8) & 0xFFu);
+            p[4]  = (uint8_t)((entries[i].startRAT >> 16) & 0xFFu);
+            p[5]  = (uint8_t)((entries[i].startRAT >> 24) & 0xFFu);
+            p[6]  = (uint8_t)(entries[i].endRAT & 0xFFu);
+            p[7]  = (uint8_t)((entries[i].endRAT >> 8) & 0xFFu);
+            p[8]  = (uint8_t)((entries[i].endRAT >> 16) & 0xFFu);
+            p[9]  = (uint8_t)((entries[i].endRAT >> 24) & 0xFFu);
             p[10] = (uint8_t)(entries[i].status & 0xFFu);
             p[11] = (uint8_t)((entries[i].status >> 8) & 0xFFu);
             p[12] = entries[i].numSent;
+            p[13] = entries[i].nTx;
+            p[14] = entries[i].nRxOk;
+            p[15] = entries[i].nRxNok;
+            p[16] = entries[i].nRxIgnored;
+            p[17] = entries[i].pktStatus;
         }
-        send_response(RSP_DEBUG_TIMING, seq, rsp, (uint16_t)(1u + (uint16_t)n * 13u));
+        send_response(RSP_DEBUG_TIMING, seq, rsp, (uint16_t)(1u + (uint16_t)n * 18u));
         return;
     }
 

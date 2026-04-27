@@ -280,13 +280,15 @@ bool BleConnMgr_poll(void) {
     uint32_t startTime = curHopTime;
     uint32_t endTime = s_next_hop_time;
     uint32_t numSent = 0;
+    RadioIF_BleCentralStats stats = {0};
 
-    int status =
-        RadioIF_bleCentral(chan, st->accessAddr, st->crcInit, &txq, startTime, endTime, &numSent);
+    int status = RadioIF_bleCentral(chan, st->accessAddr, st->crcInit, &txq, startTime, endTime,
+                                    &numSent, &stats);
     s_last_status = status;
     s_dbg_total_tx_done += numSent;
 
-    /* Snapshot timing for host-side correlation (Session 3 telemetry). */
+    /* Snapshot timing + per-event RF stats for host-side correlation
+     * (Session 3 + Session 4 telemetry). */
     {
         BleConnMgr_DbgTimingEntry *e = &s_dbg_timing[s_dbg_timing_head];
         e->eventIdx = s_event_counter;
@@ -294,6 +296,11 @@ bool BleConnMgr_poll(void) {
         e->endRAT = endTime;
         e->status = (uint16_t)status;
         e->numSent = (uint8_t)numSent;
+        e->nTx = stats.nTx;
+        e->nRxOk = stats.nRxOk;
+        e->nRxNok = stats.nRxNok;
+        e->nRxIgnored = stats.nRxIgnored;
+        e->pktStatus = stats.pktStatus;
         s_dbg_timing_head = (uint8_t)((s_dbg_timing_head + 1u) % BLE_CONN_MGR_DBG_TIMING_DEPTH);
         if (s_dbg_timing_count < BLE_CONN_MGR_DBG_TIMING_DEPTH) {
             s_dbg_timing_count++;

@@ -201,8 +201,23 @@ void BleConnMgr_start(void) {
      * winOffset is read back from s_ll_data[8..9] in BleConn_initiate after
      * the SDK overwrites it (with bDynamicWinOffset=1), so this correction is
      * dynamic across connections. */
-    uint32_t anchor_correction = TRANSMIT_WINDOW_DELAY + (uint32_t)st->winOffset * 5000u;
-    s_next_hop_time = st->connTime + anchor_correction - AO_TARG + s_hop_interval_ticks;
+    /* Session 5 anchor formula — match Sniffle's RadioTask.c:467:
+     *     nextHopTime = connTime - AO_TARG + hopIntervalTicks
+     *
+     * TI's `connectTime` returned by CMD_BLE5_INITIATOR is already the
+     * slave's first-event anchor (the SDK accounts for transmitWindowDelay
+     * and WinOffset internally). Session 4 H4 added transmitWindowDelay +
+     * WinOffset*1.25ms ON TOP of connTime — that's a double-application of
+     * a delay the SDK has already absorbed. Sniffle on the same hardware
+     * uses just `connTime + hopInterval - AO_TARG` and connects cleanly to
+     * CH573 (Session 4 Task 3 evidence).
+     *
+     * Old formula kept here for reference if this regresses on a future
+     * peer that does NOT have its anchor at TI's connectTime tick:
+     *   uint32_t anchor_correction = TRANSMIT_WINDOW_DELAY + (uint32_t)st->winOffset * 5000u;
+     *   s_next_hop_time = st->connTime + anchor_correction - AO_TARG + s_hop_interval_ticks;
+     */
+    s_next_hop_time = st->connTime - AO_TARG + s_hop_interval_ticks;
     s_last_rx_time = RF_getCurrentTime();
 
     if (st->useCsa2) {

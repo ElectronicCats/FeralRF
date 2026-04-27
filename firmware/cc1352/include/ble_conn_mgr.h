@@ -22,4 +22,20 @@ int BleConnMgr_getLastStatus(void);
 uint16_t BleConnMgr_getL2capRxCount(void);
 uint16_t BleConnMgr_getTotalRxCount(void);
 
+#define BLE_CONN_MGR_DBG_TIMING_DEPTH 16u
+
+/* One captured master-event timing record. Layout is wire-stable: see
+ * RSP_DEBUG_TIMING in command_processor.c and python/feralrf/_responses.py. */
+typedef struct {
+    uint16_t eventIdx; /* s_event_counter at capture time */
+    uint32_t startRAT; /* curHopTime fed to RadioIF_bleCentral */
+    uint32_t endRAT;   /* s_next_hop_time fed to RadioIF_bleCentral */
+    uint16_t status;   /* RF status code returned by the command */
+    uint8_t numSent;   /* nTxEntryDone returned by the command */
+} BleConnMgr_DbgTimingEntry;
+
+/* Returns up to maxEntries snapshots of the most recent master events,
+ * oldest first. The returned count equals min(active entries, maxEntries). */
+uint8_t BleConnMgr_getDebugTiming(BleConnMgr_DbgTimingEntry *out, uint8_t maxEntries);
+
 #endif /* BLE_CONN_MGR_H */

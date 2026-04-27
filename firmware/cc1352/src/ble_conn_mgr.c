@@ -37,7 +37,7 @@
 #define CONN_INTERVAL_TO_TICKS(x) ((uint32_t)(x) * 5000u) /* 1.25ms * 4MHz */
 #define SUPERV_TO_TICKS(x) ((uint32_t)(x) * 40000u)       /* 10ms * 4MHz */
 #define TRANSMIT_WINDOW_DELAY 5000u                       /* 1.25ms in RAT ticks */
-#define AO_TARG 2000u                                     /* 500us anchor offset (matches Sniffle) */
+#define AO_TARG 2000u /* 500us anchor offset (matches Sniffle) */
 
 /* ── Static state ── */
 static bool s_running;
@@ -50,6 +50,12 @@ static uint16_t s_event_counter;
 static uint16_t s_dbg_l2cap_rx_count;
 static uint16_t s_dbg_total_rx_count;
 static uint32_t s_dbg_total_tx_done;
+
+/* Debug timing ring buffer — populated each call to BleConnMgr_poll().
+ * Cleared on BleConnMgr_start so each connect attempt sees a fresh log. */
+static BleConnMgr_DbgTimingEntry s_dbg_timing[BLE_CONN_MGR_DBG_TIMING_DEPTH];
+static uint8_t s_dbg_timing_head;  /* next write slot 0..DEPTH-1 */
+static uint8_t s_dbg_timing_count; /* number of valid entries (saturates at DEPTH) */
 
 /* ── LL Control PDU handling ── */
 
@@ -173,6 +179,8 @@ void BleConnMgr_start(void) {
     s_dbg_l2cap_rx_count = 0;
     s_dbg_total_rx_count = 0;
     s_dbg_total_tx_done = 0;
+    s_dbg_timing_head = 0;
+    s_dbg_timing_count = 0;
 
     s_hop_interval_ticks = CONN_INTERVAL_TO_TICKS(st->connInterval);
     s_superv_timeout_ticks = SUPERV_TO_TICKS(st->supervTimeout);
@@ -250,10 +258,25 @@ bool BleConnMgr_poll(void) {
     uint32_t endTime = s_next_hop_time;
     uint32_t numSent = 0;
 
-    int status = RadioIF_bleCentral(chan, st->accessAddr, st->crcInit, &txq,
-                                    startTime, endTime, &numSent);
+    int status =
+        RadioIF_bleCentral(chan, st->accessAddr, st->crcInit, &txq, startTime, endTime, &numSent);
     s_last_status = status;
     s_dbg_total_tx_done += numSent;
+
+    /* Snapshot timing for host-side correlation (Session 3 telemetry). */
+    {
+        BleConnMgr_DbgTimingEntry *e = &s_dbg_timing[s_dbg_timing_head];
+        e->eventIdx = s_event_counter;
+        e->startRAT = startTime;
+        e->endRAT = endTime;
+        e->status = (uint16_t)status;
+        e->numSent = (uint8_t)numSent;
+        s_dbg_timing_head = (uint8_t)((s_dbg_timing_head + 1u) % BLE_CONN_MGR_DBG_TIMING_DEPTH);
+        if (s_dbg_timing_count < BLE_CONN_MGR_DBG_TIMING_DEPTH) {
+            s_dbg_timing_count++;
+        }
+    }
+
     TXQueue_flush(numSent);
 
     /* Drain RF data queue into software RX queue, then reset for next event.
@@ -293,4 +316,21 @@ uint16_t BleConnMgr_getEventCount(void) {
 
 int BleConnMgr_getLastStatus(void) {
     return s_last_status;
+}
+
+uint8_t BleConnMgr_getDebugTiming(BleConnMgr_DbgTimingEntry *out, uint8_t maxEntries) {
+    if (out == NULL || maxEntries == 0u) {
+        return 0u;
+    }
+    uint8_t n = (s_dbg_timing_count < maxEntries) ? s_dbg_timing_count : maxEntries;
+
+    /* Walk oldest-to-newest. With a saturating ring of DEPTH entries,
+     * the oldest slot is (head - count) mod DEPTH. */
+    uint8_t start =
+        (uint8_t)((BLE_CONN_MGR_DBG_TIMING_DEPTH + s_dbg_timing_head - s_dbg_timing_count) %
+                  BLE_CONN_MGR_DBG_TIMING_DEPTH);
+    for (uint8_t i = 0; i < n; i++) {
+        out[i] = s_dbg_timing[(start + i) % BLE_CONN_MGR_DBG_TIMING_DEPTH];
+    }
+    return n;
 }

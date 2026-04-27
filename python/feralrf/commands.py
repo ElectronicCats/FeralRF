@@ -185,6 +185,11 @@ class CommandBuilder:
         return struct.pack("<H", handle & 0xFFFF)
 
     @staticmethod
+    def debug_timing() -> bytes:
+        """No payload for CMD_DEBUG_TIMING."""
+        return b""
+
+    @staticmethod
     def gatt_write(handle: int, data: bytes) -> bytes:
         """Payload for CMD_GATT_WRITE: 2-byte LE handle + value bytes."""
         return struct.pack("<H", handle & 0xFFFF) + bytes(data)

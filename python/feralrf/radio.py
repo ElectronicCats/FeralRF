@@ -9,6 +9,7 @@ from typing import Iterator, Optional, Set
 import serial
 import serial.tools.list_ports
 
+from feralrf._responses import DebugTimingResponse
 from feralrf.commands import CommandBuilder
 from feralrf.enums import PHY, Command, Response
 from feralrf.exceptions import CommandError, ConnectionError, ProtocolError, TimeoutError
@@ -175,9 +176,7 @@ class Radio:
         "start_jam",
         "stop_jam",
     )
-    PENDING_FEATURES = (
-        "spectrum",
-    )
+    PENDING_FEATURES = ("spectrum",)
 
     def __init__(self, port: Optional[str] = None, baudrate: int = 921600):
         self.port = port
@@ -619,6 +618,19 @@ class Radio:
             conn_time=conn_time,
         )
 
+    def debug_timing(self, timeout: float = 2.0) -> DebugTimingResponse:
+        """Issue CMD_DEBUG_TIMING; firmware returns the last N master-event timing records."""
+        self._send_command(Command.DEBUG_TIMING, CommandBuilder.debug_timing())
+        cmd_id, _seq, payload = self._read_response(
+            timeout=timeout,
+            expected={Response.DEBUG_TIMING, Response.ERROR},
+        )
+        if cmd_id == Response.ERROR:
+            raise CommandError("DEBUG_TIMING failed", payload[0] if payload else 0)
+        if cmd_id != Response.DEBUG_TIMING:
+            raise ProtocolError(f"Unexpected response to DEBUG_TIMING: 0x{cmd_id:02X}")
+        return DebugTimingResponse.parse(payload)
+
     def gatt_discover(self, timeout: float = 15.0) -> "GattDiscoveryResult":
         """Issue CMD_GATT_DISCOVER and collect the streamed services + chars.
 
@@ -689,7 +701,9 @@ class Radio:
                 raise CommandError("GATT_DISCOVER stream error", payload[0] if payload else 0)
 
         return GattDiscoveryResult(
-            services=services, characteristics=characteristics, status=status,
+            services=services,
+            characteristics=characteristics,
+            status=status,
         )
 
     def gatt_read(self, handle: int, timeout: float = 5.0) -> bytes:

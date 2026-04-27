@@ -47,6 +47,9 @@
 #define CMD_GATT_READ 0x45u
 #define CMD_GATT_WRITE 0x46u
 
+/* Diagnostics */
+#define CMD_DEBUG_TIMING 0x47u
+
 /* Responses (match python/feralrf/enums.py) */
 #define RSP_ACK 0x80u
 #define RSP_ERROR 0x81u
@@ -62,6 +65,9 @@
 #define RSP_GATT_CHAR 0xA3u
 #define RSP_GATT_READ_R 0xA4u
 #define RSP_GATT_DONE 0xA5u
+
+/* Diagnostics */
+#define RSP_DEBUG_TIMING 0xA8u
 
 /* Error codes */
 #define ERR_INVALID_CMD 0x01u
@@ -125,29 +131,32 @@ static void send_error(uint8_t seq, uint8_t error_code) {
 /* ── GATT ATT callbacks ── */
 static uint8_t s_gatt_seq;
 
-static void gatt_on_service(uint16_t startHandle, uint16_t endHandle,
-                             const uint8_t *uuid, uint8_t uuidLen) {
+static void gatt_on_service(uint16_t startHandle, uint16_t endHandle, const uint8_t *uuid,
+                            uint8_t uuidLen) {
     uint8_t rsp[4 + 16]; /* max: 4 handles + 16-byte UUID */
     rsp[0] = (uint8_t)(startHandle & 0xFF);
     rsp[1] = (uint8_t)(startHandle >> 8);
     rsp[2] = (uint8_t)(endHandle & 0xFF);
     rsp[3] = (uint8_t)(endHandle >> 8);
-    if (uuidLen > 16) uuidLen = 16;
-    for (uint8_t i = 0; i < uuidLen; i++) rsp[4 + i] = uuid[i];
+    if (uuidLen > 16)
+        uuidLen = 16;
+    for (uint8_t i = 0; i < uuidLen; i++)
+        rsp[4 + i] = uuid[i];
     send_response(RSP_GATT_SERVICE, s_gatt_seq, rsp, 4u + uuidLen);
 }
 
-static void gatt_on_char(uint16_t handle, uint8_t properties,
-                          uint16_t valueHandle,
-                          const uint8_t *uuid, uint8_t uuidLen) {
+static void gatt_on_char(uint16_t handle, uint8_t properties, uint16_t valueHandle,
+                         const uint8_t *uuid, uint8_t uuidLen) {
     uint8_t rsp[5 + 16];
     rsp[0] = (uint8_t)(handle & 0xFF);
     rsp[1] = (uint8_t)(handle >> 8);
     rsp[2] = properties;
     rsp[3] = (uint8_t)(valueHandle & 0xFF);
     rsp[4] = (uint8_t)(valueHandle >> 8);
-    if (uuidLen > 16) uuidLen = 16;
-    for (uint8_t i = 0; i < uuidLen; i++) rsp[5 + i] = uuid[i];
+    if (uuidLen > 16)
+        uuidLen = 16;
+    for (uint8_t i = 0; i < uuidLen; i++)
+        rsp[5 + i] = uuid[i];
     send_response(RSP_GATT_CHAR, s_gatt_seq, rsp, 5u + uuidLen);
 }
 
@@ -155,8 +164,10 @@ static void gatt_on_read(uint16_t handle, const uint8_t *data, uint8_t len) {
     uint8_t rsp[2 + 23];
     rsp[0] = (uint8_t)(handle & 0xFF);
     rsp[1] = (uint8_t)(handle >> 8);
-    if (len > 23) len = 23;
-    for (uint8_t i = 0; i < len; i++) rsp[2 + i] = data[i];
+    if (len > 23)
+        len = 23;
+    for (uint8_t i = 0; i < len; i++)
+        rsp[2 + i] = data[i];
     send_response(RSP_GATT_READ_R, s_gatt_seq, rsp, 2u + len);
 }
 
@@ -480,7 +491,10 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
         rsp[7] = (uint8_t)(last_st & 0xFFu);
         rsp[8] = (uint8_t)((last_st >> 8) & 0xFFu);
         uint32_t tx_done = 0;
-        { extern uint32_t BleConnMgr_getTotalTxDone(void); tx_done = BleConnMgr_getTotalTxDone(); }
+        {
+            extern uint32_t BleConnMgr_getTotalTxDone(void);
+            tx_done = BleConnMgr_getTotalTxDone();
+        }
         rsp[9] = (uint8_t)(tx_done & 0xFFu);
         rsp[10] = (uint8_t)((tx_done >> 8) & 0xFFu);
         rsp[11] = att_state;
@@ -556,6 +570,37 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
             return;
         }
         send_ack(seq);
+        return;
+    }
+
+    case CMD_DEBUG_TIMING: {
+        if (payload_len != 0u) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            return;
+        }
+        /* Wire layout: count(u8) + count × { eventIdx(u16) startRAT(u32)
+         * endRAT(u32) status(u16) numSent(u8) }  →  1 + 16*13 = 209 bytes max. */
+        uint8_t rsp[1u + BLE_CONN_MGR_DBG_TIMING_DEPTH * 13u];
+        BleConnMgr_DbgTimingEntry entries[BLE_CONN_MGR_DBG_TIMING_DEPTH];
+        uint8_t n = BleConnMgr_getDebugTiming(entries, BLE_CONN_MGR_DBG_TIMING_DEPTH);
+        rsp[0] = n;
+        for (uint8_t i = 0; i < n; i++) {
+            uint8_t *p = &rsp[1u + (uint16_t)i * 13u];
+            p[0] = (uint8_t)(entries[i].eventIdx & 0xFFu);
+            p[1] = (uint8_t)(entries[i].eventIdx >> 8);
+            p[2] = (uint8_t)(entries[i].startRAT & 0xFFu);
+            p[3] = (uint8_t)((entries[i].startRAT >> 8) & 0xFFu);
+            p[4] = (uint8_t)((entries[i].startRAT >> 16) & 0xFFu);
+            p[5] = (uint8_t)((entries[i].startRAT >> 24) & 0xFFu);
+            p[6] = (uint8_t)(entries[i].endRAT & 0xFFu);
+            p[7] = (uint8_t)((entries[i].endRAT >> 8) & 0xFFu);
+            p[8] = (uint8_t)((entries[i].endRAT >> 16) & 0xFFu);
+            p[9] = (uint8_t)((entries[i].endRAT >> 24) & 0xFFu);
+            p[10] = (uint8_t)(entries[i].status & 0xFFu);
+            p[11] = (uint8_t)((entries[i].status >> 8) & 0xFFu);
+            p[12] = entries[i].numSent;
+        }
+        send_response(RSP_DEBUG_TIMING, seq, rsp, (uint16_t)(1u + (uint16_t)n * 13u));
         return;
     }
 

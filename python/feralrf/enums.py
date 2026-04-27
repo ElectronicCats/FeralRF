@@ -65,6 +65,9 @@ class Command(IntEnum):
     GATT_READ = 0x45
     GATT_WRITE = 0x46
 
+    # Diagnostics
+    DEBUG_TIMING = 0x47
+
 
 class Response(IntEnum):
     """Response IDs"""
@@ -84,6 +87,9 @@ class Response(IntEnum):
     GATT_CHAR = 0xA3
     GATT_READ_VALUE = 0xA4
     GATT_DONE = 0xA5
+
+    # Diagnostics
+    DEBUG_TIMING = 0xA8
 
 
 STABLE_COMMANDS = (

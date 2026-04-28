@@ -423,7 +423,9 @@ Viven en `firmware/cc1352/smartrf_settings/` mezclados con configs generadas. En
 **Riesgos específicos:**
 - Puede ser un bug latente en precompiled libs — si es así, workaround documentado y decisión ir/no ir.
 
-### F10 — Port props NoRTOS → TI-RTOS 🔜
+### F10 — Port props NoRTOS → TI-RTOS ✅ (tag `v2.0-f10`)
+
+**Closed 2026-04-28.** All 16 prop presets validated 10/10 OTA on TI-RTOS, including OOK 433 (better than spec's best-effort baseline). FW size 91 KB. Closure note: `docs/investigations/2026-04-28-f10-validation.md`. Mid-session pivot: discovered hardware fault on board #1's Sub-1GHz TX path — validation completed with TX=board #2.
 
 **Prereq:** F9
 **Branch:** `feature/f10-port-props-tirtos`

@@ -374,9 +374,10 @@ Viven en `firmware/cc1352/smartrf_settings/` mezclados con configs generadas. En
 
 **Referencia:** branch `fix/uart-starvation-during-conn` (commits `f125473` move + `5b7325a` sweep intento incompleto) — conservar como referencia histórica, no mergear.
 
-### F8 — Validar GATT end-to-end 🟡 (F8A ✅, awaits human checkpoint)
+### F8 — Validar GATT end-to-end ✅ (tag `v2.0-f8`)
 
 **Prereq:** F7, **F8A** ✅
+**Validation note:** `docs/investigations/2026-04-28-f8-validation.md`
 **Branch:** `feature/f8-gatt-validation`
 **Tag al cerrar:** `v2.0-f8`
 

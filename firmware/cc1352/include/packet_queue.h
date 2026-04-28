@@ -11,7 +11,12 @@
 
 #include "protocol.h"
 
-#define PACKET_QUEUE_DEPTH 8u
+/* 32 entries: GATT discovery can burst-queue up to ~13 frames
+ * (3-5 services + ~9 chars + GATT_DONE) faster than HostIFTask_poll can
+ * drain UART, because RF_runCmd(BLE5_MASTER) blocks the cooperative scheduler
+ * for the entire connection event window (~10 ms). 8 entries overflowed and
+ * silently dropped RSP_GATT_DONE. */
+#define PACKET_QUEUE_DEPTH 32u
 #define PACKET_QUEUE_MAX_FRAME_SIZE (COBS_MAX_ENCODED + 1u)
 
 void PacketQueue_init(void);

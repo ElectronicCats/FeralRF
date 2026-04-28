@@ -1261,22 +1261,39 @@ static void RadioIF_processBlePackets(void) {
         entry_len = (uint16_t)raw_entry[0] | ((uint16_t)raw_entry[1] << 8);
         entry_data = raw_entry + RF_QUEUE_ENTRY_LEN_FIELD_SIZE;
 
-        if (entry_len < (uint16_t)(BLE_ADV_HEADER_LEN + BLE_APPENDED_TOTAL_LEN)) {
+        /* Smallest plausible entry: 2-byte LL header + 7 appended (no CRC). */
+        const uint16_t appended_no_crc =
+            (uint16_t)(BLE_APPENDED_RSSI_LEN + BLE_APPENDED_STATUS_LEN +
+                       BLE_APPENDED_TIMESTAMP_LEN);
+        if (entry_len < (uint16_t)(BLE_ADV_HEADER_LEN + appended_no_crc)) {
             s_metrics.rx_drop++;
             RadioIF_rfConsumeEntry();
             continue;
         }
 
-        /* Layout A: [PDU][CRC(3)][RSSI][STATUS(2)][TIMESTAMP(4)] */
-        pdu_len = (uint16_t)BLE_ADV_HEADER_LEN + (uint16_t)(entry_data[1] & 0x3Fu);
-        if ((uint16_t)(pdu_len + BLE_APPENDED_TOTAL_LEN) == entry_len) {
-            pdu_offset = 0u;
-            layout_ok = true;
-        } else if (entry_len > 1u) {
-            /* Layout B: [LEN][PDU][CRC(3)][RSSI][STATUS(2)][TIMESTAMP(4)] */
-            pdu_len = (uint16_t)BLE_ADV_HEADER_LEN + (uint16_t)(entry_data[2] & 0x3Fu);
-            if ((uint16_t)(1u + pdu_len + BLE_APPENDED_TOTAL_LEN) == entry_len) {
-                pdu_offset = 1u;
+        /* Try four layouts:
+         *   A_crc:    [PDU][CRC(3)][RSSI][STATUS(2)][TIMESTAMP(4)]
+         *   A_nocrc:  [PDU][RSSI][STATUS(2)][TIMESTAMP(4)]
+         *   B_crc:    [LEN][PDU][CRC(3)][RSSI][STATUS(2)][TIMESTAMP(4)]
+         *   B_nocrc:  [LEN][PDU][RSSI][STATUS(2)][TIMESTAMP(4)]
+         *
+         * Scanner / GenericRx use bIncludeCrc=1 (A_crc / B_crc with our
+         * bIncludeLenByte=1 → B_crc). CMD_BLE5_MASTER uses bIncludeCrc=0
+         * (B_nocrc); changing the master flag to 1 regresses the initiator
+         * (shared data queue), so the parser flexes instead. */
+        const uint16_t appended_with_crc = (uint16_t)(appended_no_crc + BLE_APPENDED_CRC_LEN);
+        for (uint8_t trial = 0; trial < 4u && !layout_ok; trial++) {
+            uint8_t off = (uint8_t)((trial & 1u) ? 1u : 0u);
+            uint16_t app = (trial & 2u) ? appended_with_crc : appended_no_crc;
+            uint16_t hdr_len_idx = (uint16_t)(off + 1u);
+            if (hdr_len_idx >= entry_len) {
+                continue;
+            }
+            uint16_t cand =
+                (uint16_t)BLE_ADV_HEADER_LEN + (uint16_t)(entry_data[hdr_len_idx] & 0x3Fu);
+            if ((uint16_t)(off + cand + app) == entry_len) {
+                pdu_offset = off;
+                pdu_len = cand;
                 layout_ok = true;
             }
         }
@@ -1287,9 +1304,9 @@ static void RadioIF_processBlePackets(void) {
             continue;
         }
 
-        /* BLE appended fields are at the end of raw payload:
-         * [ ... PDU ... ][CRC(3)][RSSI(1)][STATUS0][STATUS1][TIMESTAMP(4)].
-         */
+        /* RSSI/STATUS/TIMESTAMP always sit at the END of the entry — their
+         * indices are independent of whether CRC was appended between them
+         * and the PDU. */
         timestamp_idx = (uint16_t)(entry_len - BLE_APPENDED_TIMESTAMP_LEN);
         status0_idx = (uint16_t)(entry_len - BLE_APPENDED_TIMESTAMP_LEN - BLE_APPENDED_STATUS_LEN);
         rssi_idx = (uint16_t)(status0_idx - BLE_APPENDED_RSSI_LEN);
@@ -2321,7 +2338,10 @@ int RadioIF_bleCentral(uint8_t chan, uint32_t accessAddr, uint32_t crcInit, data
 
     Ble5_0_cmdBle5Master.pParams->rxConfig.bAutoFlushIgnored = 1;
     Ble5_0_cmdBle5Master.pParams->rxConfig.bAutoFlushCrcErr = 1;
-    Ble5_0_cmdBle5Master.pParams->rxConfig.bAutoFlushEmpty = 0;
+    /* Master mode: empties already surface via pOutput.pktStatus.bLastEmpty.
+     * Flushing them keeps the 3-entry RX queue from saturating before slave
+     * sends a non-empty ATT response. */
+    Ble5_0_cmdBle5Master.pParams->rxConfig.bAutoFlushEmpty = 1;
     Ble5_0_cmdBle5Master.pParams->rxConfig.bIncludeLenByte = 1;
     Ble5_0_cmdBle5Master.pParams->rxConfig.bIncludeCrc = 0;
     Ble5_0_cmdBle5Master.pParams->rxConfig.bAppendRssi = 1;
@@ -2354,14 +2374,13 @@ int RadioIF_bleCentral(uint8_t chan, uint32_t accessAddr, uint32_t crcInit, data
          * pin bitfield layout, and we want a wire-stable byte the Python
          * parser can interpret unambiguously. Order matches
          * DebugTimingEntry property bitmasks in _responses.py. */
-        pStats->pktStatus =
-            (uint8_t)((output.pktStatus.bTimeStampValid ? 0x01u : 0u) |
-                      (output.pktStatus.bLastCrcErr     ? 0x02u : 0u) |
-                      (output.pktStatus.bLastIgnored    ? 0x04u : 0u) |
-                      (output.pktStatus.bLastEmpty      ? 0x08u : 0u) |
-                      (output.pktStatus.bLastCtrl       ? 0x10u : 0u) |
-                      (output.pktStatus.bLastMd         ? 0x20u : 0u) |
-                      (output.pktStatus.bLastAck        ? 0x40u : 0u));
+        pStats->pktStatus = (uint8_t)((output.pktStatus.bTimeStampValid ? 0x01u : 0u) |
+                                      (output.pktStatus.bLastCrcErr ? 0x02u : 0u) |
+                                      (output.pktStatus.bLastIgnored ? 0x04u : 0u) |
+                                      (output.pktStatus.bLastEmpty ? 0x08u : 0u) |
+                                      (output.pktStatus.bLastCtrl ? 0x10u : 0u) |
+                                      (output.pktStatus.bLastMd ? 0x20u : 0u) |
+                                      (output.pktStatus.bLastAck ? 0x40u : 0u));
     }
 
     /* Return raw status for debugging. Caller checks for success codes. */

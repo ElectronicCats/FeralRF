@@ -1082,6 +1082,13 @@ static bool RadioIF_switchRfMode(RF_Mode *mode, RF_RadioSetup *setup) {
             RF_close(s_rf_handle);
             s_rf_handle = NULL;
             s_current_rf_mode = NULL;
+            /* F9 partial fix: extended settle so the RF driver clears
+             * RF_core.init while the 433 boot handle still anchors a
+             * client slot. Without this, RF_open skips CPE patch reload
+             * and the new mode runs with stale patches → silent RX
+             * failure on Sub-1GHz→BLE switch. (IEEE→BLE is still
+             * broken — see commit message and F9 close-out doc.) */
+            ClockP_usleep(200000); /* 200 ms */
         }
     }
     RF_Params rf_params;
@@ -1229,11 +1236,15 @@ static void RadioIF_stopRfBackend(void) {
             RF_yield(s_rf_handle);
             ClockP_usleep(50000);
         }
-        /* Close non-433 handle to free client slot. 433 handle stays open. */
+        /* Close non-433 handle to free client slot. 433 handle stays open.
+         * F9 partial fix: 200 ms post-close settle so the RF driver clears
+         * RF_core.init before the next RF_open in a different mode (else
+         * patches don't reload and RX silently fails). */
         if (s_rf_handle != s_433_handle) {
             RF_yield(s_rf_handle);
             ClockP_usleep(1000);
             RF_close(s_rf_handle);
+            ClockP_usleep(200000); /* 200 ms — match switchRfMode */
         }
         s_rf_handle = NULL;
     }

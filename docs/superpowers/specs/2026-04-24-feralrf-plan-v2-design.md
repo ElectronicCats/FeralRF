@@ -348,7 +348,7 @@ Viven en `firmware/cc1352/smartrf_settings/` mezclados con configs generadas. En
 
 ### BLOQUE B — Consolidación TI-RTOS
 
-### F8A — BLE Central rewrite Sniffle-style 🔜 (BLOQUEA F8)
+### F8A — BLE Central rewrite Sniffle-style ✅ (tag `v2.0-f8a`)
 
 **Agregada 2026-04-24** tras descubrir que el `CMD_BLE5_INITIATOR` de TI no entrega un `connTime` compatible con el anchor que el peripheral espera — la conexión se cae al primer master event (`BLE_DONE_NOSYNC = 0x1402`). Validado contra CH573 `DC:32:62:8D:E1:09`: Sniffle firmware conecta limpio en el mismo board; FeralRF falla incluso con sweep completo de WinOffset en 1.25 ms.
 
@@ -374,9 +374,9 @@ Viven en `firmware/cc1352/smartrf_settings/` mezclados con configs generadas. En
 
 **Referencia:** branch `fix/uart-starvation-during-conn` (commits `f125473` move + `5b7325a` sweep intento incompleto) — conservar como referencia histórica, no mergear.
 
-### F8 — Validar GATT end-to-end 🟡 BLOQUEADA por F8A
+### F8 — Validar GATT end-to-end 🟡 (F8A ✅, awaits human checkpoint)
 
-**Prereq:** F7, **F8A**
+**Prereq:** F7, **F8A** ✅
 **Branch:** `feature/f8-gatt-validation`
 **Tag al cerrar:** `v2.0-f8`
 

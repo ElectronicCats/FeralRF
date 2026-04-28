@@ -25,6 +25,14 @@
 #include "csa2.h"
 #include "tx_queue.h"
 
+/* LL Control PDU opcodes used during teardown.
+ * Core Spec Vol 6, Part B, 2.4.2 — opcode + ErrorCode payload. */
+#define LL_TERMINATE_IND_OPCODE 0x02u
+#define LL_TERMINATE_REASON_REMOTE_USER 0x13u
+
+/* TI-RTOS Clock tick = 10 µs. Convert milliseconds to ticks. */
+#define MS_TO_TASK_TICKS(ms) ((uint32_t)(ms) * 100u)
+
 /* ── Static state (single connection) ── */
 static BleConn_State s_state;
 static uint8_t s_ll_data[BLE_CONN_LLDATA_LEN];
@@ -208,13 +216,10 @@ BleConn_Result BleConn_initiate(const uint8_t *peerAddr, uint8_t peerAddrType,
          * data-channel TX lands on the wrong AA/channel/CRC and the slave
          * silently drops it. NOSYNC every event with nTx==1 (Session 4
          * Task 2 evidence). Re-snapshot ALL fields the host loop consumes. */
-        s_state.accessAddr = (uint32_t)s_ll_data[0]
-                             | ((uint32_t)s_ll_data[1] << 8)
-                             | ((uint32_t)s_ll_data[2] << 16)
-                             | ((uint32_t)s_ll_data[3] << 24);
-        s_state.crcInit = (uint32_t)s_ll_data[4]
-                          | ((uint32_t)s_ll_data[5] << 8)
-                          | ((uint32_t)s_ll_data[6] << 16);
+        s_state.accessAddr = (uint32_t)s_ll_data[0] | ((uint32_t)s_ll_data[1] << 8) |
+                             ((uint32_t)s_ll_data[2] << 16) | ((uint32_t)s_ll_data[3] << 24);
+        s_state.crcInit =
+            (uint32_t)s_ll_data[4] | ((uint32_t)s_ll_data[5] << 8) | ((uint32_t)s_ll_data[6] << 16);
         /* s_ll_data[7] = WinSize, [8..9] = WinOffset, [10..11] = Interval,
          * [12..13] = Latency, [14..15] = Timeout, [16..20] = ChM, [21] = Hop|SCA. */
         s_state.winOffset = (uint16_t)((uint16_t)s_ll_data[8] | ((uint16_t)s_ll_data[9] << 8));
@@ -235,6 +240,24 @@ BleConn_Result BleConn_initiate(const uint8_t *peerAddr, uint8_t peerAddrType,
 }
 
 void BleConn_disconnect(void) {
+    /* If we have an active connection, send LL_TERMINATE_IND so the peer
+     * tears down its side immediately instead of waiting for
+     * supervisionTimeout (~1 s for default config). Without this, CH573 and
+     * similar peripherals hold ghost connection state long enough to make
+     * back-to-back demo runs flaky. Block ~3 connection intervals after
+     * queuing so BleConnMgr_poll has time to TX it and receive the slave's
+     * empty-PDU ACK before we tear down our own side. */
+    if (s_state.connected && BleConnMgr_isRunning()) {
+        uint8_t pdu[2] = {LL_TERMINATE_IND_OPCODE, LL_TERMINATE_REASON_REMOTE_USER};
+        TXQueue_insert(2, TX_QUEUE_LLID_CTRL, pdu);
+
+        uint32_t interval_ms = (uint32_t)s_state.connInterval * 5u / 4u; /* 1.25 ms units */
+        if (interval_ms == 0u) {
+            interval_ms = 30u;
+        }
+        Task_sleep(MS_TO_TASK_TICKS(interval_ms * 3u));
+    }
+
     BleConnMgr_stop();
     if (s_state.initiating) {
         RadioIF_stopRx();

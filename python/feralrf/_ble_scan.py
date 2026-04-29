@@ -75,6 +75,20 @@ class BleScanResult:
             self.adv_count += 1
             self.raw_advs.append(ad_payload)
 
+    def to_dict(self) -> dict:
+        """Return JSON-serializable dict.
+
+        Bytes fields become hex strings. Integer dict keys become strings (JSON requirement).
+        """
+        from dataclasses import asdict
+
+        d = asdict(self)
+        d["raw_advs"] = [b.hex() for b in self.raw_advs]
+        d["raw_scan_rsps"] = [b.hex() for b in self.raw_scan_rsps]
+        d["services_uuid16_data"] = {k: v.hex() for k, v in self.services_uuid16_data.items()}
+        d["manufacturer_data"] = {str(k): v.hex() for k, v in self.manufacturer_data.items()}
+        return d
+
 
 def parse_ad_structures(payload: bytes) -> dict:
     """Parse BLE advertising data structures.

@@ -5,6 +5,8 @@ already tags it; these tests cover the Python-side parser, dataclass,
 and merge logic that consume those packets.
 """
 
+import json
+
 from feralrf._ble_scan import BleScanResult, extract_pdu_header, parse_ad_structures
 
 
@@ -262,3 +264,24 @@ def test_blescanresult_rssi_rolling_avg_three_packets():
     assert r.rssi_max == -40
     assert r.rssi_min == -60
     assert r.rssi_avg == -50.0
+
+
+def test_blescanresult_to_dict_json_serializable():
+    r = BleScanResult(mac="DE:AD:BE:EF:CA:FE", addr_type="public")
+    pkt_data = (
+        bytes([0x00, 0x09, 0xFE, 0xCA, 0xEF, 0xBE, 0xAD, 0xDE])
+        + bytes([0x05, 0x09])
+        + b"Demo"
+        + bytes([0x05, 0xFF, 0x4C, 0x00, 0x07, 0x19])
+    )
+    r.update_from_packet(FakePkt(pkt_data, rssi=-50, ll_pdu_type=0x00))
+
+    d = r.to_dict()
+    s = json.dumps(d)  # must not raise
+    parsed = json.loads(s)
+
+    assert parsed["mac"] == "DE:AD:BE:EF:CA:FE"
+    assert parsed["name"] == "Demo"
+    # bytes fields became hex strings:
+    assert parsed["manufacturer_data"] == {"76": "0719"}  # 0x004C as decimal str key in JSON
+    assert all(isinstance(p, str) for p in parsed["raw_advs"])

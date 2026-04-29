@@ -62,6 +62,11 @@ def parse_ad_structures(payload: bytes) -> dict:
         elif ad_type == 0x08:
             if "name" not in out:
                 out["name"] = value.decode("utf-8", errors="replace")
+        elif ad_type in (0x02, 0x03):
+            uuids = out.setdefault("uuids_16bit", [])
+            for j in range(0, len(value) - 1, 2):
+                uuid_int = int.from_bytes(value[j : j + 2], "little")
+                uuids.append(f"{uuid_int:04X}")
 
         i += 1 + ad_len
     return out

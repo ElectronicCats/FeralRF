@@ -216,3 +216,49 @@ def test_extract_pdu_header_too_short_returns_none():
     pkt_data = bytes([0x00, 0x06, 0xFE])  # truncated
     mac, addr_type = extract_pdu_header(pkt_data)
     assert mac is None and addr_type is None
+
+
+class FakePkt:
+    """Stand-in for feralrf.radio.Packet — only the fields update_from_packet uses."""
+
+    def __init__(self, data: bytes, rssi: int, ll_pdu_type: int):
+        self.data = data
+        self.rssi_dbm = rssi
+        self.ll_pdu_type = ll_pdu_type
+        self.crc_ok = True
+
+
+def test_blescanresult_update_adv_then_scan_rsp_merges():
+    # ADV_IND: PDU type 0x00. Name from ADV.
+    adv_data = (
+        bytes([0x00, 0x09, 0xFE, 0xCA, 0xEF, 0xBE, 0xAD, 0xDE])  # header + AdvA
+        + bytes([0x05, 0x09])
+        + b"Demo"  # AD: complete name
+    )
+    # SCAN_RSP: PDU type 0x04. UUIDs only here.
+    rsp_data = bytes([0x04, 0x09, 0xFE, 0xCA, 0xEF, 0xBE, 0xAD, 0xDE]) + bytes(  # header + AdvA
+        [0x03, 0x03, 0x2C, 0xFE]
+    )  # AD: complete 16-bit UUID FE2C
+    r = BleScanResult(mac="DE:AD:BE:EF:CA:FE", addr_type="public")
+    r.update_from_packet(FakePkt(adv_data, rssi=-50, ll_pdu_type=0x00))
+    r.update_from_packet(FakePkt(rsp_data, rssi=-52, ll_pdu_type=0x04))
+
+    assert r.adv_count == 1
+    assert r.scan_rsp_count == 1
+    assert r.name == "Demo"
+    assert r.uuids_16bit == ["FE2C"]
+    assert r.rssi_max == -50
+    assert r.rssi_min == -52
+    assert r.rssi_avg == -51.0
+    assert r.raw_advs == [adv_data[8:]]
+    assert r.raw_scan_rsps == [rsp_data[8:]]
+
+
+def test_blescanresult_rssi_rolling_avg_three_packets():
+    r = BleScanResult(mac="DE:AD:BE:EF:CA:FE", addr_type="public")
+    pkt_data = bytes([0x00, 0x06, 0xFE, 0xCA, 0xEF, 0xBE, 0xAD, 0xDE])
+    for rssi in (-40, -50, -60):
+        r.update_from_packet(FakePkt(pkt_data, rssi=rssi, ll_pdu_type=0x00))
+    assert r.rssi_max == -40
+    assert r.rssi_min == -60
+    assert r.rssi_avg == -50.0

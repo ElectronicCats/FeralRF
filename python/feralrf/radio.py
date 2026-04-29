@@ -9,6 +9,7 @@ from typing import Iterator, Optional, Set
 import serial
 import serial.tools.list_ports
 
+from feralrf._ble_scan import BleScanResult, extract_pdu_header
 from feralrf._responses import DebugConnParamsResponse, DebugTimingResponse
 from feralrf.commands import CommandBuilder
 from feralrf.enums import PHY, Command, Response
@@ -133,9 +134,10 @@ class Radio:
             init, set_phy, set_channel, set_power, start_rx, read_packets,
             stop_rx, transmit, transmit_frame, transmit_burst,
             transmit_continuous, stop_transmit, get_stats, configure_prop,
-            set_ble_addr, set_ble_addr_str, set_ble_scan_mode, set_adv_hop,
-            reset_device, ble_connect, ble_disconnect, conn_status,
-            gatt_discover, gatt_read, gatt_write.
+            scan_ble_active, set_ble_addr, set_ble_addr_str,
+            set_ble_scan_mode, set_adv_hop, reset_device, ble_connect,
+            ble_disconnect, conn_status, gatt_discover, gatt_read,
+            gatt_write.
         Experimental:
             start_jam, stop_jam.
         Pending:
@@ -162,6 +164,7 @@ class Radio:
         "configure_prop",
         "set_ble_addr",
         "set_ble_addr_str",
+        "scan_ble_active",
         "set_ble_scan_mode",
         "set_adv_hop",
         "reset_device",
@@ -789,6 +792,89 @@ class Radio:
         cmd_id, seq, resp = self._read_response(expected={Response.ACK, Response.ERROR})
         if cmd_id == Response.ERROR:
             raise CommandError("Set BLE scan mode failed", resp[0] if resp else 0)
+
+    def scan_ble_active(
+        self,
+        duration: float,
+        channels=(37, 38, 39),
+        phy: PHY = PHY.BLE_1M,
+    ) -> dict:
+        """Active BLE scan — send SCAN_REQ, capture SCAN_RSP, merge per MAC.
+
+        Saves and restores set_ble_scan_mode, set_adv_hop, and PHY/channel
+        on exit (try/finally), even on exception.
+
+        Args:
+            duration: seconds to listen.
+            channels: int or sequence of advertising channels (37/38/39).
+                      Single channel → adv_hop disabled.
+                      Multiple channels → adv_hop enabled, scan starts at channels[0].
+            phy: BLE PHY (default BLE_1M).
+
+        Returns:
+            dict[str, BleScanResult] keyed by MAC display string.
+        """
+        if isinstance(channels, int):
+            channels = (channels,)
+        else:
+            channels = tuple(channels)
+        if not channels:
+            raise ValueError("channels must contain at least one channel")
+
+        prior_phy = self._phy
+        prior_channel = self._channel
+        hop_needed = len(channels) > 1
+        results: dict = {}
+
+        try:
+            self.set_ble_scan_mode(active=True)
+            self.set_adv_hop(hop_needed)
+            self.set_phy(phy, channel=channels[0])
+            self.start_rx()
+
+            for pkt in self.read_packets(timeout=duration):
+                if not pkt.crc_ok:
+                    continue
+                if len(pkt.data) < 8:
+                    continue
+                # Only BLE adv-channel PDUs have ll_pdu_type set; non-BLE
+                # data has ll_pdu_type None. Filter to adv/scan kinds.
+                if pkt.ll_pdu_type is None:
+                    continue
+                # PDU types: 0x00 ADV_IND, 0x01 ADV_DIRECT, 0x02 ADV_NONCONN_IND,
+                # 0x04 SCAN_RSP, 0x06 ADV_SCAN_IND, 0x07 ADV_EXT_IND.
+                # 0x03 SCAN_REQ and 0x05 CONNECT_IND are not what we expect from a peripheral.
+                if pkt.ll_pdu_type not in (0x00, 0x01, 0x02, 0x04, 0x06, 0x07):
+                    continue
+
+                mac, addr_type = extract_pdu_header(pkt.data)
+                if mac is None:
+                    continue
+                result = results.get(mac)
+                if result is None:
+                    result = BleScanResult(mac=mac, addr_type=addr_type)
+                    results[mac] = result
+                result.update_from_packet(pkt)
+        finally:
+            try:
+                self.stop_rx()
+            except Exception:
+                pass
+            try:
+                self.set_ble_scan_mode(active=False)
+            except Exception:
+                pass
+            try:
+                self.set_adv_hop(False)
+            except Exception:
+                pass
+            try:
+                if prior_phy is not None:
+                    self.set_phy(prior_phy, channel=prior_channel)
+            except Exception:
+                pass
+
+        return results
 
     def configure_prop(
         self,

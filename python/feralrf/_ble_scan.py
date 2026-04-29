@@ -30,6 +30,51 @@ class BleScanResult:
     raw_advs: list[bytes] = field(default_factory=list)
     raw_scan_rsps: list[bytes] = field(default_factory=list)
 
+    def update_from_packet(self, pkt) -> None:
+        """Merge a single Packet into this result.
+
+        pkt must have: data (bytes), rssi_dbm (int), ll_pdu_type (int).
+        Caller is responsible for routing the packet to the right MAC's result.
+        """
+        ad_payload = pkt.data[8:]
+        ad = parse_ad_structures(ad_payload)
+
+        # 0x09 (Complete) overwrites; 0x08 only if no name yet — already handled in parser.
+        if "name" in ad:
+            self.name = ad["name"]
+        if "flags" in ad:
+            self.flags = ad["flags"]
+        if "tx_power" in ad:
+            self.tx_power = ad["tx_power"]
+        if "appearance" in ad:
+            self.appearance = ad["appearance"]
+        for u in ad.get("uuids_16bit", []):
+            if u not in self.uuids_16bit:
+                self.uuids_16bit.append(u)
+        for u in ad.get("uuids_128bit", []):
+            if u not in self.uuids_128bit:
+                self.uuids_128bit.append(u)
+        for k, v in ad.get("services_uuid16_data", {}).items():
+            self.services_uuid16_data[k] = v
+        for k, v in ad.get("manufacturer_data", {}).items():
+            self.manufacturer_data[k] = v
+
+        # RSSI rolling stats.
+        n_total = self.adv_count + self.scan_rsp_count
+        self.rssi_max = max(self.rssi_max, pkt.rssi_dbm)
+        self.rssi_min = min(self.rssi_min, pkt.rssi_dbm) if n_total > 0 else pkt.rssi_dbm
+        # Recompute avg incrementally
+        new_n = n_total + 1
+        self.rssi_avg = (self.rssi_avg * n_total + pkt.rssi_dbm) / new_n
+
+        # Classify by ll_pdu_type
+        if pkt.ll_pdu_type == 0x04:
+            self.scan_rsp_count += 1
+            self.raw_scan_rsps.append(ad_payload)
+        else:
+            self.adv_count += 1
+            self.raw_advs.append(ad_payload)
+
 
 def parse_ad_structures(payload: bytes) -> dict:
     """Parse BLE advertising data structures.

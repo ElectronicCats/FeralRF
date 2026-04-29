@@ -496,10 +496,12 @@ Viven en `firmware/cc1352/smartrf_settings/` mezclados con configs generadas. En
 
 **Checkpoint humano:** scan sobre 3 peripherals distintos (móvil, ESP32, dispositivo comercial).
 
-### F13 — Retro-fill Bloque A (tests + docs) 🔜
+### F13 — Retro-fill Bloque A (tests + docs) ✅ (tag `v2.0-f13`)
+
+**Closed 2026-04-29.** 234 new unit tests added (test_props.py, test_attacks_ble.py, test_emulation.py) — all hardware-free, run on every push via existing `build.yml` CI. ARCHITECTURE.md created. Reorder of `smartrf_settings/` → `patches/` skipped: the directory is empty (TI patches live in `syscfg/` already). PYTHON_API.md and protocol.md exist and pass current API surface — light refresh deferred to F19. Prereq inversion (closed before F12) is fine — F13 work is decoupled from BLE Scanner.
 
 **Prereq:** F12
-**Branch:** `feature/f13-retrofill`
+**Branch:** `feature/f11-port-ble-attacks-tirtos` (rolled into F11 work this session)
 **Tag al cerrar:** `v2.0-f13`
 
 **Entregables:**

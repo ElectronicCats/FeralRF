@@ -45,3 +45,30 @@ def test_parse_ad_appearance_uint16_le():
     payload = bytes([0x03, 0x19, 0x40, 0x00])
     out = parse_ad_structures(payload)
     assert out == {"appearance": 0x0040}
+
+
+def test_parse_ad_complete_name_utf8():
+    name = "Soundcore Boom 2"
+    name_bytes = name.encode("utf-8")
+    payload = bytes([len(name_bytes) + 1, 0x09]) + name_bytes
+    out = parse_ad_structures(payload)
+    assert out == {"name": "Soundcore Boom 2"}
+
+
+def test_parse_ad_shortened_name_used_when_no_complete():
+    payload = bytes([0x08, 0x08]) + b"PixelXL"
+    out = parse_ad_structures(payload)
+    assert out == {"name": "PixelXL"}
+
+
+def test_parse_ad_complete_name_preferred_over_shortened():
+    payload = bytes([0x06, 0x08]) + b"Pixel" + bytes([0x0C, 0x09]) + b"Pixel 7 Pro"
+    out = parse_ad_structures(payload)
+    assert out == {"name": "Pixel 7 Pro"}
+
+
+def test_parse_ad_name_invalid_utf8_replaced():
+    payload = bytes([0x04, 0x09, 0x41, 0xFF, 0x42])
+    out = parse_ad_structures(payload)
+    assert "name" in out
+    assert out["name"].startswith("A") and out["name"].endswith("B")

@@ -115,3 +115,23 @@ def test_parse_ad_uuids_128bit_incomplete_extends():
     payload = bytes([0x11, 0x06]) + wire
     out = parse_ad_structures(payload)
     assert out == {"uuids_128bit": [canonical]}
+
+
+def test_parse_ad_service_data_uuid16():
+    # 0x16: UUID (2B LE) + variable data. UUID FE2C, data 8F95F8.
+    payload = bytes([0x06, 0x16, 0x2C, 0xFE, 0x8F, 0x95, 0xF8])
+    out = parse_ad_structures(payload)
+    assert out == {"services_uuid16_data": {"FE2C": b"\x8F\x95\xF8"}}
+
+
+def test_parse_ad_service_data_multiple_uuids():
+    payload = bytes([0x06, 0x16, 0x2C, 0xFE, 0x01, 0x02, 0x03]) + bytes(
+        [0x05, 0x16, 0x0A, 0x18, 0xAA, 0xBB]
+    )
+    out = parse_ad_structures(payload)
+    assert out == {
+        "services_uuid16_data": {
+            "FE2C": b"\x01\x02\x03",
+            "180A": b"\xAA\xBB",
+        }
+    }

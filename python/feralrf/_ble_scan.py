@@ -77,6 +77,12 @@ def parse_ad_structures(payload: bytes) -> dict:
                     f"{hex_str[16:20]}-{hex_str[20:32]}"
                 )
                 uuids.append(canonical)
+        elif ad_type == 0x16 and len(value) >= 2:
+            uuid_int = int.from_bytes(value[:2], "little")
+            uuid_str = f"{uuid_int:04X}"
+            data = bytes(value[2:])
+            sd = out.setdefault("services_uuid16_data", {})
+            sd[uuid_str] = data
 
         i += 1 + ad_len
     return out

@@ -13,7 +13,7 @@
 2. Estado actual
 3. Arquitectura objetivo
 4. Dependencias
-5. Plan por fases (F0 → F19)
+5. Plan por fases (F0 → F29)
 6. Governance
 7. Riesgos
 8. Migración NoRTOS → TI-RTOS
@@ -230,7 +230,7 @@ Viven en `firmware/cc1352/smartrf_settings/` mezclados con configs generadas. En
 
 ---
 
-## 5. Plan por fases (F0 → F19, + F8A insertada 2026-04-24)
+## 5. Plan por fases (F0 → F29, + F8A insertada 2026-04-24, + Bloque D agregado 2026-04-29)
 
 **Leyenda estados:** ✅ completa · 🟡 construida sin validar / bloqueada por prereq · ⚠️ parcial (issues abiertos) · 🔜 pendiente
 
@@ -619,9 +619,263 @@ python/feralrf/emulation/
 **Riesgos específicos:**
 - R11 (ISR latency en TI-RTOS): si <500 µs no se logra, evaluar bypass del scheduler en ISR directo.
 
+### BLOQUE D — Cobertura completa CC1352 (API gaps)
+
+> **Razón:** el goal de FeralRF es exponer **toda** la superficie RF del CC1352P7 vía Python, no solo capacidades para attacks. Bloques A–C cubren ~75% del chip; este bloque cierra el 25% restante. Agregado 2026-04-29 tras alineación con Sabas.
+>
+> **Regla:** protocolos de capa alta (Zigbee, Thread, Matter, 6LoWPAN, Wireless M-Bus, Wi-SUN, MIOTY, Sidewalk) son frame-crafting en Python sobre PHY raw — NO son fases nuevas, ya son accesibles vía F1/F10 + custom config. Lo que entra a Bloque D son capacidades **del chip** que el firmware aún no expone.
+
+### F20 — BLE Peripheral + GATT server (rol completo) 🔜
+
+**Prereq:** F8 (GATT client validado), F21 (connectable advertiser)
+**Branch:** `feature/f20-ble-peripheral`
+**Tag al cerrar:** `v2.0-f20`
+
+**Entregables firmware:**
+- `CMD_BLE_PERIPHERAL_START (0x50)` — entra a rol peripheral con tabla GATT.
+- `CMD_GATT_SERVE_TABLE (0x51)` — define services/chars/descriptors estáticos.
+- ATT server: handle MTU exchange, Read Req, Write Req, Read Blob, Read Multiple, Write Cmd, HVN/HVI (notify/indicate).
+- L2CAP fixed channels reuse del F8A.
+- Connection management: aceptar `CONNECT_IND`, transitar a estado conectado, manejar terminate.
+
+**Entregables Python:**
+- `radio.serve_gatt(table)` — `table` es lista de service/char/descriptor con permisos.
+- `radio.notify(handle, data)` / `radio.indicate(handle, data)`.
+- `demo_gatt_server.py` con perfil de ejemplo.
+
+**Criterio de cierre:**
+- nRF Connect (Android/iPhone) descubre todos los services/chars expuestos.
+- Read/Write/Notify funcionan end-to-end con valores correctos.
+- Conexión sostiene 60 s sin terminate por timeout.
+
+**Checkpoint humano:** móvil con nRF Connect.
+
+**Riesgos específicos:**
+- ATT server stack es trabajo grande (~1500 LOC) — considerar reuso de TI BLE5-Stack si OneLib.a se valida en el contexto Sniffle-style.
+
+### F21 — BLE Connectable advertiser 🔜
+
+**Prereq:** F11 (BLE attacks port done)
+**Branch:** `feature/f21-ble-conn-adv`
+**Tag al cerrar:** `v2.0-f21`
+
+**Entregables firmware:**
+- `CMD_BLE_ADV_IND (0x52)` — ADV_IND (general connectable + scannable).
+- `CMD_BLE_ADV_DIRECT (0x53)` — ADV_DIRECT_IND (directed connectable, low-duty + high-duty modes).
+- `CMD_BLE_ADV_SCAN_IND (0x54)` — ADV_SCAN_IND (scannable no-conn).
+- Acepta `CONNECT_IND` y entrega control a F20 (peripheral) o termina si F20 no activo.
+
+**Entregables Python:**
+- `radio.advertise_ind(payload, scan_resp_data, ...)`.
+- `radio.advertise_direct(target_addr, mode='low'|'high')`.
+- `radio.advertise_scan_ind(payload, scan_resp_data)`.
+
+**Criterio de cierre:**
+- nRF Connect ve cada PDU type correctamente clasificado (ADV_IND vs ADV_DIRECT_IND vs ADV_SCAN_IND).
+- Para ADV_IND: scanner activo recibe `SCAN_REQ` y este FW emite `SCAN_RSP` con scan_resp_data.
+
+**Checkpoint humano:** nRF Connect en móvil.
+
+### F22 — Test mode CW + PRBS 🔜
+
+**Prereq:** F10 (props validados)
+**Branch:** `feature/f22-test-modes`
+**Tag al cerrar:** `v2.0-f22`
+
+**Entregables firmware:**
+- `CMD_TX_CW (0x55)` — `rfc_CMD_TX_TEST` con `whitening=0`, modo unmodulated carrier en freq arbitraria.
+- `CMD_TX_PRBS (0x56)` — `rfc_CMD_TX_TEST` con whitening PRBS-9/PRBS-15 modulado.
+- `CMD_TX_TEST_STOP (0x57)` — termina cualquier modo test.
+
+**Entregables Python:**
+- `radio.tx_cw(frequency_hz, power_dbm)`.
+- `radio.tx_prbs(frequency_hz, power_dbm, pattern='prbs9'|'prbs15')`.
+- `radio.tx_test_stop()`.
+
+**Criterio de cierre:**
+- Otro CC1352 en RX modo RSSI ve carrier estable (CW) o señal modulada continua (PRBS) en la freq elegida.
+- Spectrum analyzer (si disponible) confirma single-tone (CW) o spread sin huecos (PRBS).
+
+**Checkpoint humano:** opcional — spectrum analyzer ideal, fallback con 2 boards y `radio.start_rx + read_packets`.
+
+### F23 — High PA +15 a +20 dBm 🔜
+
+**Prereq:** F10
+**Branch:** `feature/f23-high-pa`
+**Tag al cerrar:** `v2.0-f23`
+
+**Entregables firmware:**
+- Fix DIO29 antenna switch control (PIN config + GPIO drive durante TX high-PA).
+- Path TX overrides `pRegOverrideTx20` activado cuando `power_dbm >= 15` (aplica a BLE/IEEE/Prop con `frontEndMode=0x0`, `biasMode=0x1`).
+- Verificar en runtime que `RFC_PA_TYPE_HIGH` está seleccionado.
+
+**Entregables Python:**
+- `set_power(dbm)` acepta hasta +20 dBm; selecciona high-PA path automáticamente.
+- `radio.get_pa_type()` retorna `'std'` o `'high'` según power último.
+
+**Criterio de cierre:**
+- TX +20 dBm medible: 2 boards, RX board reporta RSSI con delta ≥+18 dB respecto a TX 0 dBm en misma freq y distancia.
+- Sin hangs / spurious / cambio de freq.
+
+**Checkpoint humano:** 2 boards CatSniffer + ideal spectrum analyzer.
+
+**Riesgos específicos:**
+- Resuelve R4 (planeado fuera de scope v2.0 originalmente — promovido a Bloque D 2026-04-29).
+- DIO29 puede tener conflicto de uso (verificar en `hardware/PINOUT.md`).
+
+### F24 — DMM concurrent BLE + IEEE 🔜
+
+**Prereq:** F11, F1 (IEEE validado)
+**Branch:** `feature/f24-dmm`
+**Tag al cerrar:** `v2.0-f24`
+
+**Entregables firmware:**
+- Integrar TI DMM (Dual Mode Manager) o implementación reducida tipo time-slicing.
+- `CMD_START_CONCURRENT (0x58)` — argumentos: PHY1, PHY2, slice_ms.
+- Coordinar `RF_RadioSetup` entre los dos modos sin re-RF_open.
+
+**Entregables Python:**
+- `radio.start_concurrent(phy1=PHY.BLE_1M, phy2=PHY.IEEE_802_15_4, slice_ms=20)`.
+- `read_packets()` retorna paquetes etiquetados con su PHY de origen.
+
+**Criterio de cierre:**
+- Concurrent RX BLE adv ch37 + IEEE ch20: en 30 s captura ≥80% de los paquetes que cada PHY captura por separado.
+- Sin pérdida total en una de las PHYs (no starvation).
+
+**Checkpoint humano:** beacon BLE conocido + emisor IEEE conocido.
+
+**Riesgos específicos:**
+- DMM SDK puede requerir RF_MODE específico; validar contra `multi_protocol` patch.
+
+### F25 — Crypto HW expuesto (TRNG + AES + PKA) 🔜
+
+**Prereq:** independiente
+**Branch:** `feature/f25-crypto-hw`
+**Tag al cerrar:** `v2.0-f25`
+
+**Entregables firmware:**
+- TRNG: fix PERIPH power domain (resuelve R6 / `feedback_trng_hang.md` permanentemente).
+- `CMD_RANDOM (0x59)` — retorna N bytes aleatorios (1..256).
+- `CMD_AES_ECB (0x5A)`, `CMD_AES_CCM (0x5B)` — AES-128 vía driverlib.
+- `CMD_PKA_ECDH (0x5C)` — ECC P-256 ECDH para casos curve25519/p256.
+
+**Entregables Python:**
+- `radio.random_bytes(n)`.
+- `radio.aes_encrypt(key, data, mode='ecb'|'ccm', nonce=...)`.
+- `radio.ecdh_p256(my_priv, peer_pub)`.
+
+**Criterio de cierre:**
+- TRNG pasa monobit + runs tests sobre 1 MB de output.
+- AES vectors NIST validados (encrypt + decrypt round-trip).
+- ECDH genera shared secret consistente con biblioteca host (cryptography Python).
+
+**Checkpoint humano:** ninguno — todo unit-test desde host.
+
+### F26 — Proprietary 2.4 GHz como PHY normal 🔜
+
+**Prereq:** F10
+**Branch:** `feature/f26-prop-24ghz`
+**Tag al cerrar:** `v2.0-f26`
+
+**Entregables firmware:**
+- Nuevo `RadioIF_RfMode` value `RADIO_IF_RF_MODE_PROP_2_4GHZ`.
+- `RF_RadioSetup` para 2.4 GHz prop (`rfc_CMD_PROP_RADIO_DIV_SETUP_PA` con `centerFreq=2440`, `loDivider=0x05`).
+- Path en `radio_if.c` para TX/RX con FSK/GFSK/MSK/4-FSK 2400-2483.5 MHz.
+- `PHY` enum agrega `PHY_MANAGER_PHY_PROP_2_4GHZ`.
+- `CMD_SET_PHY` acepta el nuevo PHY + frequency_hz en banda 2.4 GHz.
+
+**Entregables Python:**
+- `PHY.PROP_2_4GHZ`.
+- `set_phy(PHY.PROP_2_4GHZ, frequency_hz=2440000000)`.
+- `configure_prop()` también soporta 2.4 GHz (sym rate + deviation + sync word).
+- Documentación: protocolos típicos en banda (Nordic ESB, Bluetooth Mesh PB-ADV custom, drones RC, etc).
+
+**Criterio de cierre:**
+- TX/RX entre 2 boards en 2440 MHz GFSK 250 kbps con marker test: 10/10 markers.
+- TX/RX con sym rate 1 Mbps custom: 10/10 markers.
+- Refactor coordinado: F18 jamming usa esta PHY en vez de configurar desde cero (out of scope para F26 — solo deja la PHY lista).
+
+**Checkpoint humano:** 2 boards CatSniffer.
+
+### F27 — IEEE 802.15.4 Sub-GHz (15.4g) 🔜
+
+**Prereq:** F10
+**Branch:** `feature/f27-ieee-subghz`
+**Tag al cerrar:** `v2.0-f27`
+
+**Entregables firmware:**
+- `RadioSetup` IEEE 802.15.4g (GFSK Sub-G) en `smartrf_ieee_subghz.c`.
+- Path en `radio_if.c` para selectivar entre 2.4 GHz y Sub-G según frequency_hz.
+- Channel pages 2/9 (902-928 MHz GFSK 50/100/200 kbps).
+
+**Entregables Python:**
+- `set_phy(PHY.IEEE_802_15_4, frequency_hz=915000000)` — selecciona Sub-G mode.
+- `radio.get_ieee_mode()` retorna `'2.4ghz'` o `'sub_g_915'`.
+
+**Criterio de cierre:**
+- TX/RX entre 2 boards en 915 MHz IEEE 15.4g: 10/10 markers con frame válido (PHY header + MHR + payload + FCS).
+
+**Checkpoint humano:** 2 boards.
+
+### F28 — AIS RX 162 MHz 🔜
+
+**Prereq:** F10
+**Branch:** `feature/f28-ais-rx`
+**Tag al cerrar:** `v2.0-f28`
+
+**Entregables firmware:**
+- Preset prop 162 MHz GFSK 9600 baud, h=0.5 (≈ GMSK), `loDivider=0x1E`.
+- Adaptación de overrides 169 MHz a 162 MHz.
+- Demodulador HDLC-like para frame AIS (start flag 0x7E, NRZI, scrambling, CRC-16).
+
+**Entregables Python:**
+- `radio.start_rx_ais()` — wraps set_phy con preset AIS y RX continuo.
+- Parser AIS en Python: extrae MMSI, nav status, lat/lon, speed/course de mensajes 1/2/3.
+- `demo_ais_receiver.py` con plot de tracks.
+
+**Criterio de cierre:**
+- RX-only (TX requiere licencia marítima — documentado en `docs/SAFETY.md`).
+- Captura ≥1 mensaje AIS válido (CRC OK) con MMSI + posición decoded.
+- Test en condición controlada con simulador de señal AIS si no hay tráfico marítimo cerca.
+
+**Checkpoint humano:** AIS RF generator (e.g., GNU Radio + USRP) o ubicación con tráfico marítimo.
+
+**Riesgos específicos:**
+- Antena CatSniffer no optimizada para 162 MHz; sensitivity puede ser pobre.
+- Si sensitivity insuficiente, marcar feature como "experimental — antenna external recomendada" sin bloquear release.
+
+### F29 — Presets Wi-SUN / MIOTY / Sidewalk Sub-G 🔜
+
+**Prereq:** F10
+**Branch:** `feature/f29-stack-presets`
+**Tag al cerrar:** `v2.0-f29`
+
+**Entregables firmware:**
+- Presets en `radio_if_props.c`:
+  - `WI_SUN_FAN_1_0` — FSK 2-FSK 50/100/150/200/300 kbps en 902-928 MHz, channel plan FAN 1.0.
+  - `MIOTY_TS_UNB` — TS-UNB modulation (sym rate 396 baud, deviation TBD, banda 868 MHz EU / 915 MHz US).
+  - `SIDEWALK_FSK_50K` — FSK 50 kbps 902-928 MHz (Amazon Sidewalk Sub-G FSK layer).
+  - `SIDEWALK_FSK_250K` — FSK 250 kbps variant.
+- Documentar que **Sidewalk LR (LoRa-like) NO es soportado por CC1352** — usa SX1262 en Cat-LoRa port.
+
+**Entregables Python:**
+- `PROP_PRESETS` agrega 4 entradas con metadata.
+- `demo_wisun_scan.py`, `demo_mioty_listen.py`, `demo_sidewalk_subg.py` (cada uno set_phy con preset + start_rx + parse mínimo).
+
+**Criterio de cierre:**
+- Cada preset: TX/RX entre 2 boards con marker test, 10/10 markers.
+- Para MIOTY: validar al menos que sym rate + deviation están dentro de spec TS-UNB.
+
+**Checkpoint humano:** 2 boards (suficiente para markers); validación contra dispositivos reales (Wi-SUN node, MIOTY base station, Sidewalk gateway) opcional para v2.1.
+
+**Riesgos específicos:**
+- MIOTY: TS-UNB es modulation no estándar GFSK pura — investigar si CC1352 soporta nativamente o requiere truco.
+
+---
+
 ### F19 — Release v2.0 🔜
 
-**Prereq:** F18
+**Prereq:** F29
 **Branch:** `release/v2.0`
 **Tag al cerrar:** `v2.0.0`
 

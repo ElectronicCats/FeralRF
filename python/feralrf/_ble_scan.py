@@ -91,3 +91,36 @@ def parse_ad_structures(payload: bytes) -> dict:
 
         i += 1 + ad_len
     return out
+
+
+def extract_pdu_header(pkt_data: bytes) -> tuple:
+    """Extract (mac_display_str, addr_type_str) from a BLE adv-channel PDU.
+
+    Layout: [PDU header (2B)] [AdvA (6B little-endian)] [AdvData ...]
+
+    PDU header byte 1 bit 6 = TxAdd:
+      0 → public address
+      1 → random; sub-classify by AdvA[5] high 2 bits:
+            0b00 → random_non_resolvable
+            0b01 → random_resolvable
+            0b11 → random_static
+            0b10 → reserved (treat as random_non_resolvable)
+
+    Returns (None, None) if pkt_data is shorter than 8 bytes.
+    """
+    if len(pkt_data) < 8:
+        return (None, None)
+    tx_add = (pkt_data[1] >> 6) & 0x01
+    adva_le = pkt_data[2:8]
+    mac = ":".join(f"{b:02X}" for b in reversed(adva_le))
+    if tx_add == 0:
+        addr_type = "public"
+    else:
+        high2 = (adva_le[5] >> 6) & 0x03
+        if high2 == 0b11:
+            addr_type = "random_static"
+        elif high2 == 0b01:
+            addr_type = "random_resolvable"
+        else:  # 0b00 or 0b10
+            addr_type = "random_non_resolvable"
+    return (mac, addr_type)

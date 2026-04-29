@@ -5,7 +5,7 @@ already tags it; these tests cover the Python-side parser, dataclass,
 and merge logic that consume those packets.
 """
 
-from feralrf._ble_scan import BleScanResult, parse_ad_structures
+from feralrf._ble_scan import BleScanResult, extract_pdu_header, parse_ad_structures
 
 
 def test_blescanresult_minimal_fields():
@@ -178,3 +178,41 @@ def test_parse_ad_unknown_type_skipped_correctly():
     payload = bytes([0x03, 0xAB, 0xFF, 0xFF]) + bytes([0x02, 0x01, 0x06])
     out = parse_ad_structures(payload)
     assert out == {"flags": 0x06}
+
+
+def test_extract_pdu_header_public_address():
+    # PDU header [type|RFU][len|RxAdd|TxAdd] + AdvA (6B LE)
+    # TxAdd=0 → public. AdvA = DE AD BE EF CA FE display, wire LE = FE CA EF BE AD DE.
+    pkt_data = bytes([0x00, 0x06, 0xFE, 0xCA, 0xEF, 0xBE, 0xAD, 0xDE])
+    mac, addr_type = extract_pdu_header(pkt_data)
+    assert mac == "DE:AD:BE:EF:CA:FE"
+    assert addr_type == "public"
+
+
+def test_extract_pdu_header_random_static():
+    # TxAdd=1 (bit 6 of byte 1 = 0x40) + AdvA byte 5 high bits = 0xC0 → static
+    pkt_data = bytes([0x00, 0x46, 0xFE, 0xCA, 0xEF, 0xBE, 0xAD, 0xDE | 0xC0])
+    mac, addr_type = extract_pdu_header(pkt_data)
+    expected_msb = 0xDE | 0xC0
+    assert mac == f"{expected_msb:02X}:AD:BE:EF:CA:FE"
+    assert addr_type == "random_static"
+
+
+def test_extract_pdu_header_random_resolvable():
+    # TxAdd=1 + high bits 0b01 (0x40)
+    pkt_data = bytes([0x00, 0x46, 0xFE, 0xCA, 0xEF, 0xBE, 0xAD, 0x7E])  # 0x7E high bits = 01
+    mac, addr_type = extract_pdu_header(pkt_data)
+    assert addr_type == "random_resolvable"
+
+
+def test_extract_pdu_header_random_non_resolvable():
+    # TxAdd=1 + high bits 0b00
+    pkt_data = bytes([0x00, 0x46, 0xFE, 0xCA, 0xEF, 0xBE, 0xAD, 0x3E])  # 0x3E high bits = 00
+    mac, addr_type = extract_pdu_header(pkt_data)
+    assert addr_type == "random_non_resolvable"
+
+
+def test_extract_pdu_header_too_short_returns_none():
+    pkt_data = bytes([0x00, 0x06, 0xFE])  # truncated
+    mac, addr_type = extract_pdu_header(pkt_data)
+    assert mac is None and addr_type is None

@@ -798,11 +798,12 @@ class Radio:
         duration: float,
         channels=(37, 38, 39),
         phy: PHY = PHY.BLE_1M,
-    ) -> dict:
+    ) -> dict[str, BleScanResult]:
         """Active BLE scan — send SCAN_REQ, capture SCAN_RSP, merge per MAC.
 
-        Saves and restores set_ble_scan_mode, set_adv_hop, and PHY/channel
-        on exit (try/finally), even on exception.
+        On exit (try/finally), restores prior PHY/channel and resets
+        set_ble_scan_mode and set_adv_hop to False (no shadow state for
+        those — the firmware defaults to passive scan + no hop), even on exception.
 
         Args:
             duration: seconds to listen.
@@ -824,7 +825,7 @@ class Radio:
         prior_phy = self._phy
         prior_channel = self._channel
         hop_needed = len(channels) > 1
-        results: dict = {}
+        results: dict[str, BleScanResult] = {}
 
         try:
             self.set_ble_scan_mode(active=True)

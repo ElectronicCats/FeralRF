@@ -135,3 +135,25 @@ def test_parse_ad_service_data_multiple_uuids():
             "180A": b"\xAA\xBB",
         }
     }
+
+
+def test_parse_ad_manufacturer_data_apple():
+    # Apple company ID 0x004C (LE: 0x4C 0x00). Proximity Pairing data.
+    payload = bytes([0x05, 0xFF, 0x4C, 0x00, 0x07, 0x19])
+    out = parse_ad_structures(payload)
+    assert out == {"manufacturer_data": {0x004C: b"\x07\x19"}}
+
+
+def test_parse_ad_manufacturer_data_multiple_companies():
+    payload = bytes([0x05, 0xFF, 0x4C, 0x00, 0x07, 0x19]) + bytes(  # Apple
+        [0x05, 0xFF, 0xF4, 0x2B, 0xAA, 0xBB]
+    )  # Anker
+    out = parse_ad_structures(payload)
+    assert out == {"manufacturer_data": {0x004C: b"\x07\x19", 0x2BF4: b"\xAA\xBB"}}
+
+
+def test_parse_ad_manufacturer_data_too_short_skipped():
+    # AD 0xFF with only 1 byte of value (no full company_id) — skipped.
+    payload = bytes([0x02, 0xFF, 0x4C])
+    out = parse_ad_structures(payload)
+    assert "manufacturer_data" not in out

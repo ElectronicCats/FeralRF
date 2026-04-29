@@ -83,6 +83,11 @@ def parse_ad_structures(payload: bytes) -> dict:
             data = bytes(value[2:])
             sd = out.setdefault("services_uuid16_data", {})
             sd[uuid_str] = data
+        elif ad_type == 0xFF and len(value) >= 2:
+            company_id = int.from_bytes(value[:2], "little")
+            data = bytes(value[2:])
+            md = out.setdefault("manufacturer_data", {})
+            md[company_id] = data
 
         i += 1 + ad_len
     return out

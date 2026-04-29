@@ -1114,7 +1114,8 @@ static bool RadioIF_startBleRfBackend(void) {
     if (s_ble_active_scan) {
         /* Active scan: use CMD_BLE5_SCANNER (sends SCAN_REQ, captures SCAN_RSP) */
         Ble5_0_cmdBle5Scanner.pParams->pRxQ = &s_rf_data_queue;
-        Ble5_0_cmdBle5Scanner.pParams->rxConfig.bAutoFlushIgnored = 0u;
+        /* bAutoFlushIgnored=1 prevents data-queue saturation under heavy traffic */
+        Ble5_0_cmdBle5Scanner.pParams->rxConfig.bAutoFlushIgnored = 1u;
         Ble5_0_cmdBle5Scanner.pParams->rxConfig.bAutoFlushCrcErr = 0u;
         Ble5_0_cmdBle5Scanner.pParams->rxConfig.bAutoFlushEmpty = 0u;
         Ble5_0_cmdBle5Scanner.pParams->rxConfig.bIncludeLenByte = 1u;
@@ -1132,7 +1133,8 @@ static bool RadioIF_startBleRfBackend(void) {
     } else {
         /* Passive scan: use CMD_BLE5_GENERIC_RX (receive only) */
         Ble5_0_cmdBle5GenericRx.pParams->pRxQ = &s_rf_data_queue;
-        Ble5_0_cmdBle5GenericRx.pParams->rxConfig.bAutoFlushIgnored = 0u;
+        /* bAutoFlushIgnored=1 prevents data-queue saturation under heavy traffic */
+        Ble5_0_cmdBle5GenericRx.pParams->rxConfig.bAutoFlushIgnored = 1u;
         Ble5_0_cmdBle5GenericRx.pParams->rxConfig.bAutoFlushCrcErr = 0u;
         Ble5_0_cmdBle5GenericRx.pParams->rxConfig.bAutoFlushEmpty = 0u;
         Ble5_0_cmdBle5GenericRx.pParams->rxConfig.bIncludeLenByte = 1u;
@@ -1215,9 +1217,10 @@ static bool RadioIF_startIeee154RfBackend(void) {
 
 static void RadioIF_stopRfBackend(void) {
     if (s_rf_handle != NULL) {
-        if (((s_rf_mode == RADIO_IF_RF_MODE_IEEE_15_4) ||
-             (s_rf_mode == RADIO_IF_RF_MODE_SUB_1GHZ)) &&
-            (s_rf_rx_cmd >= 0)) {
+        /* BLE GenericRx/Scanner use TRIG_NEVER + bRepeat=1 — they never auto-terminate.
+         * RF_cancelCmd is required to stop the running command cleanly before flush.
+         * Skill pattern: RF_cancelCmd → RF_flushCmd → (yield/close as needed). */
+        if (s_rf_rx_cmd >= 0) {
             RF_cancelCmd(s_rf_handle, s_rf_rx_cmd, 0);
         }
         RF_flushCmd(s_rf_handle, RF_CMDHANDLE_FLUSH_ALL, 0);

@@ -58,7 +58,13 @@ static void DataTask_emitRxPacket(const RadioIF_RxPacket *pkt) {
     payload[13u + emit_data_len + 1u] = pkt->ll_pdu_type;
     payload[13u + emit_data_len + 2u] = pkt->ll_pdu_flags;
 
-    OutputIF_sendResponse(RSP_RX_PACKET, s_rx_rsp_seq++, payload, payload_len);
+    /* seq=0xFF is reserved for firmware async errors — skip it so the
+     * Python parser does not drop legitimate RX_PACKET frames. */
+    OutputIF_sendResponse(RSP_RX_PACKET, s_rx_rsp_seq, payload, payload_len);
+    s_rx_rsp_seq++;
+    if (s_rx_rsp_seq == 0xFFu) {
+        s_rx_rsp_seq = 0u;
+    }
 }
 
 void DataTask_init(void) {

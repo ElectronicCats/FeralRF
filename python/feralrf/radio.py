@@ -308,9 +308,12 @@ class Radio:
             self._serial = None
 
     def _next_seq(self) -> int:
-        """Get next sequence number"""
+        """Get next sequence number. 0xFF is reserved for firmware async errors."""
         seq = self._seq
-        self._seq = (self._seq + 1) & 0xFF
+        nxt = (seq + 1) & 0xFF
+        if nxt == 0xFF:
+            nxt = 0
+        self._seq = nxt
         return seq
 
     def _send_command(self, cmd: Command, payload: bytes = b"") -> None:

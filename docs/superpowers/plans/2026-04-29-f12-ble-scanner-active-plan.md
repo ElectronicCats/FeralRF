@@ -264,16 +264,18 @@ def test_parse_ad_complete_name_utf8():
 
 
 def test_parse_ad_shortened_name_used_when_no_complete():
-    payload = bytes([0x07, 0x08]) + b"PixelXL"
+    # AD len = 1 (type) + 7 (PixelXL bytes) = 8 = 0x08
+    payload = bytes([0x08, 0x08]) + b"PixelXL"
     out = parse_ad_structures(payload)
     assert out == {"name": "PixelXL"}
 
 
 def test_parse_ad_complete_name_preferred_over_shortened():
     # Shortened first, then Complete — Complete should win
+    # AD lens: shortened = 1+5 = 0x06, complete = 1+11 = 0x0C
     payload = (
-        bytes([0x05, 0x08]) + b"Pixel"  # shortened
-        + bytes([0x0A, 0x09]) + b"Pixel 7 Pro"  # complete
+        bytes([0x06, 0x08]) + b"Pixel"           # shortened
+        + bytes([0x0C, 0x09]) + b"Pixel 7 Pro"   # complete
     )
     out = parse_ad_structures(payload)
     assert out == {"name": "Pixel 7 Pro"}

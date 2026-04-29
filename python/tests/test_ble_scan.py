@@ -157,3 +157,24 @@ def test_parse_ad_manufacturer_data_too_short_skipped():
     payload = bytes([0x02, 0xFF, 0x4C])
     out = parse_ad_structures(payload)
     assert "manufacturer_data" not in out
+
+
+def test_parse_ad_zero_length_skipped_no_infinite_loop():
+    # AD len=0 followed by valid AD — must not infinite-loop.
+    payload = bytes([0x00, 0x02, 0x01, 0x06])
+    out = parse_ad_structures(payload)
+    assert out == {"flags": 0x06}
+
+
+def test_parse_ad_truncated_length_breaks_cleanly():
+    # AD claims len=10 but only 3 bytes follow — break, don't raise.
+    payload = bytes([0x0A, 0x09, 0x41, 0x42, 0x43])
+    out = parse_ad_structures(payload)
+    assert out == {}
+
+
+def test_parse_ad_unknown_type_skipped_correctly():
+    # Unknown AD type 0xAB followed by valid Flags.
+    payload = bytes([0x03, 0xAB, 0xFF, 0xFF]) + bytes([0x02, 0x01, 0x06])
+    out = parse_ad_structures(payload)
+    assert out == {"flags": 0x06}

@@ -57,6 +57,11 @@ def parse_ad_structures(payload: bytes) -> dict:
             out["tx_power"] = int.from_bytes(value[:1], "little", signed=True)
         elif ad_type == 0x19 and len(value) >= 2:
             out["appearance"] = int.from_bytes(value[:2], "little")
+        elif ad_type == 0x09:
+            out["name"] = value.decode("utf-8", errors="replace")
+        elif ad_type == 0x08:
+            if "name" not in out:
+                out["name"] = value.decode("utf-8", errors="replace")
 
         i += 1 + ad_len
     return out

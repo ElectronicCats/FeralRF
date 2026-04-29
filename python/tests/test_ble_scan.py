@@ -24,3 +24,24 @@ def test_blescanresult_minimal_fields():
 
 def test_parse_ad_empty_payload_returns_empty_dict():
     assert parse_ad_structures(b"") == {}
+
+
+def test_parse_ad_flags():
+    # AD: len=2, type=0x01 (Flags), value=0x06
+    payload = bytes([0x02, 0x01, 0x06])
+    out = parse_ad_structures(payload)
+    assert out == {"flags": 0x06}
+
+
+def test_parse_ad_tx_power_signed():
+    # AD: len=2, type=0x0A (TX Power), value=-12 (0xF4 as signed int8)
+    payload = bytes([0x02, 0x0A, 0xF4])
+    out = parse_ad_structures(payload)
+    assert out == {"tx_power": -12}
+
+
+def test_parse_ad_appearance_uint16_le():
+    # AD: len=3, type=0x19 (Appearance), value=0x0040 (Generic Phone)
+    payload = bytes([0x03, 0x19, 0x40, 0x00])
+    out = parse_ad_structures(payload)
+    assert out == {"appearance": 0x0040}

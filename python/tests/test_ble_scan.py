@@ -96,3 +96,22 @@ def test_parse_ad_uuids_16bit_combined_complete_and_incomplete():
     )  # complete:   180A
     out = parse_ad_structures(payload)
     assert out == {"uuids_16bit": ["FE2C", "180A"]}
+
+
+def test_parse_ad_uuids_128bit_complete_canonical_format():
+    # 0x07 complete 128-bit UUID list. UUID 0000180A-0000-1000-8000-00805F9B34FB
+    # On wire: 16 bytes little-endian = reversed canonical bytes.
+    canonical = "0000180a-0000-1000-8000-00805f9b34fb"
+    canonical_hex = canonical.replace("-", "")
+    wire_bytes = bytes.fromhex(canonical_hex)[::-1]  # little-endian
+    payload = bytes([0x11, 0x07]) + wire_bytes
+    out = parse_ad_structures(payload)
+    assert out == {"uuids_128bit": [canonical]}
+
+
+def test_parse_ad_uuids_128bit_incomplete_extends():
+    canonical = "12345678-1234-5678-1234-567812345678"
+    wire = bytes.fromhex(canonical.replace("-", ""))[::-1]
+    payload = bytes([0x11, 0x06]) + wire
+    out = parse_ad_structures(payload)
+    assert out == {"uuids_128bit": [canonical]}

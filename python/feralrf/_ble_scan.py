@@ -67,6 +67,16 @@ def parse_ad_structures(payload: bytes) -> dict:
             for j in range(0, len(value) - 1, 2):
                 uuid_int = int.from_bytes(value[j : j + 2], "little")
                 uuids.append(f"{uuid_int:04X}")
+        elif ad_type in (0x06, 0x07):
+            uuids = out.setdefault("uuids_128bit", [])
+            for j in range(0, len(value) - 15, 16):
+                rev = value[j : j + 16][::-1]
+                hex_str = rev.hex()
+                canonical = (
+                    f"{hex_str[0:8]}-{hex_str[8:12]}-{hex_str[12:16]}-"
+                    f"{hex_str[16:20]}-{hex_str[20:32]}"
+                )
+                uuids.append(canonical)
 
         i += 1 + ad_len
     return out

@@ -72,3 +72,27 @@ def test_parse_ad_name_invalid_utf8_replaced():
     out = parse_ad_structures(payload)
     assert "name" in out
     assert out["name"].startswith("A") and out["name"].endswith("B")
+
+
+def test_parse_ad_uuids_16bit_complete():
+    # AD type 0x03: complete 16-bit UUID list. Two UUIDs: 0xFE2C, 0x180A
+    # Little-endian on wire.
+    payload = bytes([0x05, 0x03, 0x2C, 0xFE, 0x0A, 0x18])
+    out = parse_ad_structures(payload)
+    assert out == {"uuids_16bit": ["FE2C", "180A"]}
+
+
+def test_parse_ad_uuids_16bit_incomplete_extends():
+    # AD 0x02 incomplete UUID list — same handling, also added.
+    payload = bytes([0x03, 0x02, 0x2C, 0xFE])
+    out = parse_ad_structures(payload)
+    assert out == {"uuids_16bit": ["FE2C"]}
+
+
+def test_parse_ad_uuids_16bit_combined_complete_and_incomplete():
+    # Both types in same payload — both extend the same list, in order.
+    payload = bytes([0x03, 0x02, 0x2C, 0xFE]) + bytes(  # incomplete: FE2C
+        [0x03, 0x03, 0x0A, 0x18]
+    )  # complete:   180A
+    out = parse_ad_structures(payload)
+    assert out == {"uuids_16bit": ["FE2C", "180A"]}

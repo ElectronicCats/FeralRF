@@ -21,14 +21,14 @@ class BleScanResult:
     adv_count: int = 0
     scan_rsp_count: int = 0
     flags: Optional[int] = None
-    uuids_16bit: list = field(default_factory=list)
-    uuids_128bit: list = field(default_factory=list)
-    services_uuid16_data: dict = field(default_factory=dict)
-    manufacturer_data: dict = field(default_factory=dict)
+    uuids_16bit: list[str] = field(default_factory=list)
+    uuids_128bit: list[str] = field(default_factory=list)
+    services_uuid16_data: dict[str, bytes] = field(default_factory=dict)
+    manufacturer_data: dict[int, bytes] = field(default_factory=dict)
     tx_power: Optional[int] = None
     appearance: Optional[int] = None
-    raw_advs: list = field(default_factory=list)
-    raw_scan_rsps: list = field(default_factory=list)
+    raw_advs: list[bytes] = field(default_factory=list)
+    raw_scan_rsps: list[bytes] = field(default_factory=list)
 
 
 def parse_ad_structures(payload: bytes) -> dict:
@@ -38,4 +38,25 @@ def parse_ad_structures(payload: bytes) -> dict:
     Malformed length fields and unknown AD types are skipped silently.
     Never raises.
     """
-    return {}
+    out: dict = {}
+    i = 0
+    n = len(payload)
+    while i < n:
+        ad_len = payload[i]
+        if ad_len == 0:
+            i += 1
+            continue
+        if i + 1 + ad_len > n:
+            break  # truncated
+        ad_type = payload[i + 1]
+        value = payload[i + 2 : i + 1 + ad_len]
+
+        if ad_type == 0x01 and len(value) >= 1:
+            out["flags"] = value[0]
+        elif ad_type == 0x0A and len(value) >= 1:
+            out["tx_power"] = int.from_bytes(value[:1], "little", signed=True)
+        elif ad_type == 0x19 and len(value) >= 2:
+            out["appearance"] = int.from_bytes(value[:2], "little")
+
+        i += 1 + ad_len
+    return out

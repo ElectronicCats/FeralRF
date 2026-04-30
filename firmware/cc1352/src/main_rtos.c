@@ -43,6 +43,7 @@
 #include "command_processor.h"
 #include "config.h"
 #include "control_task.h"
+#include "crypto_engine.h"
 #include "data_task.h"
 #include "host_if.h"
 #include "host_if_task.h"
@@ -146,6 +147,14 @@ static void UartTask_taskFxn(UArg a0, UArg a1) {
 static void RfTask_taskFxn(UArg a0, UArg a1) {
     (void)a0;
     (void)a1;
+
+    /* Power dependencies must be set before RF_open. crypto_engine_init()
+     * calls Power_setDependency(PowerCC26X2_PERIPH_TRNG) which is idempotent
+     * and safe to call here before the RF driver is opened. */
+    if (!crypto_engine_init()) {
+        /* Crypto unavailable — log via existing diag mechanism if any.
+         * Subsequent crypto_engine_*() calls return CRYPTO_NOT_INITIALIZED. */
+    }
 
     /* Open 433 MHz RF handle ONCE at boot with dedicated SysConfig structs.
      * NEVER RF_close — TI RF driver doesn't reset RF_core.init on close,

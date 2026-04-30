@@ -129,6 +129,7 @@ set(APP_SOURCES
     src/csa2.c
     src/command_processor.c
     src/control_task.c
+    src/crypto_engine.c
     src/data_task.c
     src/host_if.c
     src/host_if_task.c

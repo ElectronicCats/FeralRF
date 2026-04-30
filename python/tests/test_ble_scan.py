@@ -58,15 +58,25 @@ def test_parse_ad_complete_name_utf8():
 
 
 def test_parse_ad_shortened_name_used_when_no_complete():
+    # AD len = 1 (type) + 7 (PixelXL bytes) = 8 = 0x08
     payload = bytes([0x08, 0x08]) + b"PixelXL"
     out = parse_ad_structures(payload)
-    assert out == {"name": "PixelXL"}
+    assert out == {"name_shortened": "PixelXL"}
 
 
 def test_parse_ad_complete_name_preferred_over_shortened():
-    payload = bytes([0x06, 0x08]) + b"Pixel" + bytes([0x0C, 0x09]) + b"Pixel 7 Pro"
+    # Shortened first, then Complete — both populated separately now;
+    # cross-packet preference (Complete wins over Shortened) is enforced
+    # in BleScanResult.update_from_packet, not the parser.
+    # AD lens: shortened = 1+5 = 0x06, complete = 1+11 = 0x0C
+    payload = (
+        bytes([0x06, 0x08])
+        + b"Pixel"  # shortened
+        + bytes([0x0C, 0x09])
+        + b"Pixel 7 Pro"  # complete
+    )
     out = parse_ad_structures(payload)
-    assert out == {"name": "Pixel 7 Pro"}
+    assert out == {"name": "Pixel 7 Pro", "name_shortened": "Pixel"}
 
 
 def test_parse_ad_name_invalid_utf8_replaced():
@@ -267,6 +277,38 @@ def test_blescanresult_rssi_rolling_avg_three_packets():
     assert r.rssi_max == -40
     assert r.rssi_min == -60
     assert r.rssi_avg == -50.0
+
+
+def test_blescanresult_complete_name_not_overwritten_by_later_shortened():
+    """Cross-packet: ADV_IND with Complete Name (0x09) must not be downgraded
+    by a subsequent SCAN_RSP with only Shortened Name (0x08)."""
+    adv_data = (
+        bytes([0x00, 0x09, 0xFE, 0xCA, 0xEF, 0xBE, 0xAD, 0xDE])  # PDU header + AdvA
+        + bytes([0x11, 0x09])
+        + b"Soundcore Boom 2"  # Complete name (16 chars)
+    )
+    rsp_data = (
+        bytes([0x04, 0x09, 0xFE, 0xCA, 0xEF, 0xBE, 0xAD, 0xDE])  # SCAN_RSP header
+        + bytes([0x05, 0x08])
+        + b"Boom"  # Shortened name
+    )
+    r = BleScanResult(mac="DE:AD:BE:EF:CA:FE", addr_type="public")
+    r.update_from_packet(FakePkt(adv_data, rssi=-50, ll_pdu_type=0x00))
+    r.update_from_packet(FakePkt(rsp_data, rssi=-52, ll_pdu_type=0x04))
+    # Complete name from ADV_IND wins over Shortened from SCAN_RSP
+    assert r.name == "Soundcore Boom 2"
+
+
+def test_blescanresult_shortened_name_used_when_only_shortened_seen():
+    """If only a Shortened Local Name was ever seen, it becomes the name."""
+    adv_data = (
+        bytes([0x00, 0x09, 0xFE, 0xCA, 0xEF, 0xBE, 0xAD, 0xDE])
+        + bytes([0x05, 0x08])
+        + b"Demo"  # only shortened
+    )
+    r = BleScanResult(mac="DE:AD:BE:EF:CA:FE", addr_type="public")
+    r.update_from_packet(FakePkt(adv_data, rssi=-50, ll_pdu_type=0x00))
+    assert r.name == "Demo"
 
 
 def test_blescanresult_to_dict_json_serializable():

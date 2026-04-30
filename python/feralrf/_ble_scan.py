@@ -39,9 +39,11 @@ class BleScanResult:
         ad_payload = pkt.data[8:]
         ad = parse_ad_structures(ad_payload)
 
-        # 0x09 (Complete) overwrites; 0x08 only if no name yet — already handled in parser.
+        # 0x09 (Complete) always wins; 0x08 (Shortened) only fills in when no Complete seen yet.
         if "name" in ad:
             self.name = ad["name"]
+        elif "name_shortened" in ad and self.name is None:
+            self.name = ad["name_shortened"]
         if "flags" in ad:
             self.flags = ad["flags"]
         if "tx_power" in ad:
@@ -119,8 +121,7 @@ def parse_ad_structures(payload: bytes) -> dict:
         elif ad_type == 0x09:
             out["name"] = value.decode("utf-8", errors="replace")
         elif ad_type == 0x08:
-            if "name" not in out:
-                out["name"] = value.decode("utf-8", errors="replace")
+            out["name_shortened"] = value.decode("utf-8", errors="replace")
         elif ad_type in (0x02, 0x03):
             uuids = out.setdefault("uuids_16bit", [])
             for j in range(0, len(value) - 1, 2):

@@ -20,6 +20,7 @@ typedef enum {
     PHY_MANAGER_PHY_SUB_1GHZ_868 = 5u,
     PHY_MANAGER_PHY_SUB_1GHZ_915 = 6u,
     PHY_MANAGER_PHY_PROPRIETARY_GFSK = 7u,
+    PHY_MANAGER_PHY_PROP_2_4GHZ = 8u,
 } PhyManager_Phy;
 
 typedef enum {
@@ -33,6 +34,7 @@ uint8_t PhyManager_getSelected(void);
 uint8_t PhyManager_getSelectedLinkLayer(void);
 bool PhyManager_isValid(uint8_t phy);
 bool PhyManager_isBlePhy(uint8_t phy);
+bool PhyManager_isProp24ghzPhy(uint8_t phy);
 bool PhyManager_supportsRfBackendRx(uint8_t phy);
 
 #endif /* PHY_MANAGER_H */

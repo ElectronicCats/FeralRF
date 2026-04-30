@@ -22,6 +22,7 @@ static const PhyManager_Profile s_phy_profiles[] = {
     {PHY_MANAGER_PHY_SUB_1GHZ_868, PHY_MANAGER_LL_DEFAULT, false, true},
     {PHY_MANAGER_PHY_SUB_1GHZ_915, PHY_MANAGER_LL_DEFAULT, false, true},
     {PHY_MANAGER_PHY_PROPRIETARY_GFSK, PHY_MANAGER_LL_DEFAULT, false, true},
+    {PHY_MANAGER_PHY_PROP_2_4GHZ, PHY_MANAGER_LL_DEFAULT, false, true},
 };
 
 static uint8_t s_selected_phy = PHY_MANAGER_PHY_BLE_1M;
@@ -67,6 +68,10 @@ bool PhyManager_isValid(uint8_t phy) {
 bool PhyManager_isBlePhy(uint8_t phy) {
     const PhyManager_Profile *profile = PhyManager_findProfile(phy);
     return (profile != NULL) && profile->ble_family;
+}
+
+bool PhyManager_isProp24ghzPhy(uint8_t phy) {
+    return phy == PHY_MANAGER_PHY_PROP_2_4GHZ;
 }
 
 bool PhyManager_supportsRfBackendRx(uint8_t phy) {

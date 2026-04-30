@@ -16,6 +16,7 @@ class PHY(IntEnum):
     SUB_1GHZ_868 = 5
     SUB_1GHZ_915 = 6
     PROPRIETARY_GFSK = 7
+    PROP_2_4GHZ = 8
 
 
 class Command(IntEnum):

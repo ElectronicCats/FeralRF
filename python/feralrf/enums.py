@@ -51,6 +51,11 @@ class Command(IntEnum):
     TX_FRAME = 0x23
     TX_STOP = 0x24
 
+    # Test modes (F22)
+    TX_CW = 0x55
+    TX_PRBS = 0x56
+    TX_TEST_STOP = 0x57
+
     # Jamming
     JAM_CONTINUOUS = 0x30
     JAM_STOP = 0x33
@@ -112,6 +117,9 @@ STABLE_COMMANDS = (
     Command.TX_BURST,
     Command.TX_FRAME,
     Command.TX_STOP,
+    Command.TX_CW,
+    Command.TX_PRBS,
+    Command.TX_TEST_STOP,
 )
 
 EXPERIMENTAL_COMMANDS = (

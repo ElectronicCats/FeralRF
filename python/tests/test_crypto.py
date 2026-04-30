@@ -5,6 +5,8 @@ Hardware end-to-end coverage lives in python/examples/lab/smoke_f25_crypto.py.
 NIST CAVS vector cross-checks live in test_crypto_vectors.py.
 """
 
+import pytest
+
 from feralrf.enums import STABLE_COMMANDS, Command, Response
 
 
@@ -102,3 +104,57 @@ def test_crypto_error_exists():
     assert issubclass(CryptoError, RadioError)
     err = CryptoError("test")
     assert str(err) == "test"
+
+
+def test_random_bytes_sends_correct_frame(monkeypatch):
+    """random_bytes(n) issues CMD_RANDOM with payload [n]."""
+    from feralrf import Radio
+    from feralrf.enums import Response
+
+    radio = Radio(port="dummy")
+    sent = []
+
+    def fake_send(cmd, payload=b""):
+        sent.append((cmd, bytes(payload)))
+
+    def fake_read(timeout=1.0, expected=None):
+        return (Response.RSP_RANDOM, 0, b"\x01\x02\x03\x04\x05")
+
+    monkeypatch.setattr(radio, "_send_command", fake_send)
+    monkeypatch.setattr(radio, "_read_response", fake_read)
+
+    out = radio.random_bytes(5)
+    assert out == b"\x01\x02\x03\x04\x05"
+    assert sent[0] == (Command.CMD_RANDOM, b"\x05")
+
+
+def test_random_bytes_invalid_n_raises():
+    """random_bytes(0) and random_bytes(241) raise ValueError."""
+    from feralrf import Radio
+
+    radio = Radio(port="dummy")
+    with pytest.raises(ValueError, match="1.*240"):
+        radio.random_bytes(0)
+    with pytest.raises(ValueError, match="1.*240"):
+        radio.random_bytes(241)
+
+
+def test_random_bytes_two_calls_differ(monkeypatch):
+    """Returned bytes from second call differ from first."""
+    from feralrf import Radio
+    from feralrf.enums import Response
+
+    radio = Radio(port="dummy")
+    responses = [
+        b"\xAA\xBB\xCC\xDD\xEE\xFF\x11\x22",
+        b"\x33\x44\x55\x66\x77\x88\x99\x00",
+    ]
+    monkeypatch.setattr(radio, "_send_command", lambda c, p=b"": None)
+    monkeypatch.setattr(
+        radio,
+        "_read_response",
+        lambda timeout=1.0, expected=None: (Response.RSP_RANDOM, 0, responses.pop(0)),
+    )
+    a = radio.random_bytes(8)
+    b = radio.random_bytes(8)
+    assert a != b

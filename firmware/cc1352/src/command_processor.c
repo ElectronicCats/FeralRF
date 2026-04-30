@@ -12,6 +12,7 @@
 #include "ble_conn.h"
 #include "ble_conn_mgr.h"
 #include "control_task.h"
+#include "crypto_engine.h"
 #include "ll_manager.h"
 #include "output_if.h"
 #include "protocol.h"
@@ -35,6 +36,7 @@
 #define CMD_TX_CW 0x55u
 #define CMD_TX_PRBS 0x56u
 #define CMD_TX_TEST_STOP 0x57u
+#define CMD_RANDOM 0x59u
 #define CMD_SET_ADV_HOP 0x07u
 #define CMD_SET_PROP_CONFIG 0x08u
 #define CMD_SET_BLE_ADDR 0x09u
@@ -59,6 +61,7 @@
 #define RSP_ERROR 0x81u
 #define RSP_STATS 0x93u
 #define RSP_INFO 0x94u
+#define RSP_RANDOM 0x95u
 
 /* BLE Connection responses */
 #define RSP_CONN_RESULT 0xA0u
@@ -464,6 +467,22 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
         send_ack(seq);
         return;
 
+    case CMD_RANDOM: {
+        if (payload_len != 1u) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            break;
+        }
+        uint8_t n = payload[0];
+        uint8_t buf[240];
+        crypto_engine_status_t st = crypto_engine_random(n, buf);
+        if (st != CRYPTO_OK) {
+            send_error(seq, (uint8_t)st);
+            break;
+        }
+        send_response(RSP_RANDOM, seq, buf, n);
+        break;
+    }
+
     case CMD_JAM_CONTINUOUS:
         if (payload_len != 4u) {
             send_error(seq, ERR_INVALID_PAYLOAD);
@@ -631,16 +650,16 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
         rsp[0] = n;
         for (uint8_t i = 0; i < n; i++) {
             uint8_t *p = &rsp[1u + (uint16_t)i * 18u];
-            p[0]  = (uint8_t)(entries[i].eventIdx & 0xFFu);
-            p[1]  = (uint8_t)(entries[i].eventIdx >> 8);
-            p[2]  = (uint8_t)(entries[i].startRAT & 0xFFu);
-            p[3]  = (uint8_t)((entries[i].startRAT >> 8) & 0xFFu);
-            p[4]  = (uint8_t)((entries[i].startRAT >> 16) & 0xFFu);
-            p[5]  = (uint8_t)((entries[i].startRAT >> 24) & 0xFFu);
-            p[6]  = (uint8_t)(entries[i].endRAT & 0xFFu);
-            p[7]  = (uint8_t)((entries[i].endRAT >> 8) & 0xFFu);
-            p[8]  = (uint8_t)((entries[i].endRAT >> 16) & 0xFFu);
-            p[9]  = (uint8_t)((entries[i].endRAT >> 24) & 0xFFu);
+            p[0] = (uint8_t)(entries[i].eventIdx & 0xFFu);
+            p[1] = (uint8_t)(entries[i].eventIdx >> 8);
+            p[2] = (uint8_t)(entries[i].startRAT & 0xFFu);
+            p[3] = (uint8_t)((entries[i].startRAT >> 8) & 0xFFu);
+            p[4] = (uint8_t)((entries[i].startRAT >> 16) & 0xFFu);
+            p[5] = (uint8_t)((entries[i].startRAT >> 24) & 0xFFu);
+            p[6] = (uint8_t)(entries[i].endRAT & 0xFFu);
+            p[7] = (uint8_t)((entries[i].endRAT >> 8) & 0xFFu);
+            p[8] = (uint8_t)((entries[i].endRAT >> 16) & 0xFFu);
+            p[9] = (uint8_t)((entries[i].endRAT >> 24) & 0xFFu);
             p[10] = (uint8_t)(entries[i].status & 0xFFu);
             p[11] = (uint8_t)((entries[i].status >> 8) & 0xFFu);
             p[12] = entries[i].numSent;
@@ -680,14 +699,14 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
         const BleConn_State *st = BleConn_getState();
         const uint8_t *ll = BleConn_getLlData();
         uint8_t rsp[50];
-        rsp[0]  = (uint8_t)(st->accessAddr & 0xFFu);
-        rsp[1]  = (uint8_t)((st->accessAddr >> 8) & 0xFFu);
-        rsp[2]  = (uint8_t)((st->accessAddr >> 16) & 0xFFu);
-        rsp[3]  = (uint8_t)((st->accessAddr >> 24) & 0xFFu);
-        rsp[4]  = (uint8_t)(st->crcInit & 0xFFu);
-        rsp[5]  = (uint8_t)((st->crcInit >> 8) & 0xFFu);
-        rsp[6]  = (uint8_t)((st->crcInit >> 16) & 0xFFu);
-        rsp[7]  = (uint8_t)((st->crcInit >> 24) & 0xFFu);
+        rsp[0] = (uint8_t)(st->accessAddr & 0xFFu);
+        rsp[1] = (uint8_t)((st->accessAddr >> 8) & 0xFFu);
+        rsp[2] = (uint8_t)((st->accessAddr >> 16) & 0xFFu);
+        rsp[3] = (uint8_t)((st->accessAddr >> 24) & 0xFFu);
+        rsp[4] = (uint8_t)(st->crcInit & 0xFFu);
+        rsp[5] = (uint8_t)((st->crcInit >> 8) & 0xFFu);
+        rsp[6] = (uint8_t)((st->crcInit >> 16) & 0xFFu);
+        rsp[7] = (uint8_t)((st->crcInit >> 24) & 0xFFu);
         memcpy(&rsp[8], st->channelMap, 5);
         rsp[13] = st->hopIncrement;
         rsp[14] = (uint8_t)(st->winOffset & 0xFFu);

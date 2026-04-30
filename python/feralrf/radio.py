@@ -1134,6 +1134,33 @@ class Radio:
         if cmd_id == Response.ERROR:
             raise CommandError("tx_test_stop failed", payload[0] if payload else 0)
 
+    def random_bytes(self, n: int) -> bytes:
+        """Generate `n` cryptographically secure random bytes from the chip's TRNG.
+
+        Args:
+            n: Number of bytes (1 <= n <= 240).
+
+        Returns:
+            `n` random bytes.
+
+        Raises:
+            ValueError: If `n` is outside [1, 240].
+            CryptoError: If firmware TRNG is unavailable.
+        """
+        if not 1 <= n <= 240:
+            raise ValueError(f"random_bytes: n must be in [1, 240], got {n}")
+        self._send_command(Command.CMD_RANDOM, bytes([n]))
+        rsp_id, status, data = self._read_response(expected={Response.RSP_RANDOM, Response.ERROR})
+        if rsp_id == Response.ERROR:
+            from feralrf.exceptions import CryptoError
+
+            raise CryptoError(f"random_bytes failed: status={status}")
+        if len(data) != n:
+            from feralrf.exceptions import CryptoError
+
+            raise CryptoError(f"random_bytes returned {len(data)} bytes, expected {n}")
+        return data
+
     def start_jam(
         self,
         channel: int,

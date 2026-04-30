@@ -30,12 +30,32 @@ bool crypto_engine_init(void) {
     return true;
 }
 
-/* Stub bodies — replaced in subsequent tasks (T4-T10). */
 crypto_engine_status_t crypto_engine_random(uint8_t n, uint8_t *out) {
-    (void)n;
-    (void)out;
-    return CRYPTO_NOT_INITIALIZED;
+    if (n == 0u || n > 240u || out == NULL) {
+        return CRYPTO_BAD_PARAM;
+    }
+    if (!s_initialized)
+        return CRYPTO_NOT_INITIALIZED;
+
+    TRNG_Params params;
+    TRNG_Params_init(&params);
+    params.returnBehavior = TRNG_RETURN_BEHAVIOR_POLLING;
+
+    TRNG_Handle handle = TRNG_open(CONFIG_TRNG_0, &params);
+    if (handle == NULL) {
+        return CRYPTO_HW_ERROR;
+    }
+
+    int_fast16_t rc = TRNG_getRandomBytes(handle, out, (size_t)n);
+    TRNG_close(handle);
+
+    if (rc != TRNG_STATUS_SUCCESS) {
+        return CRYPTO_HW_ERROR;
+    }
+    return CRYPTO_OK;
 }
+
+/* Stub bodies — replaced in subsequent tasks (T5-T10). */
 
 crypto_engine_status_t crypto_engine_aes_ecb(uint8_t op, const uint8_t key[16],
                                              const uint8_t in[16], uint8_t out[16]) {

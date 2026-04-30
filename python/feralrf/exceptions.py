@@ -33,3 +33,16 @@ class TimeoutError(FeralRFError):
     """Operation timeout"""
 
     pass
+
+
+class RadioError(FeralRFError):
+    """Base class for radio and hardware subsystem errors."""
+
+    pass
+
+
+class CryptoError(RadioError):
+    """Raised when a hardware crypto operation fails (tag mismatch,
+    HW error, driver init failure)."""
+
+    pass

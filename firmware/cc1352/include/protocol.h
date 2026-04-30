@@ -27,6 +27,32 @@
 /* Maximum COBS-encoded frame size */
 #define COBS_MAX_ENCODED (PROTOCOL_MAX_FRAME + COBS_MAX_OVERHEAD + 1)
 
+/* -------------------------------------------------------------------------
+ * Command IDs
+ * ------------------------------------------------------------------------- */
+
+/* Crypto HW (F25) */
+#define CMD_RANDOM         0x59
+#define CMD_AES_ECB        0x5A
+#define CMD_AES_CCM        0x5B
+#define CMD_AES_CTR        0x5C
+#define CMD_AES_CBC        0x5D
+#define CMD_AES_GCM        0x5E
+#define CMD_SHA256         0x5F
+#define CMD_ECDH           0x60
+#define CMD_ECDSA_SIGN     0x61
+#define CMD_ECDSA_VERIFY   0x62
+
+/* Crypto responses */
+#define RSP_RANDOM         0x95
+#define RSP_AES            0x96
+#define RSP_AES_CCM        0x97
+#define RSP_AES_GCM        0x98
+#define RSP_SHA256         0x99
+#define RSP_ECDH           0x9A
+#define RSP_ECDSA_SIG      0x9B
+#define RSP_ECDSA_VERIFY   0x9C
+
 /**
  * Calculate CRC-16-CCITT
  * Polynomial: 0x1021, Initial: 0xFFFF

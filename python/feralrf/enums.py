@@ -56,6 +56,18 @@ class Command(IntEnum):
     TX_PRBS = 0x56
     TX_TEST_STOP = 0x57
 
+    # Crypto HW (F25)
+    CMD_RANDOM = 0x59
+    CMD_AES_ECB = 0x5A
+    CMD_AES_CCM = 0x5B
+    CMD_AES_CTR = 0x5C
+    CMD_AES_CBC = 0x5D
+    CMD_AES_GCM = 0x5E
+    CMD_SHA256 = 0x5F
+    CMD_ECDH = 0x60
+    CMD_ECDSA_SIGN = 0x61
+    CMD_ECDSA_VERIFY = 0x62
+
     # Jamming
     JAM_CONTINUOUS = 0x30
     JAM_STOP = 0x33
@@ -83,6 +95,16 @@ class Response(IntEnum):
     RX_PACKET = 0x90
     STATS = 0x93
     INFO = 0x94
+
+    # Crypto HW (F25)
+    RSP_RANDOM = 0x95
+    RSP_AES = 0x96
+    RSP_AES_CCM = 0x97
+    RSP_AES_GCM = 0x98
+    RSP_SHA256 = 0x99
+    RSP_ECDH = 0x9A
+    RSP_ECDSA_SIG = 0x9B
+    RSP_ECDSA_VERIFY = 0x9C
 
     # BLE Connection
     CONN_RESULT = 0xA0
@@ -120,6 +142,16 @@ STABLE_COMMANDS = (
     Command.TX_CW,
     Command.TX_PRBS,
     Command.TX_TEST_STOP,
+    Command.CMD_RANDOM,
+    Command.CMD_AES_ECB,
+    Command.CMD_AES_CCM,
+    Command.CMD_AES_CTR,
+    Command.CMD_AES_CBC,
+    Command.CMD_AES_GCM,
+    Command.CMD_SHA256,
+    Command.CMD_ECDH,
+    Command.CMD_ECDSA_SIGN,
+    Command.CMD_ECDSA_VERIFY,
 )
 
 EXPERIMENTAL_COMMANDS = (

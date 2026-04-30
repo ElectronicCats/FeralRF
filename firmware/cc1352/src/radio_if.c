@@ -237,6 +237,10 @@ static RF_Mode *s_tx_session_mode = NULL;
  * after ~12 PHY switches — the F9 root cause). */
 static RF_Handle s_non433_handle = NULL;
 
+/* F22 test mode — CW or PRBS via rfc_CMD_TX_TEST. Single in-flight cmd. */
+static rfc_CMD_TX_TEST_t s_cmd_tx_test;
+static RF_CmdHandle s_test_cmd_handle = RF_SCHEDULE_CMD_ERROR;
+
 /* 2.4 GHz power table (LP_CC1352P7-1 style, includes High PA up to 20 dBm). */
 static RF_TxPowerTable_Entry s_tx_power_table_24g[] = {
     {-20, RF_TxPowerTable_DEFAULT_PA_ENTRY(6, 3, 0, 2)},
@@ -2064,6 +2068,18 @@ bool RadioIF_transmitRaw(const uint8_t *data, uint8_t data_len, int8_t power_dbm
     }
 
     return false;
+}
+
+bool RadioIF_runTxTest(uint8_t mode) {
+    /* F22 stub — body filled in T7. Returns false so command_processor
+     * sends ERR_RF_NOT_READY until the real implementation lands. */
+    (void)mode;
+    return false;
+}
+
+void RadioIF_stopTxTest(void) {
+    /* F22 stub — body filled in T8. Idempotent no-op until then. */
+    s_test_cmd_handle = RF_SCHEDULE_CMD_ERROR;
 }
 
 bool RadioIF_startRx(void) {

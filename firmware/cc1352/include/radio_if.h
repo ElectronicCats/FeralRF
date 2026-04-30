@@ -49,6 +49,13 @@ void RadioIF_setChannel(uint8_t channel);
 void RadioIF_setPower(int8_t power_dbm);
 void RadioIF_setAdvHopEnabled(bool enabled);
 bool RadioIF_transmitRaw(const uint8_t *data, uint8_t data_len, int8_t power_dbm);
+
+/* F22 test modes — CW (mode=0) or PRBS-9 (mode=1) / PRBS-15 (mode=2).
+ * Requires a prior set_phy() so the active RF handle exists. Returns false
+ * if no PHY is configured. */
+bool RadioIF_runTxTest(uint8_t mode);
+void RadioIF_stopTxTest(void);
+
 bool RadioIF_startRx(void);
 void RadioIF_stopRx(void);
 bool RadioIF_isRxRunning(void);

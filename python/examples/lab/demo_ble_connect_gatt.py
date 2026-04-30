@@ -16,26 +16,41 @@ from typing import Optional
 from feralrf import Radio
 from feralrf.enums import PHY
 
-
 KNOWN_UUIDS = {
-    0x1800: "Generic Access", 0x1801: "Generic Attribute",
-    0x180A: "Device Information", 0x180F: "Battery Service",
-    0x1810: "Blood Pressure", 0x1812: "Human Interface Device",
-    0x1816: "Cycling Speed and Cadence", 0x1818: "Cycling Power",
-    0x181C: "User Data", 0x1848: "Media Control Service",
+    0x1800: "Generic Access",
+    0x1801: "Generic Attribute",
+    0x180A: "Device Information",
+    0x180F: "Battery Service",
+    0x1810: "Blood Pressure",
+    0x1812: "Human Interface Device",
+    0x1816: "Cycling Speed and Cadence",
+    0x1818: "Cycling Power",
+    0x181C: "User Data",
+    0x1848: "Media Control Service",
     0xFE2C: "Google Fast Pair",
-    0x2A00: "Device Name", 0x2A01: "Appearance",
-    0x2A04: "Peripheral Preferred Conn Params", 0x2A05: "Service Changed",
+    0x2A00: "Device Name",
+    0x2A01: "Appearance",
+    0x2A04: "Peripheral Preferred Conn Params",
+    0x2A05: "Service Changed",
     0x2A19: "Battery Level",
-    0x2A24: "Model Number String", 0x2A25: "Serial Number String",
-    0x2A26: "Firmware Revision String", 0x2A27: "Hardware Revision String",
-    0x2A28: "Software Revision String", 0x2A29: "Manufacturer Name String",
+    0x2A24: "Model Number String",
+    0x2A25: "Serial Number String",
+    0x2A26: "Firmware Revision String",
+    0x2A27: "Hardware Revision String",
+    0x2A28: "Software Revision String",
+    0x2A29: "Manufacturer Name String",
     0x2A50: "PnP ID",
 }
 
 CHAR_PROPS = {
-    0x01: "Broadcast", 0x02: "Read", 0x04: "WriteNoRsp", 0x08: "Write",
-    0x10: "Notify", 0x20: "Indicate", 0x40: "AuthWrite", 0x80: "ExtProps",
+    0x01: "Broadcast",
+    0x02: "Read",
+    0x04: "WriteNoRsp",
+    0x08: "Write",
+    0x10: "Notify",
+    0x20: "Indicate",
+    0x40: "AuthWrite",
+    0x80: "ExtProps",
 }
 
 
@@ -46,8 +61,7 @@ def uuid_str(uuid_bytes: bytes) -> str:
         return f"0x{val:04X} ({name})" if name else f"0x{val:04X}"
     if len(uuid_bytes) == 16:
         b = uuid_bytes[::-1]
-        return (f"{b[0:4].hex()}-{b[4:6].hex()}-{b[6:8].hex()}-"
-                f"{b[8:10].hex()}-{b[10:16].hex()}")
+        return f"{b[0:4].hex()}-{b[4:6].hex()}-{b[6:8].hex()}-" f"{b[8:10].hex()}-{b[10:16].hex()}"
     return uuid_bytes.hex()
 
 
@@ -93,7 +107,7 @@ def scan_and_pick(radio: Radio, duration: float = 5.0) -> Optional[tuple]:
             ad_type = pkt.data[i + 1]
             if ad_type in (0x08, 0x09):
                 try:
-                    name = pkt.data[i + 2:i + 1 + ad_len].decode("utf-8", errors="replace")
+                    name = pkt.data[i + 2 : i + 1 + ad_len].decode("utf-8", errors="replace")
                 except Exception:
                     pass
             i += 1 + ad_len
@@ -153,6 +167,7 @@ def run(argv: list) -> int:
                 return 1
             addr_le, addr_type = pick
 
+        assert addr_le is not None
         addr_str = ":".join(f"{b:02X}" for b in reversed(addr_le))
         print(f"\nConnecting to {addr_str} (type={'random' if addr_type else 'public'})")
 
@@ -164,8 +179,10 @@ def run(argv: list) -> int:
 
         time.sleep(2.0)
         status = radio.conn_status()
-        print(f"  connected={status.connected} events={status.events} "
-              f"att_state={status.att_state} last_status=0x{status.last_status:04X}")
+        print(
+            f"  connected={status.connected} events={status.events} "
+            f"att_state={status.att_state} last_status=0x{status.last_status:04X}"
+        )
         if not status.connected:
             print("Connection dropped before GATT.")
             return 3
@@ -178,8 +195,10 @@ def run(argv: list) -> int:
             print(f"  0x{svc.start_handle:04X}-0x{svc.end_handle:04X}  UUID={uuid_str(svc.uuid)}")
         print(f"\nCharacteristics ({len(discovery.characteristics)}):")
         for ch in discovery.characteristics:
-            print(f"  decl=0x{ch.handle:04X} val=0x{ch.value_handle:04X}  "
-                  f"props=[{props_str(ch.properties)}]  UUID={uuid_str(ch.uuid)}")
+            print(
+                f"  decl=0x{ch.handle:04X} val=0x{ch.value_handle:04X}  "
+                f"props=[{props_str(ch.properties)}]  UUID={uuid_str(ch.uuid)}"
+            )
         print(f"\nGATT done (status={discovery.status})")
 
         if do_read and discovery.characteristics:

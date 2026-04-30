@@ -91,8 +91,7 @@ static bool send_exchange_mtu_req(void) {
     return att_send(pdu, 3);
 }
 
-static bool send_read_by_group_type_req(uint16_t startHandle, uint16_t endHandle,
-                                         uint16_t uuid16) {
+static bool send_read_by_group_type_req(uint16_t startHandle, uint16_t endHandle, uint16_t uuid16) {
     uint8_t pdu[7];
     pdu[0] = ATT_READ_BY_GROUP_TYPE_REQ;
     pdu[1] = (uint8_t)(startHandle & 0xFF);
@@ -104,8 +103,7 @@ static bool send_read_by_group_type_req(uint16_t startHandle, uint16_t endHandle
     return att_send(pdu, 7);
 }
 
-static bool send_read_by_type_req(uint16_t startHandle, uint16_t endHandle,
-                                   uint16_t uuid16) {
+static bool send_read_by_type_req(uint16_t startHandle, uint16_t endHandle, uint16_t uuid16) {
     uint8_t pdu[7];
     pdu[0] = ATT_READ_BY_TYPE_REQ;
     pdu[1] = (uint8_t)(startHandle & 0xFF);
@@ -407,8 +405,7 @@ void AttClient_poll(void) {
         if (s_disc_next_handle == 0) {
             s_disc_next_handle = 0x0001;
         }
-        if (send_read_by_group_type_req(s_disc_next_handle, 0xFFFF,
-                                         GATT_PRIMARY_SERVICE_UUID)) {
+        if (send_read_by_group_type_req(s_disc_next_handle, 0xFFFF, GATT_PRIMARY_SERVICE_UUID)) {
             s_request_pending = true;
         }
         break;

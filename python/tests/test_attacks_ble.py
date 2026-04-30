@@ -5,8 +5,6 @@ of the advertising payloads used by attacks.ble (Apple Proximity, Google
 Fast Pair, generic ADV).
 """
 
-import pytest
-
 from feralrf.attacks.ble import (
     APPLE_DEVICES,
     GOOGLE_DEVICES,

@@ -119,16 +119,16 @@ class DebugTimingEntry:
     (n_tx>=1, n_rx_*==0).
     """
 
-    event_idx: int       # u16 — BleConnMgr s_event_counter at capture time
-    start_rat: int       # u32 — curHopTime fed to RadioIF_bleCentral
-    end_rat: int         # u32 — s_next_hop_time fed to RadioIF_bleCentral
-    status: int          # u16 — RF status code (BLE_DONE_NOSYNC=0x1402, OK=0x1400, …)
-    num_sent: int        # u8  — pOutput.nTxEntryDone
-    n_tx: int            # u8  — pOutput.nTx (total TX incl. auto-empty + retrans)
-    n_rx_ok: int         # u8  — pOutput.nRxOk
-    n_rx_nok: int        # u8  — pOutput.nRxNok
-    n_rx_ignored: int    # u8  — pOutput.nRxIgnored
-    pkt_status: int      # u8  — packed pktStatus bitfield (see properties)
+    event_idx: int  # u16 — BleConnMgr s_event_counter at capture time
+    start_rat: int  # u32 — curHopTime fed to RadioIF_bleCentral
+    end_rat: int  # u32 — s_next_hop_time fed to RadioIF_bleCentral
+    status: int  # u16 — RF status code (BLE_DONE_NOSYNC=0x1402, OK=0x1400, …)
+    num_sent: int  # u8  — pOutput.nTxEntryDone
+    n_tx: int  # u8  — pOutput.nTx (total TX incl. auto-empty + retrans)
+    n_rx_ok: int  # u8  — pOutput.nRxOk
+    n_rx_nok: int  # u8  — pOutput.nRxNok
+    n_rx_ignored: int  # u8  — pOutput.nRxIgnored
+    pkt_status: int  # u8  — packed pktStatus bitfield (see properties)
 
     @property
     def b_time_stamp_valid(self) -> bool:
@@ -182,10 +182,18 @@ class DebugTimingResponse:
         entries = []
         for i in range(count):
             base = 1 + i * cls._ENTRY_SIZE
-            (event_idx, start_rat, end_rat, status, num_sent,
-             n_tx, n_rx_ok, n_rx_nok, n_rx_ignored, pkt_status) = struct.unpack(
-                "<HIIHBBBBBB", payload[base : base + cls._ENTRY_SIZE]
-            )
+            (
+                event_idx,
+                start_rat,
+                end_rat,
+                status,
+                num_sent,
+                n_tx,
+                n_rx_ok,
+                n_rx_nok,
+                n_rx_ignored,
+                pkt_status,
+            ) = struct.unpack("<HIIHBBBBBB", payload[base : base + cls._ENTRY_SIZE])
             entries.append(
                 DebugTimingEntry(
                     event_idx=event_idx,
@@ -244,8 +252,7 @@ class DebugConnParamsResponse:
     def parse(cls, payload: bytes) -> "DebugConnParamsResponse":
         if len(payload) != 50:
             raise ValueError(
-                f"DEBUG_CONN_PARAMS payload size mismatch: "
-                f"got {len(payload)}, expected 50"
+                f"DEBUG_CONN_PARAMS payload size mismatch: " f"got {len(payload)}, expected 50"
             )
         access_addr = int.from_bytes(payload[0:4], "little")
         crc_init = int.from_bytes(payload[4:8], "little")

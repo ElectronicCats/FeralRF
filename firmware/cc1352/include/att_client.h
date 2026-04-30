@@ -25,11 +25,10 @@ typedef enum {
 } AttClient_State;
 
 /* Callback for GATT results sent to host */
-typedef void (*AttClient_ServiceCb)(uint16_t startHandle, uint16_t endHandle,
-                                     const uint8_t *uuid, uint8_t uuidLen);
-typedef void (*AttClient_CharCb)(uint16_t handle, uint8_t properties,
-                                  uint16_t valueHandle,
-                                  const uint8_t *uuid, uint8_t uuidLen);
+typedef void (*AttClient_ServiceCb)(uint16_t startHandle, uint16_t endHandle, const uint8_t *uuid,
+                                    uint8_t uuidLen);
+typedef void (*AttClient_CharCb)(uint16_t handle, uint8_t properties, uint16_t valueHandle,
+                                 const uint8_t *uuid, uint8_t uuidLen);
 typedef void (*AttClient_ReadCb)(uint16_t handle, const uint8_t *data, uint8_t len);
 typedef void (*AttClient_DoneCb)(uint8_t status); /* 0=ok, 1=error, 2=timeout */
 

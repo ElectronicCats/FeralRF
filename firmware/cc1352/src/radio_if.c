@@ -973,6 +973,10 @@ static bool RadioIF_runFsAndPostRx(void) {
         }
         break;
     }
+    case RADIO_IF_RF_MODE_PROP_2_4GHZ:
+        fs_cmd = (RF_Op *)&Prop24g_cmdFs;
+        rx_cmd = (RF_Op *)&Prop24g_cmdPropRx;
+        break;
     case RADIO_IF_RF_MODE_NONE:
     default:
         return false;
@@ -1897,6 +1901,11 @@ void RadioIF_setPhy(uint8_t phy, uint16_t channel, uint32_t frequency_hz) {
         RadioIF_applyIeee154ChannelConfig(s_channel);
     } else if (RadioIF_isSub1ghzPhySelected()) {
         RadioIF_applySub1ghzChannelConfig(s_channel, s_frequency_hz);
+    } else if (RadioIF_isProp24ghzPhySelected()) {
+        if (frequency_hz == 0u) {
+            s_frequency_hz = 2440000000u;
+        }
+        RadioIF_applyProp24ghzChannelConfig(s_frequency_hz);
     }
 
     RadioIF_updateBleHopMode();
@@ -1907,7 +1916,8 @@ void RadioIF_setPhy(uint8_t phy, uint16_t channel, uint32_t frequency_hz) {
     if ((s_backend == RADIO_IF_BACKEND_RF) && (s_rf_handle != NULL) &&
         ((PhyManager_isBlePhy(s_selected_phy) && (s_rf_mode == RADIO_IF_RF_MODE_BLE)) ||
          (RadioIF_isIeee154PhySelected() && (s_rf_mode == RADIO_IF_RF_MODE_IEEE_15_4)) ||
-         (RadioIF_isSub1ghzPhySelected() && (s_rf_mode == RADIO_IF_RF_MODE_SUB_1GHZ)))) {
+         (RadioIF_isSub1ghzPhySelected() && (s_rf_mode == RADIO_IF_RF_MODE_SUB_1GHZ)) ||
+         (RadioIF_isProp24ghzPhySelected() && (s_rf_mode == RADIO_IF_RF_MODE_PROP_2_4GHZ)))) {
         (void)RadioIF_restartRfRx();
     }
 }
@@ -1928,6 +1938,8 @@ void RadioIF_setChannel(uint8_t channel) {
         RadioIF_applyIeee154ChannelConfig(s_channel);
     } else if (RadioIF_isSub1ghzPhySelected()) {
         RadioIF_applySub1ghzChannelConfig(s_channel, s_frequency_hz);
+    } else if (RadioIF_isProp24ghzPhySelected()) {
+        RadioIF_applyProp24ghzChannelConfig(s_frequency_hz);
     }
 
     RadioIF_updateBleHopMode();
@@ -1938,7 +1950,8 @@ void RadioIF_setChannel(uint8_t channel) {
     if ((s_backend == RADIO_IF_BACKEND_RF) && (s_rf_handle != NULL) &&
         ((PhyManager_isBlePhy(s_selected_phy) && (s_rf_mode == RADIO_IF_RF_MODE_BLE)) ||
          (RadioIF_isIeee154PhySelected() && (s_rf_mode == RADIO_IF_RF_MODE_IEEE_15_4)) ||
-         (RadioIF_isSub1ghzPhySelected() && (s_rf_mode == RADIO_IF_RF_MODE_SUB_1GHZ)))) {
+         (RadioIF_isSub1ghzPhySelected() && (s_rf_mode == RADIO_IF_RF_MODE_SUB_1GHZ)) ||
+         (RadioIF_isProp24ghzPhySelected() && (s_rf_mode == RADIO_IF_RF_MODE_PROP_2_4GHZ)))) {
         (void)RadioIF_restartRfRx();
     }
 }
@@ -2138,6 +2151,10 @@ bool RadioIF_transmitRaw(const uint8_t *data, uint8_t data_len, int8_t power_dbm
         return RadioIF_transmitIeee154Raw(data, data_len);
     }
 
+    if (RadioIF_isProp24ghzPhySelected()) {
+        return RadioIF_transmitProp24ghzRaw(data, data_len);
+    }
+
     return false;
 }
 
@@ -2218,6 +2235,8 @@ bool RadioIF_startRx(void) {
             rf_started = RadioIF_startIeee154RfBackend();
         } else if (RadioIF_isSub1ghzPhySelected()) {
             rf_started = RadioIF_startSub1ghzRfBackend();
+        } else if (RadioIF_isProp24ghzPhySelected()) {
+            rf_started = RadioIF_startProp24ghzRfBackend();
         }
 
         if (rf_started) {

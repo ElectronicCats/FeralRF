@@ -24,3 +24,29 @@ def test_tx_test_commands_in_stable():
     assert Command.TX_CW in STABLE_COMMANDS
     assert Command.TX_PRBS in STABLE_COMMANDS
     assert Command.TX_TEST_STOP in STABLE_COMMANDS
+
+
+def test_tx_cw_sends_correct_frame(monkeypatch):
+    """tx_cw issues SET_POWER then a TX_CW frame with empty payload."""
+    from feralrf import Radio
+    from feralrf.enums import Response
+
+    radio = Radio(port="dummy")
+    sent_cmds = []
+
+    monkeypatch.setattr(
+        radio, "_send_command", lambda c, p=b"": sent_cmds.append((c, bytes(p)))
+    )
+    monkeypatch.setattr(
+        radio,
+        "_read_response",
+        lambda timeout=1.0, expected=None: (Response.ACK, 0, b""),
+    )
+
+    radio.tx_cw(power_dbm=5)
+
+    cmd_ids = [c[0] for c in sent_cmds]
+    assert Command.SET_POWER in cmd_ids
+    assert Command.TX_CW in cmd_ids
+    cw_frame = next(c for c in sent_cmds if c[0] == Command.TX_CW)
+    assert cw_frame[1] == b""

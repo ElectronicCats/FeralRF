@@ -1081,6 +1081,26 @@ class Radio:
         if cmd_id != Response.ACK:
             raise ProtocolError(f"Unexpected response to TX_STOP: 0x{cmd_id:02X}")
 
+    def tx_cw(self, power_dbm: int = 0) -> None:
+        """Emit unmodulated carrier on current PHY/channel.
+
+        Requires set_phy(...) first to select band + channel/frequency.
+        Stop with tx_test_stop(). Test signal runs until cancelled.
+
+        Args:
+            power_dbm: TX power, -20 to +5 dBm (std-PA cap on this hw rev).
+
+        Raises:
+            CommandError: if no PHY is set or RF Core rejects the command.
+        """
+        self.set_power(power_dbm)
+        self._send_command(Command.TX_CW)
+        cmd_id, _seq, payload = self._read_response(
+            expected={Response.ACK, Response.ERROR}
+        )
+        if cmd_id == Response.ERROR:
+            raise CommandError("tx_cw failed", payload[0] if payload else 0)
+
     def start_jam(
         self,
         channel: int,

@@ -417,7 +417,7 @@ TRNGCC26XX_Object trngCC26XXObjects[CONFIG_TRNG_COUNT];
 /*
  *  ======== trngCC26XXHWAttrs ========
  */
-static const TRNGCC26XX_HWAttrs trngCC26XXHWAttrs[CONFIG_TRNG_COUNT] = {
+const TRNGCC26XX_HWAttrs trngCC26XXHWAttrs[CONFIG_TRNG_COUNT] = {
     {
         .intPriority = (~0),
         .swiPriority = 0,

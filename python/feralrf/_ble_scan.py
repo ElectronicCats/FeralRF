@@ -157,7 +157,7 @@ def extract_pdu_header(pkt_data: bytes) -> tuple:
 
     Layout: [PDU header (2B)] [AdvA (6B little-endian)] [AdvData ...]
 
-    PDU header byte 1 bit 6 = TxAdd:
+    PDU header byte 0 bit 6 = TxAdd:
       0 → public address
       1 → random; sub-classify by AdvA[5] high 2 bits:
             0b00 → random_non_resolvable
@@ -169,7 +169,7 @@ def extract_pdu_header(pkt_data: bytes) -> tuple:
     """
     if len(pkt_data) < 8:
         return (None, None)
-    tx_add = (pkt_data[1] >> 6) & 0x01
+    tx_add = (pkt_data[0] >> 6) & 0x01
     adva_le = pkt_data[2:8]
     mac = ":".join(f"{b:02X}" for b in reversed(adva_le))
     if tx_add == 0:

@@ -192,8 +192,9 @@ def test_extract_pdu_header_public_address():
 
 
 def test_extract_pdu_header_random_static():
-    # TxAdd=1 (bit 6 of byte 1 = 0x40) + AdvA byte 5 high bits = 0xC0 → static
-    pkt_data = bytes([0x00, 0x46, 0xFE, 0xCA, 0xEF, 0xBE, 0xAD, 0xDE | 0xC0])
+    # TxAdd=1 is bit 6 of byte 0 (= 0x40). byte 1 = length only (0x06).
+    # AdvA byte 5 high bits = 0xC0 → random_static
+    pkt_data = bytes([0x40, 0x06, 0xFE, 0xCA, 0xEF, 0xBE, 0xAD, 0xDE | 0xC0])
     mac, addr_type = extract_pdu_header(pkt_data)
     expected_msb = 0xDE | 0xC0
     assert mac == f"{expected_msb:02X}:AD:BE:EF:CA:FE"
@@ -201,15 +202,17 @@ def test_extract_pdu_header_random_static():
 
 
 def test_extract_pdu_header_random_resolvable():
-    # TxAdd=1 + high bits 0b01 (0x40)
-    pkt_data = bytes([0x00, 0x46, 0xFE, 0xCA, 0xEF, 0xBE, 0xAD, 0x7E])  # 0x7E high bits = 01
+    # TxAdd=1 is bit 6 of byte 0 (= 0x40). byte 1 = length only (0x06).
+    # AdvA byte 5 high bits = 0b01 → random_resolvable
+    pkt_data = bytes([0x40, 0x06, 0xFE, 0xCA, 0xEF, 0xBE, 0xAD, 0x7E])  # 0x7E high bits = 01
     mac, addr_type = extract_pdu_header(pkt_data)
     assert addr_type == "random_resolvable"
 
 
 def test_extract_pdu_header_random_non_resolvable():
-    # TxAdd=1 + high bits 0b00
-    pkt_data = bytes([0x00, 0x46, 0xFE, 0xCA, 0xEF, 0xBE, 0xAD, 0x3E])  # 0x3E high bits = 00
+    # TxAdd=1 is bit 6 of byte 0 (= 0x40). byte 1 = length only (0x06).
+    # AdvA byte 5 high bits = 0b00 → random_non_resolvable
+    pkt_data = bytes([0x40, 0x06, 0xFE, 0xCA, 0xEF, 0xBE, 0xAD, 0x3E])  # 0x3E high bits = 00
     mac, addr_type = extract_pdu_header(pkt_data)
     assert addr_type == "random_non_resolvable"
 

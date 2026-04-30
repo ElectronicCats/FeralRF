@@ -405,6 +405,261 @@ void Board_shutDownExtFlash(void) {
     GPIO_resetConfig(BOARD_EXT_FLASH_SPI_POCI);
 }
 
+/*
+ *  =============================== TRNG ===============================
+ */
+
+#include <ti/drivers/TRNG.h>
+#include <ti/drivers/trng/TRNGCC26XX.h>
+
+TRNGCC26XX_Object trngCC26XXObjects[CONFIG_TRNG_COUNT];
+
+/*
+ *  ======== trngCC26XXHWAttrs ========
+ */
+static const TRNGCC26XX_HWAttrs trngCC26XXHWAttrs[CONFIG_TRNG_COUNT] = {
+    {
+        .intPriority = (~0),
+        .swiPriority = 0,
+        .samplesPerCycle = 240000,
+    },
+};
+
+const TRNG_Config TRNG_config[CONFIG_TRNG_COUNT] = {
+    {   /* CONFIG_TRNG_0 */
+        .object  = &trngCC26XXObjects[CONFIG_TRNG_0],
+        .hwAttrs = &trngCC26XXHWAttrs[CONFIG_TRNG_0]
+    },
+};
+
+const uint_least8_t CONFIG_TRNG_0_CONST = CONFIG_TRNG_0;
+const uint_least8_t TRNG_count = CONFIG_TRNG_COUNT;
+
+/*
+ *  =============================== AESECB ===============================
+ */
+
+#include <ti/drivers/AESECB.h>
+#include <ti/drivers/aesecb/AESECBCC26XX.h>
+
+AESECBCC26XX_Object aesecbCC26XXObjects[CONFIG_AESECB_COUNT];
+
+/*
+ *  ======== aesecbCC26XXHWAttrs ========
+ */
+const AESECBCC26XX_HWAttrs aesecbCC26XXHWAttrs[CONFIG_AESECB_COUNT] = {
+    {
+        .intPriority = (~0),
+    },
+};
+
+const AESECB_Config AESECB_config[CONFIG_AESECB_COUNT] = {
+    {   /* CONFIG_AESECB_0 */
+        .object  = &aesecbCC26XXObjects[CONFIG_AESECB_0],
+        .hwAttrs = &aesecbCC26XXHWAttrs[CONFIG_AESECB_0]
+    },
+};
+
+const uint_least8_t CONFIG_AESECB_0_CONST = CONFIG_AESECB_0;
+const uint_least8_t AESECB_count = CONFIG_AESECB_COUNT;
+
+/*
+ *  =============================== AESCCM ===============================
+ */
+
+#include <ti/drivers/AESCCM.h>
+#include <ti/drivers/aesccm/AESCCMCC26XX.h>
+
+AESCCMCC26XX_Object aesccmCC26XXObjects[CONFIG_AESCCM_COUNT];
+
+/*
+ *  ======== aesccmCC26XXHWAttrs ========
+ */
+const AESCCMCC26XX_HWAttrs aesccmCC26XXHWAttrs[CONFIG_AESCCM_COUNT] = {
+    {
+        .intPriority = (~0),
+    },
+};
+
+const AESCCM_Config AESCCM_config[CONFIG_AESCCM_COUNT] = {
+    {   /* CONFIG_AESCCM_0 */
+        .object  = &aesccmCC26XXObjects[CONFIG_AESCCM_0],
+        .hwAttrs = &aesccmCC26XXHWAttrs[CONFIG_AESCCM_0]
+    },
+};
+
+const uint_least8_t CONFIG_AESCCM_0_CONST = CONFIG_AESCCM_0;
+const uint_least8_t AESCCM_count = CONFIG_AESCCM_COUNT;
+
+/*
+ *  =============================== AESCTR ===============================
+ */
+
+#include <ti/drivers/AESCTR.h>
+#include <ti/drivers/aesctr/AESCTRCC26XX.h>
+
+AESCTRCC26XX_Object aesctrCC26XXObjects[CONFIG_AESCTR_COUNT];
+
+/*
+ *  ======== aesctrCC26XXHWAttrs ========
+ */
+const AESCTRCC26XX_HWAttrs aesctrCC26XXHWAttrs[CONFIG_AESCTR_COUNT] = {
+    {
+        .intPriority = (~0),
+    },
+};
+
+const AESCTR_Config AESCTR_config[CONFIG_AESCTR_COUNT] = {
+    {   /* CONFIG_AESCTR_0 */
+        .object  = &aesctrCC26XXObjects[CONFIG_AESCTR_0],
+        .hwAttrs = &aesctrCC26XXHWAttrs[CONFIG_AESCTR_0]
+    },
+};
+
+const uint_least8_t CONFIG_AESCTR_0_CONST = CONFIG_AESCTR_0;
+const uint_least8_t AESCTR_count = CONFIG_AESCTR_COUNT;
+
+/*
+ *  =============================== AESCBC ===============================
+ */
+
+#include <ti/drivers/AESCBC.h>
+#include <ti/drivers/aescbc/AESCBCCC26XX.h>
+
+AESCBCCC26XX_Object aescbcCC26XXObjects[CONFIG_AESCBC_COUNT];
+
+/*
+ *  ======== aescbcCC26XXHWAttrs ========
+ */
+const AESCBCCC26XX_HWAttrs aescbcCC26XXHWAttrs[CONFIG_AESCBC_COUNT] = {
+    {
+        .intPriority = (~0),
+    },
+};
+
+const AESCBC_Config AESCBC_config[CONFIG_AESCBC_COUNT] = {
+    {   /* CONFIG_AESCBC_0 */
+        .object  = &aescbcCC26XXObjects[CONFIG_AESCBC_0],
+        .hwAttrs = &aescbcCC26XXHWAttrs[CONFIG_AESCBC_0]
+    },
+};
+
+const uint_least8_t CONFIG_AESCBC_0_CONST = CONFIG_AESCBC_0;
+const uint_least8_t AESCBC_count = CONFIG_AESCBC_COUNT;
+
+/*
+ *  =============================== AESGCM ===============================
+ */
+
+#include <ti/drivers/AESGCM.h>
+#include <ti/drivers/aesgcm/AESGCMCC26XX.h>
+
+AESGCMCC26XX_Object aesgcmCC26XXObjects[CONFIG_AESGCM_COUNT];
+
+/*
+ *  ======== aesgcmCC26XXHWAttrs ========
+ */
+const AESGCMCC26XX_HWAttrs aesgcmCC26XXHWAttrs[CONFIG_AESGCM_COUNT] = {
+    {
+        .intPriority = (~0),
+    },
+};
+
+const AESGCM_Config AESGCM_config[CONFIG_AESGCM_COUNT] = {
+    {   /* CONFIG_AESGCM_0 */
+        .object  = &aesgcmCC26XXObjects[CONFIG_AESGCM_0],
+        .hwAttrs = &aesgcmCC26XXHWAttrs[CONFIG_AESGCM_0]
+    },
+};
+
+const uint_least8_t CONFIG_AESGCM_0_CONST = CONFIG_AESGCM_0;
+const uint_least8_t AESGCM_count = CONFIG_AESGCM_COUNT;
+
+/*
+ *  =============================== SHA2 ===============================
+ */
+
+#include <ti/drivers/SHA2.h>
+#include <ti/drivers/sha2/SHA2CC26X2.h>
+
+SHA2CC26X2_Object sha2CC26X2Objects[CONFIG_SHA2_COUNT];
+
+/*
+ *  ======== sha2CC26X2HWAttrs ========
+ */
+const SHA2CC26X2_HWAttrs sha2CC26X2HWAttrs[CONFIG_SHA2_COUNT] = {
+    {
+        .intPriority = (~0),
+    },
+};
+
+const SHA2_Config SHA2_config[CONFIG_SHA2_COUNT] = {
+    {   /* CONFIG_SHA2_0 */
+        .object  = &sha2CC26X2Objects[CONFIG_SHA2_0],
+        .hwAttrs = &sha2CC26X2HWAttrs[CONFIG_SHA2_0]
+    },
+};
+
+const uint_least8_t CONFIG_SHA2_0_CONST = CONFIG_SHA2_0;
+const uint_least8_t SHA2_count = CONFIG_SHA2_COUNT;
+
+/*
+ *  =============================== ECDH ===============================
+ */
+
+#include <ti/drivers/ECDH.h>
+#include <ti/drivers/ecdh/ECDHCC26X2.h>
+
+ECDHCC26X2_Object ecdhCC26X2Objects[CONFIG_ECDH_COUNT];
+
+/*
+ *  ======== ecdhCC26X2HWAttrs ========
+ */
+const ECDHCC26X2_HWAttrs ecdhCC26X2HWAttrs[CONFIG_ECDH_COUNT] = {
+    {
+        .intPriority = (~0),
+    },
+};
+
+const ECDH_Config ECDH_config[CONFIG_ECDH_COUNT] = {
+    {   /* CONFIG_ECDH_0 */
+        .object  = &ecdhCC26X2Objects[CONFIG_ECDH_0],
+        .hwAttrs = &ecdhCC26X2HWAttrs[CONFIG_ECDH_0]
+    },
+};
+
+const uint_least8_t CONFIG_ECDH_0_CONST = CONFIG_ECDH_0;
+const uint_least8_t ECDH_count = CONFIG_ECDH_COUNT;
+
+/*
+ *  =============================== ECDSA ===============================
+ */
+
+#include <ti/drivers/ECDSA.h>
+#include <ti/drivers/ecdsa/ECDSACC26X2.h>
+
+ECDSACC26X2_Object ecdsaCC26X2Objects[CONFIG_ECDSA_COUNT];
+
+/*
+ *  ======== ecdsaCC26X2HWAttrs ========
+ */
+const ECDSACC26X2_HWAttrs ecdsaCC26X2HWAttrs[CONFIG_ECDSA_COUNT] = {
+    {
+        .intPriority = (~0),
+        .trngIntPriority = (~0),
+    },
+};
+
+const ECDSA_Config ECDSA_config[CONFIG_ECDSA_COUNT] = {
+    {   /* CONFIG_ECDSA_0 */
+        .object  = &ecdsaCC26X2Objects[CONFIG_ECDSA_0],
+        .hwAttrs = &ecdsaCC26X2HWAttrs[CONFIG_ECDSA_0]
+    },
+};
+
+const uint_least8_t CONFIG_ECDSA_0_CONST = CONFIG_ECDSA_0;
+const uint_least8_t ECDSA_count = CONFIG_ECDSA_COUNT;
+
 #include <ti/drivers/Board.h>
 
 /*

@@ -1587,6 +1587,38 @@ static bool RadioIF_startSub1ghzRfBackend(void) {
     return true;
 }
 
+static bool RadioIF_startProp24ghzRfBackend(void) {
+    if (!RadioIF_createRfDataQueue(&s_rf_data_queue, s_rf_rx_data_buffer,
+                                   (uint16_t)sizeof(s_rf_rx_data_buffer), RF_QUEUE_NUM_DATA_ENTRIES,
+                                   RF_QUEUE_ENTRY_PAYLOAD_LEN)) {
+        return false;
+    }
+
+    s_rf_mode = RADIO_IF_RF_MODE_PROP_2_4GHZ;
+    RadioIF_applyProp24ghzChannelConfig(s_frequency_hz);
+
+    if (!RadioIF_switchRfMode(&Prop24g_mode, (RF_RadioSetup *)&Prop24g_cmdPropRadioSetup)) {
+        s_rf_mode = RADIO_IF_RF_MODE_NONE;
+        return false;
+    }
+
+    Prop24g_cmdPropRx.pQueue = &s_rf_data_queue;
+
+    if (s_rf_handle == NULL) {
+        s_rf_mode = RADIO_IF_RF_MODE_NONE;
+        return false;
+    }
+
+    if (!RadioIF_runFsAndPostRx()) {
+        s_rf_rx_cmd = RF_SCHEDULE_CMD_ERROR;
+        s_rf_mode = RADIO_IF_RF_MODE_NONE;
+        return false;
+    }
+
+    s_rf_event_flags = 0u;
+    return true;
+}
+
 static void RadioIF_processPropPackets(void) {
     while (RadioIF_rfHasPacket()) {
         RadioIF_RxPacket pkt = {0};

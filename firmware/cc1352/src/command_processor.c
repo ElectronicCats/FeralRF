@@ -32,6 +32,9 @@
 #define CMD_TX_BURST 0x22u
 #define CMD_TX_FRAME 0x23u
 #define CMD_TX_STOP 0x24u
+#define CMD_TX_CW 0x55u
+#define CMD_TX_PRBS 0x56u
+#define CMD_TX_TEST_STOP 0x57u
 #define CMD_SET_ADV_HOP 0x07u
 #define CMD_SET_PROP_CONFIG 0x08u
 #define CMD_SET_BLE_ADDR 0x09u
@@ -78,6 +81,7 @@
 #define ERR_FRAME_TOO_LONG 0x04u
 #define ERR_INVALID_STATE 0x05u
 #define ERR_RF_INIT_FAILED 0x06u
+#define ERR_RF_NOT_READY 0x07u
 
 static uint16_t read_u16_le(const uint8_t *p) {
     return (uint16_t)p[0] | ((uint16_t)p[1] << 8);
@@ -420,6 +424,43 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
             return;
         }
         ControlTask_onTxStop();
+        send_ack(seq);
+        return;
+
+    case CMD_TX_CW:
+        if (payload_len != 0) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            return;
+        }
+        if (!RadioIF_runTxTest(0u)) {
+            send_error(seq, ERR_RF_NOT_READY);
+            return;
+        }
+        send_ack(seq);
+        return;
+
+    case CMD_TX_PRBS:
+        if (payload_len != 1u) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            return;
+        }
+        if (payload[0] != 1u && payload[0] != 2u) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            return;
+        }
+        if (!RadioIF_runTxTest(payload[0])) {
+            send_error(seq, ERR_RF_NOT_READY);
+            return;
+        }
+        send_ack(seq);
+        return;
+
+    case CMD_TX_TEST_STOP:
+        if (payload_len != 0) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            return;
+        }
+        RadioIF_stopTxTest();
         send_ack(seq);
         return;
 

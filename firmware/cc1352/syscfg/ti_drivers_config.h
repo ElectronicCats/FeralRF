@@ -75,6 +75,70 @@ extern const uint_least8_t GPIO_pinUpperBound;
 
 
 /*
+ *  ======== TRNG ========
+ */
+extern const uint_least8_t CONFIG_TRNG_0_CONST;
+#define CONFIG_TRNG_0 0
+#define CONFIG_TRNG_COUNT 1
+
+/*
+ *  ======== AESECB ========
+ */
+extern const uint_least8_t CONFIG_AESECB_0_CONST;
+#define CONFIG_AESECB_0 0
+#define CONFIG_AESECB_COUNT 1
+
+/*
+ *  ======== AESCCM ========
+ */
+extern const uint_least8_t CONFIG_AESCCM_0_CONST;
+#define CONFIG_AESCCM_0 0
+#define CONFIG_AESCCM_COUNT 1
+
+/*
+ *  ======== AESCTR ========
+ */
+extern const uint_least8_t CONFIG_AESCTR_0_CONST;
+#define CONFIG_AESCTR_0 0
+#define CONFIG_AESCTR_COUNT 1
+
+/*
+ *  ======== AESCBC ========
+ */
+extern const uint_least8_t CONFIG_AESCBC_0_CONST;
+#define CONFIG_AESCBC_0 0
+#define CONFIG_AESCBC_COUNT 1
+
+/*
+ *  ======== AESGCM ========
+ */
+extern const uint_least8_t CONFIG_AESGCM_0_CONST;
+#define CONFIG_AESGCM_0 0
+#define CONFIG_AESGCM_COUNT 1
+
+/*
+ *  ======== SHA2 ========
+ */
+extern const uint_least8_t CONFIG_SHA2_0_CONST;
+#define CONFIG_SHA2_0 0
+#define CONFIG_SHA2_COUNT 1
+
+/*
+ *  ======== ECDH ========
+ */
+extern const uint_least8_t CONFIG_ECDH_0_CONST;
+#define CONFIG_ECDH_0 0
+#define CONFIG_ECDH_COUNT 1
+
+/*
+ *  ======== ECDSA ========
+ */
+extern const uint_least8_t CONFIG_ECDSA_0_CONST;
+#define CONFIG_ECDSA_0 0
+#define CONFIG_ECDSA_COUNT 1
+
+
+/*
  *  ======== Board_init ========
  *  Perform all required TI-Drivers initialization
  *

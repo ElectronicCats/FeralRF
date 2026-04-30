@@ -45,12 +45,28 @@ def test_response_parses_two_entries():
     assert parsed.count == 2
     assert parsed.entries == [
         DebugTimingEntry(
-            event_idx=0, start_rat=0x10000000, end_rat=0x10100000, status=0x1402,
-            num_sent=0, n_tx=0, n_rx_ok=0, n_rx_nok=0, n_rx_ignored=0, pkt_status=0x00,
+            event_idx=0,
+            start_rat=0x10000000,
+            end_rat=0x10100000,
+            status=0x1402,
+            num_sent=0,
+            n_tx=0,
+            n_rx_ok=0,
+            n_rx_nok=0,
+            n_rx_ignored=0,
+            pkt_status=0x00,
         ),
         DebugTimingEntry(
-            event_idx=1, start_rat=0x10100000, end_rat=0x10200000, status=0x1400,
-            num_sent=1, n_tx=2, n_rx_ok=1, n_rx_nok=0, n_rx_ignored=0, pkt_status=0x41,
+            event_idx=1,
+            start_rat=0x10100000,
+            end_rat=0x10200000,
+            status=0x1400,
+            num_sent=1,
+            n_tx=2,
+            n_rx_ok=1,
+            n_rx_nok=0,
+            n_rx_ignored=0,
+            pkt_status=0x41,
         ),
     ]
 
@@ -66,19 +82,29 @@ def test_response_rejects_truncated_entry():
 
 def test_debug_timing_parses_extended_entry():
     """One full 18-byte entry: NOSYNC with all new fields zero."""
-    payload = bytes([
-        0x01,                   # count
-        0x05, 0x00,             # event_idx = 5
-        0xAD, 0xDE, 0x00, 0x00, # start_rat = 0xDEAD
-        0xEF, 0xBE, 0x00, 0x00, # end_rat   = 0xBEEF
-        0x02, 0x14,             # status    = 0x1402 (NOSYNC)
-        0x00,                   # num_sent
-        0x00,                   # n_tx
-        0x00,                   # n_rx_ok
-        0x00,                   # n_rx_nok
-        0x00,                   # n_rx_ignored
-        0x00,                   # pkt_status
-    ])
+    payload = bytes(
+        [
+            0x01,  # count
+            0x05,
+            0x00,  # event_idx = 5
+            0xAD,
+            0xDE,
+            0x00,
+            0x00,  # start_rat = 0xDEAD
+            0xEF,
+            0xBE,
+            0x00,
+            0x00,  # end_rat   = 0xBEEF
+            0x02,
+            0x14,  # status    = 0x1402 (NOSYNC)
+            0x00,  # num_sent
+            0x00,  # n_tx
+            0x00,  # n_rx_ok
+            0x00,  # n_rx_nok
+            0x00,  # n_rx_ignored
+            0x00,  # pkt_status
+        ]
+    )
     rsp = DebugTimingResponse.parse(payload)
     assert len(rsp.entries) == 1
     e = rsp.entries[0]
@@ -96,17 +122,24 @@ def test_debug_timing_parses_extended_entry():
 
 def test_debug_timing_pkt_status_bits():
     """pkt_status bit layout (matches firmware packing in radio_if.c):
-        bit0 = bTimeStampValid
-        bit1 = bLastCrcErr
-        bit2 = bLastIgnored
-        bit3 = bLastEmpty
-        bit4 = bLastCtrl
-        bit5 = bLastMd
-        bit6 = bLastAck
+    bit0 = bTimeStampValid
+    bit1 = bLastCrcErr
+    bit2 = bLastIgnored
+    bit3 = bLastEmpty
+    bit4 = bLastCtrl
+    bit5 = bLastMd
+    bit6 = bLastAck
     """
     e = DebugTimingEntry(
-        event_idx=0, start_rat=0, end_rat=0, status=0,
-        num_sent=0, n_tx=0, n_rx_ok=0, n_rx_nok=0, n_rx_ignored=0,
+        event_idx=0,
+        start_rat=0,
+        end_rat=0,
+        status=0,
+        num_sent=0,
+        n_tx=0,
+        n_rx_ok=0,
+        n_rx_nok=0,
+        n_rx_ignored=0,
         pkt_status=0b0100_0001,  # bTimeStampValid + bLastAck
     )
     assert e.b_time_stamp_valid is True

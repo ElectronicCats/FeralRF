@@ -13,11 +13,7 @@ Spec: BLE 5.0 Vol 6 Part B §2.3.3.1.
 
 import struct
 
-from feralrf.ble.connect_ind import (
-    BleConnIndFields,
-    build_connect_ind_pdu,
-    build_ll_data,
-)
+from feralrf.ble.connect_ind import BleConnIndFields, build_connect_ind_pdu, build_ll_data
 
 
 def test_ll_data_layout_matches_spec():

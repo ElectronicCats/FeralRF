@@ -10,6 +10,7 @@ Skipped unless the env vars are set.
 
 import os
 import time
+from typing import Generator
 
 import pytest
 
@@ -18,7 +19,7 @@ from feralrf import Radio
 pytestmark = pytest.mark.hardware_ble
 
 
-ADDR = os.environ.get("FERALRF_PERIPHERAL_ADDR")
+ADDR: str = os.environ.get("FERALRF_PERIPHERAL_ADDR") or ""
 ATYPE = int(os.environ.get("FERALRF_PERIPHERAL_TYPE", "1"))
 
 if not ADDR:
@@ -30,7 +31,7 @@ def _addr_le(s: str) -> bytes:
 
 
 @pytest.fixture(scope="module")
-def radio() -> Radio:
+def radio() -> Generator[Radio, None, None]:
     r = Radio()
     r.init()
     yield r

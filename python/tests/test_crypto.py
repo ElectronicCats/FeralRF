@@ -5,8 +5,6 @@ Hardware end-to-end coverage lives in python/examples/lab/smoke_f25_crypto.py.
 NIST CAVS vector cross-checks live in test_crypto_vectors.py.
 """
 
-import pytest
-
 from feralrf.enums import STABLE_COMMANDS, Command, Response
 
 
@@ -100,6 +98,7 @@ def test_crypto_commands_in_stable():
 
 def test_crypto_error_exists():
     from feralrf.exceptions import CryptoError, RadioError
+
     assert issubclass(CryptoError, RadioError)
     err = CryptoError("test")
     assert str(err) == "test"

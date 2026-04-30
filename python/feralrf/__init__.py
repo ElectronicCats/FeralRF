@@ -18,7 +18,14 @@ from feralrf.enums import (
     Command,
     Response,
 )
-from feralrf.exceptions import CommandError, ConnectionError, FeralRFError, ProtocolError
+from feralrf.exceptions import (
+    CommandError,
+    ConnectionError,
+    CryptoError,
+    FeralRFError,
+    ProtocolError,
+    RadioError,
+)
 from feralrf.presets import PROP_PRESETS
 from feralrf.radio import (
     ConnectionResult,
@@ -56,4 +63,6 @@ __all__ = [
     "ConnectionError",
     "ProtocolError",
     "CommandError",
+    "RadioError",
+    "CryptoError",
 ]

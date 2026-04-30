@@ -11,7 +11,6 @@ import pytest
 from feralrf.commands import CommandBuilder
 from feralrf.presets import PROP_PRESETS
 
-
 REQUIRED_KEYS = {
     "frequency_hz",
     "mod_type",

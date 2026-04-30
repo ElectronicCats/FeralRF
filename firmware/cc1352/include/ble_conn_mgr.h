@@ -31,16 +31,16 @@ uint16_t BleConnMgr_getTotalRxCount(void);
  * Session 4 grew this from 13 to 17 wire bytes by adding nRxOk, nRxNok,
  * nRxIgnored, and a packed pktStatus byte from rfc_bleMasterSlaveOutput_t. */
 typedef struct {
-    uint16_t eventIdx;     /* s_event_counter at capture time */
-    uint32_t startRAT;     /* curHopTime fed to RadioIF_bleCentral */
-    uint32_t endRAT;       /* s_next_hop_time fed to RadioIF_bleCentral */
-    uint16_t status;       /* RF status code returned by the command */
-    uint8_t  numSent;      /* pOutput.nTxEntryDone */
-    uint8_t  nTx;          /* pOutput.nTx — total TX incl. auto-empty (Session 4) */
-    uint8_t  nRxOk;        /* pOutput.nRxOk (Session 4) */
-    uint8_t  nRxNok;       /* pOutput.nRxNok (Session 4) */
-    uint8_t  nRxIgnored;   /* pOutput.nRxIgnored (Session 4) */
-    uint8_t  pktStatus;    /* packed pktStatus bitfield, see RadioIF_BleCentralStats */
+    uint16_t eventIdx;  /* s_event_counter at capture time */
+    uint32_t startRAT;  /* curHopTime fed to RadioIF_bleCentral */
+    uint32_t endRAT;    /* s_next_hop_time fed to RadioIF_bleCentral */
+    uint16_t status;    /* RF status code returned by the command */
+    uint8_t numSent;    /* pOutput.nTxEntryDone */
+    uint8_t nTx;        /* pOutput.nTx — total TX incl. auto-empty (Session 4) */
+    uint8_t nRxOk;      /* pOutput.nRxOk (Session 4) */
+    uint8_t nRxNok;     /* pOutput.nRxNok (Session 4) */
+    uint8_t nRxIgnored; /* pOutput.nRxIgnored (Session 4) */
+    uint8_t pktStatus;  /* packed pktStatus bitfield, see RadioIF_BleCentralStats */
 } BleConnMgr_DbgTimingEntry;
 
 /* Returns up to maxEntries snapshots of the most recent master events,

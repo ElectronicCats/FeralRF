@@ -63,10 +63,10 @@ def rx_collect(port, duration, results):
 
 
 def smoke(args):
-    from feralrf import PHY, Radio
+    from feralrf import Radio
     from feralrf.attacks import ble
 
-    print(f"[STEP] reset both")
+    print("[STEP] reset both")
     reset_one(args.tx_port)
     reset_one(args.rx_port)
 

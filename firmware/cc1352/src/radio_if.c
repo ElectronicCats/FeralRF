@@ -230,6 +230,13 @@ static RF_Object s_rf_tx_session_object;
 static RF_Handle s_tx_session_handle = NULL;
 static RF_Mode *s_tx_session_mode = NULL;
 
+/* Persistent non-433 RF handle. Opened on first non-433 set_phy, kept open
+ * for the firmware's lifetime. Mode switches between BLE/IEEE/Sub1G(non-433)
+ * are done by re-running RadioSetup as a command on this handle, NOT by
+ * RF_close+RF_open (which leaks SemaphoreP/CPE state across cycles and breaks
+ * after ~12 PHY switches — the F9 root cause). */
+static RF_Handle s_non433_handle = NULL;
+
 /* 2.4 GHz power table (LP_CC1352P7-1 style, includes High PA up to 20 dBm). */
 static RF_TxPowerTable_Entry s_tx_power_table_24g[] = {
     {-20, RF_TxPowerTable_DEFAULT_PA_ENTRY(6, 3, 0, 2)},
@@ -1047,58 +1054,61 @@ static void RadioIF_applyBlePhyMode(uint8_t phy) {
 /* rfDiagnostics pattern: RF_yield → RF_close → RF_open for PHY switch */
 
 static bool RadioIF_switchRfMode(RF_Mode *mode, RF_RadioSetup *setup) {
-    /* 433 MHz uses a persistent boot handle — never RF_close/RF_open.
-     * Alias s_rf_handle so downstream code (runFsAndPostRx, etc.) works. */
+    /* === 433 path: persistent boot handle, alias only ===
+     * Don't close non-433 handle — keep it open for return trip. Both
+     * handles can coexist (driver N_MAX_CLIENTS=2). */
     if (mode == &Prop0_mode433) {
         if (s_433_handle == NULL) {
             return false;
         }
-        /* Close any non-433 handle first to free the RF client slot */
-        if (s_rf_handle != NULL && s_rf_handle != s_433_handle) {
-            RF_flushCmd(s_rf_handle, RF_CMDHANDLE_FLUSH_ALL, 0);
-            RF_yield(s_rf_handle);
-            ClockP_usleep(1000);
-            RF_close(s_rf_handle);
+        if (s_non433_handle != NULL) {
+            RF_flushCmd(s_non433_handle, RF_CMDHANDLE_FLUSH_ALL, 0);
         }
         s_rf_handle = s_433_handle;
         s_current_rf_mode = &Prop0_mode433;
         return true;
     }
-    /* Skip close/open if already in the same RF mode */
-    if (s_rf_handle != NULL && s_current_rf_mode == mode) {
-        RF_flushCmd(s_rf_handle, RF_CMDHANDLE_FLUSH_ALL, 0);
+
+    /* === Non-433 path: hot-switch via RadioSetup command ===
+     * F9 fix: NEVER RF_close/RF_open between non-433 modes. Per
+     * `ti-rtos-rf-cc1352` skill, RF_close+RF_open leaks SemaphoreP/CPE
+     * state across cycles and breaks after ~12 PHY switches. Use
+     * RF_MODE_MULTIPLE + multi_protocol patch (already configured) so the
+     * same handle accepts BLE/IEEE/Prop RadioSetup commands. */
+    if (s_non433_handle == NULL) {
+        /* First non-433 mode change after init → open the persistent handle. */
+        RF_Params rf_params;
+        RF_Params_init(&rf_params);
+        s_non433_handle = RF_open(&s_rf_object, mode, setup, &rf_params);
+        if (s_non433_handle == NULL) {
+            s_rf_handle = NULL;
+            s_current_rf_mode = NULL;
+            return false;
+        }
+        s_rf_handle = s_non433_handle;
+        s_current_rf_mode = mode;
+        s_tx_session_handle = s_rf_handle;
+        s_tx_session_mode = NULL;
         return true;
     }
-    if (s_rf_handle != NULL) {
-        RF_flushCmd(s_rf_handle, RF_CMDHANDLE_FLUSH_ALL, 0);
-        if (s_rf_handle == s_433_handle) {
-            /* s_rf_handle is aliased to the 433 boot handle — detach
-             * without RF_close to preserve the persistent handle. */
-            s_rf_handle = NULL;
-            s_current_rf_mode = NULL;
-        } else {
-            RF_yield(s_rf_handle);
-            ClockP_usleep(1000); /* 1ms settle after yield */
-            RF_close(s_rf_handle);
-            s_rf_handle = NULL;
-            s_current_rf_mode = NULL;
-            /* F9 partial fix: extended settle so the RF driver clears
-             * RF_core.init while the 433 boot handle still anchors a
-             * client slot. Without this, RF_open skips CPE patch reload
-             * and the new mode runs with stale patches → silent RX
-             * failure on Sub-1GHz→BLE switch. (IEEE→BLE is still
-             * broken — see commit message and F9 close-out doc.) */
-            ClockP_usleep(200000); /* 200 ms */
-        }
+
+    /* Handle already open — alias and re-run setup. Always re-run setup
+     * because callers may mutate the setup struct in place (e.g.,
+     * setPropConfig switches preset by editing Prop0_cmdPropRadioDivSetup
+     * fields), so pointer-identity isn't sufficient to skip. */
+    s_rf_handle = s_non433_handle;
+    RF_flushCmd(s_rf_handle, RF_CMDHANDLE_FLUSH_ALL, 0);
+    ((RF_Op *)setup)->status = 0x0000;
+    RF_EventMask result = RF_runCmd(s_rf_handle, (RF_Op *)setup, RF_PriorityNormal, NULL,
+                                    RF_EventLastCmdDone | RF_EventCmdAborted | RF_EventCmdStopped |
+                                        RF_EventCmdCancelled);
+    if ((result & RF_EventLastCmdDone) == 0u) {
+        return false;
     }
-    RF_Params rf_params;
-    RF_Params_init(&rf_params);
-    s_rf_handle = RF_open(&s_rf_object, mode, setup, &rf_params);
-    /* Invalidate TX session — old handle is dead */
-    s_tx_session_handle = s_rf_handle;
+    s_current_rf_mode = mode;
+    /* Setup changed — TX session cache must re-run FS+TX from scratch. */
     s_tx_session_mode = NULL;
-    s_current_rf_mode = (s_rf_handle != NULL) ? mode : NULL;
-    return s_rf_handle != NULL;
+    return true;
 }
 
 static bool RadioIF_startBleRfBackend(void) {
@@ -1226,7 +1236,7 @@ static void RadioIF_stopRfBackend(void) {
     if (s_rf_handle != NULL) {
         /* BLE GenericRx/Scanner use TRIG_NEVER + bRepeat=1 — they never auto-terminate.
          * RF_cancelCmd is required to stop the running command cleanly before flush.
-         * Skill pattern: RF_cancelCmd → RF_flushCmd → (yield/close as needed). */
+         * Skill pattern: RF_cancelCmd → RF_flushCmd. */
         if (s_rf_rx_cmd >= 0) {
             RF_cancelCmd(s_rf_handle, s_rf_rx_cmd, 0);
         }
@@ -1236,23 +1246,16 @@ static void RadioIF_stopRfBackend(void) {
             RF_yield(s_rf_handle);
             ClockP_usleep(50000);
         }
-        /* Close non-433 handle to free client slot. 433 handle stays open.
-         * F9 partial fix: 200 ms post-close settle so the RF driver clears
-         * RF_core.init before the next RF_open in a different mode (else
-         * patches don't reload and RX silently fails). */
-        if (s_rf_handle != s_433_handle) {
-            RF_yield(s_rf_handle);
-            ClockP_usleep(1000);
-            RF_close(s_rf_handle);
-            ClockP_usleep(200000); /* 200 ms — match switchRfMode */
-        }
-        s_rf_handle = NULL;
+        /* F9 fix: do NOT RF_close. Both s_433_handle and s_non433_handle
+         * stay open for the firmware lifetime. Mode switches are handled
+         * in switchRfMode by re-running RadioSetup as a command. */
     }
 
     s_rf_rx_cmd = RF_SCHEDULE_CMD_ERROR;
     s_rf_event_flags = 0u;
     s_rf_mode = RADIO_IF_RF_MODE_NONE;
-    s_current_rf_mode = NULL;
+    /* Keep s_rf_handle and s_current_rf_mode — switchRfMode uses them
+     * to decide hot-switch vs first-open. */
     RadioIF_resetRfDataQueue();
 }
 
@@ -1701,6 +1704,17 @@ void RadioIF_init(void) {
     RadioIF_stopJamSession();
     RadioIF_closeTxSession();
     RadioIF_stopRfBackend();
+
+    /* F9: stopRfBackend no longer closes the persistent non-433 handle.
+     * If init runs mid-session (CMD_RADIO_INIT after first set_phy), force
+     * a real close here so the next set_phy reopens cleanly. Hardware
+     * reset / cold boot leave s_non433_handle == NULL so this is a no-op. */
+    if (s_non433_handle != NULL) {
+        RF_yield(s_non433_handle);
+        ClockP_usleep(1000);
+        RF_close(s_non433_handle);
+        s_non433_handle = NULL;
+    }
 
     s_rx_running = false;
     s_timestamp_us = 0;

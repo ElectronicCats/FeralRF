@@ -149,7 +149,7 @@ static void RfTask_taskFxn(UArg a0, UArg a1) {
     (void)a1;
 
     /* Power dependencies must be set before RF_open. crypto_engine_init()
-     * calls Power_setDependency(PowerCC26X2_PERIPH_TRNG) which is idempotent
+     * calls Power_setDependency(PowerCC26XX_PERIPH_TRNG) which is idempotent
      * and safe to call here before the RF driver is opened. */
     if (!crypto_engine_init()) {
         /* Crypto unavailable — log via existing diag mechanism if any.

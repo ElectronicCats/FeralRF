@@ -1095,9 +1095,7 @@ class Radio:
         """
         self.set_power(power_dbm)
         self._send_command(Command.TX_CW)
-        cmd_id, _seq, payload = self._read_response(
-            expected={Response.ACK, Response.ERROR}
-        )
+        cmd_id, _seq, payload = self._read_response(expected={Response.ACK, Response.ERROR})
         if cmd_id == Response.ERROR:
             raise CommandError("tx_cw failed", payload[0] if payload else 0)
 
@@ -1114,16 +1112,24 @@ class Radio:
         """
         mode_byte = {"prbs9": 0x01, "prbs15": 0x02}.get(pattern.lower())
         if mode_byte is None:
-            raise ValueError(
-                f"pattern must be 'prbs9' or 'prbs15', got {pattern!r}"
-            )
+            raise ValueError(f"pattern must be 'prbs9' or 'prbs15', got {pattern!r}")
         self.set_power(power_dbm)
         self._send_command(Command.TX_PRBS, bytes([mode_byte]))
-        cmd_id, _seq, payload = self._read_response(
-            expected={Response.ACK, Response.ERROR}
-        )
+        cmd_id, _seq, payload = self._read_response(expected={Response.ACK, Response.ERROR})
         if cmd_id == Response.ERROR:
             raise CommandError("tx_prbs failed", payload[0] if payload else 0)
+
+    def tx_test_stop(self) -> None:
+        """Stop any active CW or PRBS test signal. Idempotent — safe to call
+        when no test is running.
+
+        Raises:
+            CommandError: only if firmware reports an unexpected error.
+        """
+        self._send_command(Command.TX_TEST_STOP)
+        cmd_id, _seq, payload = self._read_response(expected={Response.ACK, Response.ERROR})
+        if cmd_id == Response.ERROR:
+            raise CommandError("tx_test_stop failed", payload[0] if payload else 0)
 
     def start_jam(
         self,

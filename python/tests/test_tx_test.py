@@ -36,9 +36,7 @@ def test_tx_cw_sends_correct_frame(monkeypatch):
     radio = Radio(port="dummy")
     sent_cmds = []
 
-    monkeypatch.setattr(
-        radio, "_send_command", lambda c, p=b"": sent_cmds.append((c, bytes(p)))
-    )
+    monkeypatch.setattr(radio, "_send_command", lambda c, p=b"": sent_cmds.append((c, bytes(p))))
     monkeypatch.setattr(
         radio,
         "_read_response",
@@ -61,9 +59,7 @@ def test_tx_prbs_pattern_prbs9(monkeypatch):
 
     radio = Radio(port="dummy")
     sent_cmds = []
-    monkeypatch.setattr(
-        radio, "_send_command", lambda c, p=b"": sent_cmds.append((c, bytes(p)))
-    )
+    monkeypatch.setattr(radio, "_send_command", lambda c, p=b"": sent_cmds.append((c, bytes(p))))
     monkeypatch.setattr(
         radio,
         "_read_response",
@@ -83,9 +79,7 @@ def test_tx_prbs_pattern_prbs15(monkeypatch):
 
     radio = Radio(port="dummy")
     sent_cmds = []
-    monkeypatch.setattr(
-        radio, "_send_command", lambda c, p=b"": sent_cmds.append((c, bytes(p)))
-    )
+    monkeypatch.setattr(radio, "_send_command", lambda c, p=b"": sent_cmds.append((c, bytes(p))))
     monkeypatch.setattr(
         radio,
         "_read_response",
@@ -105,3 +99,23 @@ def test_tx_prbs_invalid_pattern_raises():
     radio = Radio(port="dummy")
     with pytest.raises(ValueError, match="prbs9.*prbs15"):
         radio.tx_prbs(power_dbm=0, pattern="prbs99")
+
+
+def test_tx_test_stop_no_payload(monkeypatch):
+    """tx_test_stop sends TX_TEST_STOP with empty payload."""
+    from feralrf import Radio
+    from feralrf.enums import Response
+
+    radio = Radio(port="dummy")
+    sent_cmds = []
+    monkeypatch.setattr(radio, "_send_command", lambda c, p=b"": sent_cmds.append((c, bytes(p))))
+    monkeypatch.setattr(
+        radio,
+        "_read_response",
+        lambda timeout=1.0, expected=None: (Response.ACK, 0, b""),
+    )
+
+    radio.tx_test_stop()
+
+    stop_frame = next(c for c in sent_cmds if c[0] == Command.TX_TEST_STOP)
+    assert stop_frame[1] == b""

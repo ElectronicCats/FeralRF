@@ -1735,6 +1735,27 @@ static bool RadioIF_transmitPropRaw(const uint8_t *payload, uint8_t payload_len)
                                     (RF_Op *)&Prop0_cmdFs, (RF_Op *)&Prop0_cmdPropTx, tx_power);
 }
 
+static bool RadioIF_transmitProp24ghzRaw(const uint8_t *payload, uint8_t payload_len) {
+    RF_TxPowerTable_Value tx_power = RadioIF_resolveTxPowerValue(s_tx_power_dbm);
+
+    if (payload == NULL || payload_len == 0u || payload_len > PROP_TX_MAX_PAYLOAD_LEN) {
+        return false;
+    }
+
+    /* Apply frequency in case caller changed s_frequency_hz */
+    RadioIF_applyProp24ghzChannelConfig(s_frequency_hz);
+
+    Prop24g_cmdPropTx.pktLen = payload_len;
+    Prop24g_cmdPropTx.pPkt = (uint8_t *)payload;
+    Prop24g_cmdPropTx.startTrigger.triggerType = TRIG_NOW;
+    Prop24g_cmdPropTx.startTrigger.pastTrig = 1u;
+    Prop24g_cmdPropTx.condition.rule = COND_NEVER;
+    Prop24g_cmdPropTx.pNextOp = 0;
+
+    return RadioIF_executeTxCommand(&Prop24g_mode, (RF_RadioSetup *)&Prop24g_cmdPropRadioSetup,
+                                    (RF_Op *)&Prop24g_cmdFs, (RF_Op *)&Prop24g_cmdPropTx, tx_power);
+}
+
 static void RadioIF_processRfPackets(void) {
     switch (s_rf_mode) {
     case RADIO_IF_RF_MODE_BLE:

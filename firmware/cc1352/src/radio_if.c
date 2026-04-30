@@ -2113,8 +2113,8 @@ bool RadioIF_runTxTest(uint8_t mode) {
         Ieee154_0_cmdFs.status = 0x0000u;
         RF_postCmd(s_rf_handle, (RF_Op *)&Ieee154_0_cmdFs, RF_PriorityNormal, NULL, 0);
     } else if (RadioIF_isSub1ghzPhySelected()) {
-        RF_Op *fs =
-            (s_current_rf_mode == &Prop0_mode433) ? (RF_Op *)&Prop0_cmdFs433 : (RF_Op *)&Prop0_cmdFs;
+        RF_Op *fs = (s_current_rf_mode == &Prop0_mode433) ? (RF_Op *)&Prop0_cmdFs433
+                                                          : (RF_Op *)&Prop0_cmdFs;
         fs->status = 0x0000u;
         RF_postCmd(s_rf_handle, fs, RF_PriorityNormal, NULL, 0);
     }
@@ -2126,7 +2126,10 @@ bool RadioIF_runTxTest(uint8_t mode) {
 }
 
 void RadioIF_stopTxTest(void) {
-    /* F22 stub — body filled in T8. Idempotent no-op until then. */
+    if (s_rf_handle != NULL && s_test_cmd_handle >= 0) {
+        RF_cancelCmd(s_rf_handle, s_test_cmd_handle, 0);
+        RF_flushCmd(s_rf_handle, RF_CMDHANDLE_FLUSH_ALL, 0);
+    }
     s_test_cmd_handle = RF_SCHEDULE_CMD_ERROR;
 }
 

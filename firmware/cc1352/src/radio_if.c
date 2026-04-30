@@ -12,6 +12,7 @@
 #include "smartrf_ble5_0.h"
 #include "smartrf_ieee_15_4_0.h"
 #include "smartrf_prop_0.h"
+#include "smartrf_prop_2_4ghz.h"
 #include "ti_radio_config_433.h"
 
 #include <stddef.h>
@@ -96,6 +97,7 @@ typedef enum {
     RADIO_IF_RF_MODE_BLE = 1,
     RADIO_IF_RF_MODE_IEEE_15_4 = 2,
     RADIO_IF_RF_MODE_SUB_1GHZ = 3,
+    RADIO_IF_RF_MODE_PROP_2_4GHZ = 4,
 } RadioIF_RfMode;
 
 static bool s_rx_running = false;
@@ -1439,6 +1441,22 @@ static bool RadioIF_isSub1ghzPhySelected(void) {
     return (s_selected_phy == PHY_MANAGER_PHY_SUB_1GHZ_868) ||
            (s_selected_phy == PHY_MANAGER_PHY_SUB_1GHZ_915) ||
            (s_selected_phy == PHY_MANAGER_PHY_PROPRIETARY_GFSK);
+}
+
+static bool RadioIF_isProp24ghzPhySelected(void) {
+    return PhyManager_isProp24ghzPhy(s_selected_phy);
+}
+
+static void RadioIF_applyProp24ghzChannelConfig(uint32_t frequency_hz) {
+    /* CC1352 RF Core CMD_FS frequency field is MHz (uint16_t).
+     * Default to 2440 MHz if zero. */
+    uint32_t fmhz = frequency_hz / 1000000u;
+    if (fmhz < 2400u || fmhz > 2484u) {
+        fmhz = 2440u;
+    }
+    Prop24g_cmdFs.frequency = (uint16_t)fmhz;
+    Prop24g_cmdFs.fractFreq = 0u;
+    /* fractional part of frequency for sub-MHz tuning could be added here */
 }
 
 static void RadioIF_applySub1ghzChannelConfig(uint16_t channel, uint32_t frequency_hz) {

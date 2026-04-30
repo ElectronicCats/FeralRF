@@ -2071,10 +2071,58 @@ bool RadioIF_transmitRaw(const uint8_t *data, uint8_t data_len, int8_t power_dbm
 }
 
 bool RadioIF_runTxTest(uint8_t mode) {
-    /* F22 stub — body filled in T7. Returns false so command_processor
-     * sends ERR_RF_NOT_READY until the real implementation lands. */
-    (void)mode;
-    return false;
+    if (s_rf_handle == NULL) {
+        return false;
+    }
+    /* Idempotent: if a previous test is running, stop it first. */
+    if (s_test_cmd_handle >= 0) {
+        RadioIF_stopTxTest();
+    }
+
+    memset(&s_cmd_tx_test, 0, sizeof(s_cmd_tx_test));
+    s_cmd_tx_test.commandNo = CMD_TX_TEST;
+    /* TI CMD_TX_TEST config:
+     *   bUseCw    : 1=CW (mode 0), 0=modulated PRBS (mode 1/2)
+     *   whitenMode: 2=PRBS-15 (mode 1), 3=PRBS-32 (mode 2)
+     * Note: PRBS-9 is BLE DTM via CMD_BLE5_TX_TEST, NOT this command. */
+    s_cmd_tx_test.config.bUseCw = (mode == 0u) ? 1u : 0u;
+    if (mode == 1u) {
+        s_cmd_tx_test.config.whitenMode = 2u; /* PRBS-15 */
+    } else if (mode == 2u) {
+        s_cmd_tx_test.config.whitenMode = 3u; /* PRBS-32 */
+    } else {
+        s_cmd_tx_test.config.whitenMode = 0u; /* CW: no whitening */
+    }
+    s_cmd_tx_test.config.bFsOff = 0u; /* keep FS on */
+    s_cmd_tx_test.startTrigger.triggerType = TRIG_NOW;
+    s_cmd_tx_test.startTrigger.pastTrig = 1u;
+    s_cmd_tx_test.endTrigger.triggerType = TRIG_NEVER; /* runs until cancelled */
+    s_cmd_tx_test.endTime = 0u;
+    s_cmd_tx_test.condition.rule = COND_NEVER;
+    s_cmd_tx_test.status = 0x0000u;
+
+    /* Apply currently-set TX power on the active handle. */
+    RadioIF_applyRfTxPower(s_rf_handle, RadioIF_resolveTxPowerValue(s_tx_power_dbm));
+
+    /* Re-tune via FS for current band so the synth is locked at the
+     * channel the user picked via set_phy(). */
+    if (PhyManager_isBlePhy(s_selected_phy)) {
+        Ble5_0_cmdFs.status = 0x0000u;
+        RF_postCmd(s_rf_handle, (RF_Op *)&Ble5_0_cmdFs, RF_PriorityNormal, NULL, 0);
+    } else if (RadioIF_isIeee154PhySelected()) {
+        Ieee154_0_cmdFs.status = 0x0000u;
+        RF_postCmd(s_rf_handle, (RF_Op *)&Ieee154_0_cmdFs, RF_PriorityNormal, NULL, 0);
+    } else if (RadioIF_isSub1ghzPhySelected()) {
+        RF_Op *fs =
+            (s_current_rf_mode == &Prop0_mode433) ? (RF_Op *)&Prop0_cmdFs433 : (RF_Op *)&Prop0_cmdFs;
+        fs->status = 0x0000u;
+        RF_postCmd(s_rf_handle, fs, RF_PriorityNormal, NULL, 0);
+    }
+
+    s_test_cmd_handle =
+        RF_postCmd(s_rf_handle, (RF_Op *)&s_cmd_tx_test, RF_PriorityNormal, NULL, 0);
+    s_last_tx_status = s_cmd_tx_test.status;
+    return s_test_cmd_handle >= 0;
 }
 
 void RadioIF_stopTxTest(void) {

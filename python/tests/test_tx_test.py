@@ -5,6 +5,8 @@ the error path for invalid PRBS pattern. Hardware end-to-end coverage
 lives in python/examples/lab/smoke_f22_tx_test.py.
 """
 
+import pytest
+
 from feralrf.enums import STABLE_COMMANDS, Command
 
 
@@ -50,3 +52,56 @@ def test_tx_cw_sends_correct_frame(monkeypatch):
     assert Command.TX_CW in cmd_ids
     cw_frame = next(c for c in sent_cmds if c[0] == Command.TX_CW)
     assert cw_frame[1] == b""
+
+
+def test_tx_prbs_pattern_prbs9(monkeypatch):
+    """tx_prbs(pattern='prbs9') sends payload byte 0x01."""
+    from feralrf import Radio
+    from feralrf.enums import Response
+
+    radio = Radio(port="dummy")
+    sent_cmds = []
+    monkeypatch.setattr(
+        radio, "_send_command", lambda c, p=b"": sent_cmds.append((c, bytes(p)))
+    )
+    monkeypatch.setattr(
+        radio,
+        "_read_response",
+        lambda timeout=1.0, expected=None: (Response.ACK, 0, b""),
+    )
+
+    radio.tx_prbs(power_dbm=0, pattern="prbs9")
+
+    prbs_frame = next(c for c in sent_cmds if c[0] == Command.TX_PRBS)
+    assert prbs_frame[1] == bytes([0x01])
+
+
+def test_tx_prbs_pattern_prbs15(monkeypatch):
+    """tx_prbs(pattern='prbs15') sends payload byte 0x02."""
+    from feralrf import Radio
+    from feralrf.enums import Response
+
+    radio = Radio(port="dummy")
+    sent_cmds = []
+    monkeypatch.setattr(
+        radio, "_send_command", lambda c, p=b"": sent_cmds.append((c, bytes(p)))
+    )
+    monkeypatch.setattr(
+        radio,
+        "_read_response",
+        lambda timeout=1.0, expected=None: (Response.ACK, 0, b""),
+    )
+
+    radio.tx_prbs(power_dbm=0, pattern="prbs15")
+
+    prbs_frame = next(c for c in sent_cmds if c[0] == Command.TX_PRBS)
+    assert prbs_frame[1] == bytes([0x02])
+
+
+def test_tx_prbs_invalid_pattern_raises():
+    """Unknown pattern strings raise ValueError before any IO."""
+    from feralrf import Radio
+
+    radio = Radio(port="dummy")
+    with pytest.raises(ValueError, match="prbs9.*prbs15"):
+        radio.tx_prbs(power_dbm=0, pattern="prbs99")

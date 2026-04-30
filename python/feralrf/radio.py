@@ -1101,6 +1101,30 @@ class Radio:
         if cmd_id == Response.ERROR:
             raise CommandError("tx_cw failed", payload[0] if payload else 0)
 
+    def tx_prbs(self, power_dbm: int = 0, pattern: str = "prbs9") -> None:
+        """Emit PRBS-modulated test signal on current PHY/channel.
+
+        Args:
+            power_dbm: TX power, -20 to +5 dBm.
+            pattern: 'prbs9' (default, BLE DTM compliant) or 'prbs15'.
+
+        Raises:
+            ValueError: if pattern not 'prbs9' or 'prbs15'.
+            CommandError: if no PHY is set or RF Core rejects the command.
+        """
+        mode_byte = {"prbs9": 0x01, "prbs15": 0x02}.get(pattern.lower())
+        if mode_byte is None:
+            raise ValueError(
+                f"pattern must be 'prbs9' or 'prbs15', got {pattern!r}"
+            )
+        self.set_power(power_dbm)
+        self._send_command(Command.TX_PRBS, bytes([mode_byte]))
+        cmd_id, _seq, payload = self._read_response(
+            expected={Response.ACK, Response.ERROR}
+        )
+        if cmd_id == Response.ERROR:
+            raise CommandError("tx_prbs failed", payload[0] if payload else 0)
+
     def start_jam(
         self,
         channel: int,

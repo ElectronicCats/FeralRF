@@ -39,6 +39,7 @@ dev = [
     "black>=23.0",
     "isort>=5.0",
     "mypy>=1.0",
+    "cryptography>=42.0",
 ]
 
 [project.urls]

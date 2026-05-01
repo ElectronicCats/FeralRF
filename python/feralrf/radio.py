@@ -1275,6 +1275,50 @@ class Radio:
             return (ct, tag)
         return (out, b"")
 
+    def aes_gcm_encrypt(self, key: bytes, iv: bytes, aad: bytes, plaintext: bytes) -> tuple:
+        """Encrypt with AES-GCM. Returns (ciphertext, 16-byte tag)."""
+        return self._aes_gcm_op(op=0, key=key, iv=iv, aad=aad, data=plaintext, tag_in=b"")
+
+    def aes_gcm_decrypt(
+        self, key: bytes, iv: bytes, aad: bytes, ciphertext: bytes, tag: bytes
+    ) -> bytes:
+        """Decrypt with AES-GCM. Raises CryptoError on tag mismatch."""
+        pt, _ = self._aes_gcm_op(op=1, key=key, iv=iv, aad=aad, data=ciphertext, tag_in=tag)
+        return pt
+
+    def _aes_gcm_op(self, op, key, iv, aad, data, tag_in):
+        from feralrf.exceptions import CryptoError
+
+        if len(key) != 16:
+            raise ValueError(f"key must be 16 bytes, got {len(key)}")
+        if len(iv) != 12:
+            raise ValueError(f"iv must be 12 bytes for GCM, got {len(iv)}")
+        if op == 1 and len(tag_in) != 16:
+            raise ValueError("tag must be 16 bytes")
+
+        header = bytes(
+            [
+                op,
+                *key,
+                *iv,
+                len(aad) & 0xFF,
+                (len(aad) >> 8) & 0xFF,
+                len(data) & 0xFF,
+                (len(data) >> 8) & 0xFF,
+            ]
+        )
+        payload = header + aad + data + (tag_in if op == 1 else b"")
+
+        self._send_command(Command.CMD_AES_GCM, payload)
+        rsp_id, status, out = self._read_response(expected={Response.RSP_AES_GCM, Response.ERROR})
+        if rsp_id == Response.ERROR:
+            if status == 0x02:
+                raise CryptoError("aes_gcm: tag mismatch")
+            raise CryptoError(f"aes_gcm failed: status={status}")
+        if op == 0:
+            return (out[: len(data)], out[len(data) : len(data) + 16])
+        return (out, b"")
+
     def start_jam(
         self,
         channel: int,

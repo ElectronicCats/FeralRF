@@ -44,6 +44,7 @@
 #define CMD_AES_CBC 0x5Du
 #define CMD_AES_GCM 0x5Eu
 #define CMD_SHA256 0x5Fu
+#define CMD_ECDH 0x60u
 #define CMD_SET_ADV_HOP 0x07u
 #define CMD_SET_PROP_CONFIG 0x08u
 #define CMD_SET_BLE_ADDR 0x09u
@@ -73,6 +74,7 @@
 #define RSP_AES_CCM 0x97u
 #define RSP_AES_GCM 0x98u
 #define RSP_SHA256 0x99u
+#define RSP_ECDH 0x9Au
 
 /* BLE Connection responses */
 #define RSP_CONN_RESULT 0xA0u
@@ -675,6 +677,33 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
             break;
         }
         send_response(RSP_SHA256, seq, digest, 32);
+        break;
+    }
+
+    case CMD_ECDH: {
+        /* payload: curve:1 | priv:32 | peer_pub:32 or 64 */
+        if (payload_len < 1u + 32u + 32u) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            break;
+        }
+        uint8_t curve = payload[0];
+        size_t pub_len = payload_len - 33u;
+        if ((curve == 0u && pub_len != 64u) || (curve == 1u && pub_len != 32u)) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            break;
+        }
+        if (curve > 1u) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            break;
+        }
+        uint8_t shared[32];
+        crypto_engine_status_t st =
+            crypto_engine_ecdh((crypto_curve_t)curve, payload + 1, payload + 33, pub_len, shared);
+        if (st != CRYPTO_OK) {
+            send_error(seq, (uint8_t)st);
+            break;
+        }
+        send_response(RSP_ECDH, seq, shared, 32);
         break;
     }
 

@@ -13,6 +13,8 @@
 #include <ti/drivers/AESECB.h>
 #include <ti/drivers/AESGCM.h>
 #include <ti/drivers/cryptoutils/cryptokey/CryptoKeyPlaintext.h>
+#include <ti/drivers/cryptoutils/ecc/ECCParams.h>
+#include <ti/drivers/ECDH.h>
 #include <ti/drivers/Power.h>
 #include <ti/drivers/power/PowerCC26XX.h>
 #include <ti/drivers/SHA2.h>
@@ -307,12 +309,111 @@ crypto_engine_status_t crypto_engine_sha256(const uint8_t *in, size_t len, uint8
 crypto_engine_status_t crypto_engine_ecdh(crypto_curve_t curve, const uint8_t priv[32],
                                           const uint8_t *peer_pub, size_t peer_pub_len,
                                           uint8_t shared[32]) {
-    (void)curve;
-    (void)priv;
-    (void)peer_pub;
-    (void)peer_pub_len;
-    (void)shared;
-    return CRYPTO_NOT_INITIALIZED;
+    if (priv == NULL || peer_pub == NULL || shared == NULL)
+        return CRYPTO_BAD_PARAM;
+    if (!s_initialized)
+        return CRYPTO_NOT_INITIALIZED;
+
+    const ECCParams_CurveParams *cparams;
+    bool is_montgomery;
+
+    if (curve == CRYPTO_CURVE_P256) {
+        cparams = &ECCParams_NISTP256;
+        is_montgomery = false;
+        /* TI big-endian P-256 public key: [0x04 | X(32) | Y(32)] = 65 bytes.
+         * Protocol passes raw X||Y (64 bytes); validate that. */
+        if (peer_pub_len != 64u)
+            return CRYPTO_BAD_PARAM;
+    } else if (curve == CRYPTO_CURVE_25519) {
+        cparams = &ECCParams_Curve25519;
+        is_montgomery = true;
+        /* Curve25519 X-only little-endian: 32 bytes. */
+        if (peer_pub_len != 32u)
+            return CRYPTO_BAD_PARAM;
+    } else {
+        return CRYPTO_UNSUPPORTED_CURVE;
+    }
+
+    ECDH_Params params;
+    ECDH_Params_init(&params);
+    params.returnBehavior = ECDH_RETURN_BEHAVIOR_POLLING;
+
+    ECDH_Handle h = ECDH_open(CONFIG_ECDH_0, &params);
+    if (h == NULL)
+        return CRYPTO_HW_ERROR;
+
+    CryptoKey priv_key;
+    CryptoKeyPlaintext_initKey(&priv_key, (uint8_t *)priv, 32u);
+
+    int_fast16_t rc;
+    crypto_engine_status_t ret;
+
+    if (!is_montgomery) {
+        /* P-256: construct 65-byte [0x04 | X | Y] peer public key buffer. */
+        uint8_t peer_buf[65];
+        peer_buf[0] = 0x04u;
+        for (size_t i = 0u; i < 64u; i++) {
+            peer_buf[1u + i] = peer_pub[i];
+        }
+        CryptoKey peer_key;
+        CryptoKeyPlaintext_initKey(&peer_key, peer_buf, sizeof(peer_buf));
+
+        /* Shared secret output: [0x04 | X(32) | Y(32)] = 65 bytes. */
+        uint8_t shared_buf[65];
+        CryptoKey shared_key;
+        CryptoKeyPlaintext_initBlankKey(&shared_key, shared_buf, sizeof(shared_buf));
+
+        ECDH_OperationComputeSharedSecret oper;
+        ECDH_OperationComputeSharedSecret_init(&oper);
+        oper.curve = cparams;
+        oper.myPrivateKey = &priv_key;
+        oper.theirPublicKey = &peer_key;
+        oper.sharedSecret = &shared_key;
+        oper.keyMaterialEndianness = ECDH_BIG_ENDIAN_KEY;
+
+        rc = ECDH_computeSharedSecret(h, &oper);
+        ECDH_close(h);
+
+        if (rc != ECDH_STATUS_SUCCESS) {
+            ret = (rc == ECDH_STATUS_PUBLIC_KEY_NOT_ON_CURVE) ? CRYPTO_BAD_PARAM : CRYPTO_HW_ERROR;
+        } else {
+            /* X coordinate is bytes [1..32] of the 65-byte output. */
+            for (size_t i = 0u; i < 32u; i++) {
+                shared[i] = shared_buf[1u + i];
+            }
+            ret = CRYPTO_OK;
+        }
+    } else {
+        /* Curve25519: X-only little-endian format. */
+        CryptoKey peer_key;
+        CryptoKeyPlaintext_initKey(&peer_key, (uint8_t *)peer_pub, 32u);
+
+        uint8_t shared_buf[32];
+        CryptoKey shared_key;
+        CryptoKeyPlaintext_initBlankKey(&shared_key, shared_buf, sizeof(shared_buf));
+
+        ECDH_OperationComputeSharedSecret oper;
+        ECDH_OperationComputeSharedSecret_init(&oper);
+        oper.curve = cparams;
+        oper.myPrivateKey = &priv_key;
+        oper.theirPublicKey = &peer_key;
+        oper.sharedSecret = &shared_key;
+        oper.keyMaterialEndianness = ECDH_LITTLE_ENDIAN_KEY;
+
+        rc = ECDH_computeSharedSecret(h, &oper);
+        ECDH_close(h);
+
+        if (rc != ECDH_STATUS_SUCCESS) {
+            ret = (rc == ECDH_STATUS_PUBLIC_KEY_NOT_ON_CURVE) ? CRYPTO_BAD_PARAM : CRYPTO_HW_ERROR;
+        } else {
+            for (size_t i = 0u; i < 32u; i++) {
+                shared[i] = shared_buf[i];
+            }
+            ret = CRYPTO_OK;
+        }
+    }
+
+    return ret;
 }
 
 crypto_engine_status_t crypto_engine_ecdsa_sign(crypto_curve_t curve, const uint8_t priv[32],

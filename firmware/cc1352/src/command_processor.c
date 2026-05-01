@@ -43,6 +43,7 @@
 #define CMD_AES_CTR 0x5Cu
 #define CMD_AES_CBC 0x5Du
 #define CMD_AES_GCM 0x5Eu
+#define CMD_SHA256 0x5Fu
 #define CMD_SET_ADV_HOP 0x07u
 #define CMD_SET_PROP_CONFIG 0x08u
 #define CMD_SET_BLE_ADDR 0x09u
@@ -71,6 +72,7 @@
 #define RSP_AES 0x96u
 #define RSP_AES_CCM 0x97u
 #define RSP_AES_GCM 0x98u
+#define RSP_SHA256 0x99u
 
 /* BLE Connection responses */
 #define RSP_CONN_RESULT 0xA0u
@@ -658,6 +660,21 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
         } else {
             send_response(RSP_AES_GCM, seq, out, pt_len);
         }
+        break;
+    }
+
+    case CMD_SHA256: {
+        if (payload_len > 240u) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            break;
+        }
+        uint8_t digest[32];
+        crypto_engine_status_t st = crypto_engine_sha256(payload, payload_len, digest);
+        if (st != CRYPTO_OK) {
+            send_error(seq, (uint8_t)st);
+            break;
+        }
+        send_response(RSP_SHA256, seq, digest, 32);
         break;
     }
 

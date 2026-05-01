@@ -1286,6 +1286,21 @@ class Radio:
         pt, _ = self._aes_gcm_op(op=1, key=key, iv=iv, aad=aad, data=ciphertext, tag_in=tag)
         return pt
 
+    def sha256(self, data: bytes) -> bytes:
+        """Compute SHA-256 of `data` (<=240 bytes). Returns 32-byte digest."""
+        from feralrf.exceptions import CryptoError
+
+        if len(data) > 240:
+            raise ValueError(f"data too large for one-shot SHA-256: {len(data)} (max 240)")
+
+        self._send_command(Command.CMD_SHA256, data)
+        rsp_id, status, out = self._read_response(expected={Response.RSP_SHA256, Response.ERROR})
+        if rsp_id == Response.ERROR:
+            raise CryptoError(f"sha256 failed: status={status}")
+        if len(out) != 32:
+            raise CryptoError(f"sha256 returned {len(out)} bytes, expected 32")
+        return out
+
     def _aes_gcm_op(self, op, key, iv, aad, data, tag_in):
         from feralrf.exceptions import CryptoError
 

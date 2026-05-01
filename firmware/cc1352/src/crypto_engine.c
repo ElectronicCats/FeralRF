@@ -15,6 +15,7 @@
 #include <ti/drivers/cryptoutils/cryptokey/CryptoKeyPlaintext.h>
 #include <ti/drivers/Power.h>
 #include <ti/drivers/power/PowerCC26XX.h>
+#include <ti/drivers/SHA2.h>
 #include <ti/drivers/TRNG.h>
 
 #include "ti_drivers_config.h"
@@ -281,10 +282,26 @@ crypto_engine_status_t crypto_engine_aes_gcm(uint8_t op, const uint8_t key[16],
 }
 
 crypto_engine_status_t crypto_engine_sha256(const uint8_t *in, size_t len, uint8_t out[32]) {
-    (void)in;
-    (void)len;
-    (void)out;
-    return CRYPTO_NOT_INITIALIZED;
+    if (out == NULL)
+        return CRYPTO_BAD_PARAM;
+    if (len > 0u && in == NULL)
+        return CRYPTO_BAD_PARAM;
+    if (!s_initialized)
+        return CRYPTO_NOT_INITIALIZED;
+
+    SHA2_Params params;
+    SHA2_Params_init(&params);
+    params.returnBehavior = SHA2_RETURN_BEHAVIOR_POLLING;
+    params.hashType = SHA2_HASH_TYPE_256;
+
+    SHA2_Handle h = SHA2_open(CONFIG_SHA2_0, &params);
+    if (h == NULL)
+        return CRYPTO_HW_ERROR;
+
+    int_fast16_t rc = SHA2_hashData(h, (uint8_t *)in, len, out);
+    SHA2_close(h);
+
+    return (rc == SHA2_STATUS_SUCCESS) ? CRYPTO_OK : CRYPTO_HW_ERROR;
 }
 
 crypto_engine_status_t crypto_engine_ecdh(crypto_curve_t curve, const uint8_t priv[32],

@@ -11,9 +11,15 @@
 
 #include "att_client.h"
 #include "ble_conn.h"
+#include "output_if.h"
 #include "tx_queue.h"
 
 #include <string.h>
+
+/* Response code for GATT notifications/indications streamed to the host.
+ * The canonical definition lives in command_processor.c; duplicated here
+ * because that file's response codes are file-local #defines. Keep in sync. */
+#define RSP_GATT_NOTIFY 0xA6u
 
 /* ── ATT Opcodes (Core Spec Vol 3, Part F, 3.4) ── */
 #define ATT_ERROR_RSP 0x01u
@@ -29,6 +35,7 @@
 #define ATT_WRITE_RSP 0x13u
 #define ATT_READ_BY_GROUP_TYPE_REQ 0x10u
 #define ATT_READ_BY_GROUP_TYPE_RSP 0x11u
+#define ATT_HANDLE_VALUE_NOTIFICATION 0x1Bu
 
 /* ATT Error codes */
 #define ATT_ERR_ATTRIBUTE_NOT_FOUND 0x0Au
@@ -70,6 +77,14 @@ static uint8_t s_dbg_head;  /* next write slot */
 static uint8_t s_dbg_count; /* valid entries, saturates at depth */
 static uint16_t s_dbg_seq;  /* monotonic sequence */
 
+/* ── Notification/indication metrics (F8b Track A) ──
+ * Counters are not currently surfaced through a dedicated CMD_*; they exist
+ * for instrumentation and can be exposed later via the debug log path. */
+static struct {
+    uint16_t notif_rx;  /* total 0x1B + 0x1D PDUs accepted and emitted */
+    uint16_t notif_bad; /* malformed (len < 3) PDUs dropped */
+} s_metrics;
+
 static void att_dbg(uint8_t tag, AttClient_State oldState) {
     AttClient_DbgEntry *e = &s_dbg_log[s_dbg_head];
     e->seq = s_dbg_seq++;
@@ -101,6 +116,15 @@ static bool att_send(const uint8_t *att_pdu, uint8_t att_len) {
     memcpy(&l2cap[4], att_pdu, att_len);
 
     return TXQueue_insert(total, TX_QUEUE_LLID_DATA_START, l2cap);
+}
+
+/* ── Notification/indication helpers (F8b Track A) ── */
+
+static void AttClient_emitNotification(const uint8_t *handle_and_value, uint8_t len) {
+    /* Build RSP_GATT_NOTIFY payload = [handle:2LE][value:N], passing the ATT
+     * payload bytes through unchanged. seq=0 because notifications are
+     * unsolicited streaming responses (no host-side request to correlate). */
+    OutputIF_sendResponse(RSP_GATT_NOTIFY, 0u, handle_and_value, (uint16_t)len);
 }
 
 /* ── ATT Request builders ── */
@@ -450,6 +474,18 @@ void AttClient_onL2capRx(const uint8_t *l2capPayload, uint8_t len) {
     case ATT_ERROR_RSP:
         handle_error_rsp(att_pdu, att_len);
         break;
+    case ATT_HANDLE_VALUE_NOTIFICATION:
+        /* Payload after the opcode: handle[2] + value[N]. Minimum
+         * well-formed PDU is opcode + handle = 3 bytes. */
+        if (att_len < 3u) {
+            s_metrics.notif_bad++;
+            att_dbg(ATT_DBG_TAG_NOTIFY_RX, old);
+            return;
+        }
+        AttClient_emitNotification(&att_pdu[1], (uint8_t)(att_len - 1u));
+        s_metrics.notif_rx++;
+        att_dbg(ATT_DBG_TAG_NOTIFY_RX, old);
+        return;
     default:
         break;
     }

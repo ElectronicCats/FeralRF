@@ -95,6 +95,7 @@ typedef enum {
     ATT_DBG_TAG_POLL_TX_READ = 22,
     ATT_DBG_TAG_POLL_TX_MTU = 23,
     ATT_DBG_TAG_DONE_CB = 24,
+    ATT_DBG_TAG_NOTIFY_RX = 25,
 } AttClient_DbgTag;
 
 /* 8 bytes per entry. Keep packed-ish (struct alignment puts u16 first). */

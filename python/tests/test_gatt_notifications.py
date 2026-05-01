@@ -63,3 +63,23 @@ def test_gatt_subscribe_raises_on_error_response(radio_mock):
 
     with pytest.raises(CommandError):
         radio_mock.gatt_subscribe(handle=212, enable=True)
+
+
+def test_gatt_notification_dataclass_fields():
+    """GattNotification has handle, value, timestamp."""
+    from feralrf.radio import GattNotification
+
+    n = GattNotification(handle=212, value=b"\x01\x02\x03", timestamp=123.456)
+    assert n.handle == 212
+    assert n.value == b"\x01\x02\x03"
+    assert n.timestamp == 123.456
+
+
+def test_gatt_notification_repr():
+    """GattNotification has a useful repr including handle and hex value."""
+    from feralrf.radio import GattNotification
+
+    n = GattNotification(handle=0xD4, value=b"\xab\xcd", timestamp=0.0)
+    s = repr(n)
+    assert "212" in s or "0xd4" in s.lower() or "GattNotification" in s
+    assert "abcd" in s.lower() or "ab cd" in s.lower() or "b'\\xab\\xcd'" in s

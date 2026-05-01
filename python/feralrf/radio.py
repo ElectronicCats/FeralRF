@@ -117,6 +117,21 @@ class GattCharacteristic:
 
 
 @dataclass
+class GattNotification:
+    """An ATT notification or indication received on a subscribed CCC.
+
+    Async push from firmware: when the peer sends ATT op 0x1B (NOTIFY)
+    or 0x1D (INDICATE), the firmware emits RSP_GATT_NOTIFY[handle:2][value:N]
+    immediately — no host poll required. The host's read_gatt_notifications()
+    iterator yields these as they arrive.
+    """
+
+    handle: int
+    value: bytes
+    timestamp: float  # host monotonic at receive
+
+
+@dataclass
 class GattDiscoveryResult:
     """Aggregated output of a full gatt_discover() call."""
 

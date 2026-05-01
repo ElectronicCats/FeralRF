@@ -315,3 +315,31 @@ def test_aes_gcm_encrypt_roundtrip(monkeypatch):
     assert payload[0] == 0x00
     assert payload[1:17] == b"\x11" * 16
     assert payload[17:29] == b"\x22" * 12
+
+
+def test_sha256_oversize_raises():
+    from feralrf import Radio
+
+    radio = Radio(port="dummy")
+    with pytest.raises(ValueError, match="240"):
+        radio.sha256(b"\x00" * 241)
+
+
+def test_sha256_sends_correct_frame(monkeypatch):
+    from feralrf import Radio
+    from feralrf.enums import Command, Response
+
+    radio = Radio(port="dummy")
+    sent = []
+    monkeypatch.setattr(radio, "_send_command", lambda c, p=b"": sent.append((c, bytes(p))))
+    monkeypatch.setattr(
+        radio,
+        "_read_response",
+        lambda timeout=1.0, expected=None: (Response.RSP_SHA256, 0, bytes(range(32))),
+    )
+
+    digest = radio.sha256(b"abc")
+    assert digest == bytes(range(32))
+    cmd, payload = sent[0]
+    assert cmd == Command.CMD_SHA256
+    assert payload == b"abc"

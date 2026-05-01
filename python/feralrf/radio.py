@@ -1150,11 +1150,12 @@ class Radio:
         if not 1 <= n <= 240:
             raise ValueError(f"random_bytes: n must be in [1, 240], got {n}")
         self._send_command(Command.CMD_RANDOM, bytes([n]))
-        rsp_id, status, data = self._read_response(expected={Response.RSP_RANDOM, Response.ERROR})
+        rsp_id, _seq, data = self._read_response(expected={Response.RSP_RANDOM, Response.ERROR})
         if rsp_id == Response.ERROR:
             from feralrf.exceptions import CryptoError
 
-            raise CryptoError(f"random_bytes failed: status={status}")
+            err = data[0] if data else 0
+            raise CryptoError(f"random_bytes failed: err=0x{err:02X}")
         if len(data) != n:
             from feralrf.exceptions import CryptoError
 
@@ -1198,9 +1199,10 @@ class Radio:
             raise ValueError(f"unknown mode {mode!r}; expected ecb|ctr|cbc")
 
         self._send_command(cmd, payload)
-        rsp_id, status, out = self._read_response(expected={Response.RSP_AES, Response.ERROR})
+        rsp_id, _seq, out = self._read_response(expected={Response.RSP_AES, Response.ERROR})
         if rsp_id == Response.ERROR:
-            raise CryptoError(f"aes {mode} failed: status={status}")
+            err = out[0] if out else 0
+            raise CryptoError(f"aes {mode} failed: err=0x{err:02X}")
         return out
 
     def aes_encrypt(self, key: bytes, data: bytes, mode: str, iv: Optional[bytes] = None) -> bytes:
@@ -1264,11 +1266,12 @@ class Radio:
         payload = header + aad + data + (tag_in if op == 1 else b"")
 
         self._send_command(Command.CMD_AES_CCM, payload)
-        rsp_id, status, out = self._read_response(expected={Response.RSP_AES_CCM, Response.ERROR})
+        rsp_id, _seq, out = self._read_response(expected={Response.RSP_AES_CCM, Response.ERROR})
         if rsp_id == Response.ERROR:
-            if status == 0x02:
+            err = out[0] if out else 0
+            if err == 0x02:
                 raise CryptoError("aes_ccm: tag mismatch")
-            raise CryptoError(f"aes_ccm failed: status={status}")
+            raise CryptoError(f"aes_ccm failed: err=0x{err:02X}")
         if op == 0:
             ct = out[: len(data)]
             tag = out[len(data) : len(data) + tag_len]
@@ -1294,9 +1297,10 @@ class Radio:
             raise ValueError(f"data too large for one-shot SHA-256: {len(data)} (max 240)")
 
         self._send_command(Command.CMD_SHA256, data)
-        rsp_id, status, out = self._read_response(expected={Response.RSP_SHA256, Response.ERROR})
+        rsp_id, _seq, out = self._read_response(expected={Response.RSP_SHA256, Response.ERROR})
         if rsp_id == Response.ERROR:
-            raise CryptoError(f"sha256 failed: status={status}")
+            err = out[0] if out else 0
+            raise CryptoError(f"sha256 failed: err=0x{err:02X}")
         if len(out) != 32:
             raise CryptoError(f"sha256 returned {len(out)} bytes, expected 32")
         return out
@@ -1319,11 +1323,12 @@ class Radio:
         curve_id = self._resolve_curve_id(curve)
         payload = bytes([curve_id]) + priv + msg_hash
         self._send_command(Command.CMD_ECDSA_SIGN, payload)
-        rsp_id, status, out = self._read_response(expected={Response.RSP_ECDSA_SIG, Response.ERROR})
+        rsp_id, _seq, out = self._read_response(expected={Response.RSP_ECDSA_SIG, Response.ERROR})
         if rsp_id == Response.ERROR:
-            if status == 0x05:
+            err = out[0] if out else 0
+            if err == 0x05:
                 raise CryptoError(f"ecdsa_sign: curve {curve!r} not supported by firmware")
-            raise CryptoError(f"ecdsa_sign failed: status={status}")
+            raise CryptoError(f"ecdsa_sign failed: err=0x{err:02X}")
         if len(out) != 64:
             raise CryptoError(f"ecdsa_sign returned {len(out)} bytes, expected 64")
         return out
@@ -1343,13 +1348,14 @@ class Radio:
             raise ValueError(f"pub must be 32 bytes for curve25519, got {len(pub)}")
         payload = bytes([curve_id]) + pub + msg_hash + sig
         self._send_command(Command.CMD_ECDSA_VERIFY, payload)
-        rsp_id, status, out = self._read_response(
+        rsp_id, _seq, out = self._read_response(
             expected={Response.RSP_ECDSA_VERIFY, Response.ERROR}
         )
         if rsp_id == Response.ERROR:
-            if status == 0x05:
+            err = out[0] if out else 0
+            if err == 0x05:
                 raise CryptoError(f"ecdsa_verify: curve {curve!r} not supported")
-            raise CryptoError(f"ecdsa_verify failed: status={status}")
+            raise CryptoError(f"ecdsa_verify failed: err=0x{err:02X}")
         return out == b"\x01"
 
     def ecdh(self, my_priv: bytes, peer_pub: bytes, curve: str) -> bytes:
@@ -1371,11 +1377,12 @@ class Radio:
 
         payload = bytes([curve_id]) + my_priv + peer_pub
         self._send_command(Command.CMD_ECDH, payload)
-        rsp_id, status, out = self._read_response(expected={Response.RSP_ECDH, Response.ERROR})
+        rsp_id, _seq, out = self._read_response(expected={Response.RSP_ECDH, Response.ERROR})
         if rsp_id == Response.ERROR:
-            if status == 0x05:
+            err = out[0] if out else 0
+            if err == 0x05:
                 raise CryptoError(f"ecdh: curve {curve!r} not supported by firmware")
-            raise CryptoError(f"ecdh failed: status={status}")
+            raise CryptoError(f"ecdh failed: err=0x{err:02X}")
         if len(out) != 32:
             raise CryptoError(f"ecdh returned {len(out)} bytes, expected 32")
         return out
@@ -1404,11 +1411,12 @@ class Radio:
         payload = header + aad + data + (tag_in if op == 1 else b"")
 
         self._send_command(Command.CMD_AES_GCM, payload)
-        rsp_id, status, out = self._read_response(expected={Response.RSP_AES_GCM, Response.ERROR})
+        rsp_id, _seq, out = self._read_response(expected={Response.RSP_AES_GCM, Response.ERROR})
         if rsp_id == Response.ERROR:
-            if status == 0x02:
+            err = out[0] if out else 0
+            if err == 0x02:
                 raise CryptoError("aes_gcm: tag mismatch")
-            raise CryptoError(f"aes_gcm failed: status={status}")
+            raise CryptoError(f"aes_gcm failed: err=0x{err:02X}")
         if op == 0:
             return (out[: len(data)], out[len(data) : len(data) + 16])
         return (out, b"")

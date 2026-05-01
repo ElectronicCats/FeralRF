@@ -37,6 +37,9 @@
 #define CMD_TX_PRBS 0x56u
 #define CMD_TX_TEST_STOP 0x57u
 #define CMD_RANDOM 0x59u
+#define CMD_AES_ECB 0x5Au
+#define CMD_AES_CTR 0x5Cu
+#define CMD_AES_CBC 0x5Du
 #define CMD_SET_ADV_HOP 0x07u
 #define CMD_SET_PROP_CONFIG 0x08u
 #define CMD_SET_BLE_ADDR 0x09u
@@ -62,6 +65,7 @@
 #define RSP_STATS 0x93u
 #define RSP_INFO 0x94u
 #define RSP_RANDOM 0x95u
+#define RSP_AES 0x96u
 
 /* BLE Connection responses */
 #define RSP_CONN_RESULT 0xA0u
@@ -480,6 +484,67 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
             break;
         }
         send_response(RSP_RANDOM, seq, buf, n);
+        break;
+    }
+
+    case CMD_AES_ECB: {
+        /* payload: op:1 | key:16 | data:16 = 33 B */
+        if (payload_len != 33u) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            break;
+        }
+        uint8_t out[16];
+        crypto_engine_status_t st =
+            crypto_engine_aes_ecb(payload[0], payload + 1, payload + 17, out);
+        if (st != CRYPTO_OK) {
+            send_error(seq, (uint8_t)st);
+            break;
+        }
+        send_response(RSP_AES, seq, out, 16);
+        break;
+    }
+
+    case CMD_AES_CTR: {
+        /* payload: op:1 | key:16 | iv:16 | data:N */
+        if (payload_len < 33u + 1u) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            break;
+        }
+        size_t data_len = payload_len - 33u;
+        if (data_len > 200u) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            break;
+        }
+        uint8_t out[200];
+        crypto_engine_status_t st = crypto_engine_aes_ctr(payload[0], payload + 1, payload + 17,
+                                                          payload + 33, data_len, out);
+        if (st != CRYPTO_OK) {
+            send_error(seq, (uint8_t)st);
+            break;
+        }
+        send_response(RSP_AES, seq, out, (uint16_t)data_len);
+        break;
+    }
+
+    case CMD_AES_CBC: {
+        /* payload: op:1 | key:16 | iv:16 | data:N (multiple of 16) */
+        if (payload_len < 33u + 16u) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            break;
+        }
+        size_t data_len = payload_len - 33u;
+        if (data_len > 192u || (data_len % 16u) != 0u) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            break;
+        }
+        uint8_t out[192];
+        crypto_engine_status_t st = crypto_engine_aes_cbc(payload[0], payload + 1, payload + 17,
+                                                          payload + 33, data_len, out);
+        if (st != CRYPTO_OK) {
+            send_error(seq, (uint8_t)st);
+            break;
+        }
+        send_response(RSP_AES, seq, out, (uint16_t)data_len);
         break;
     }
 

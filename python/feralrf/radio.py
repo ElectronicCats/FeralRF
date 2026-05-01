@@ -1161,6 +1161,56 @@ class Radio:
             raise CryptoError(f"random_bytes returned {len(data)} bytes, expected {n}")
         return data
 
+    def _aes_block_op(
+        self,
+        op: int,
+        key: bytes,
+        data: bytes,
+        mode: str,
+        iv: Optional[bytes] = None,
+    ) -> bytes:
+        from feralrf.exceptions import CryptoError
+
+        if len(key) != 16:
+            raise ValueError(f"key must be 16 bytes, got {len(key)}")
+        if mode == "ecb":
+            if len(data) != 16:
+                raise ValueError(f"data must be 16 bytes for ECB, got {len(data)}")
+            cmd = Command.CMD_AES_ECB
+            payload = bytes([op]) + key + data
+        elif mode == "ctr":
+            if iv is None or len(iv) != 16:
+                raise ValueError("iv must be 16 bytes for CTR")
+            if len(data) > 207:  # 240 - 33 byte header
+                raise ValueError(f"data too large for one-shot CTR: {len(data)}")
+            cmd = Command.CMD_AES_CTR
+            payload = bytes([op]) + key + iv + data
+        elif mode == "cbc":
+            if iv is None or len(iv) != 16:
+                raise ValueError("iv must be 16 bytes for CBC")
+            if len(data) % 16 != 0 or len(data) == 0:
+                raise ValueError(f"data must be non-empty multiple of 16 for CBC, got {len(data)}")
+            if len(data) > 192:
+                raise ValueError(f"data too large for one-shot CBC: {len(data)}")
+            cmd = Command.CMD_AES_CBC
+            payload = bytes([op]) + key + iv + data
+        else:
+            raise ValueError(f"unknown mode {mode!r}; expected ecb|ctr|cbc")
+
+        self._send_command(cmd, payload)
+        rsp_id, status, out = self._read_response(expected={Response.RSP_AES, Response.ERROR})
+        if rsp_id == Response.ERROR:
+            raise CryptoError(f"aes {mode} failed: status={status}")
+        return out
+
+    def aes_encrypt(self, key: bytes, data: bytes, mode: str, iv: Optional[bytes] = None) -> bytes:
+        """Encrypt `data` under `key` with mode 'ecb', 'ctr', or 'cbc'."""
+        return self._aes_block_op(op=0, key=key, data=data, mode=mode, iv=iv)
+
+    def aes_decrypt(self, key: bytes, data: bytes, mode: str, iv: Optional[bytes] = None) -> bytes:
+        """Decrypt `data` under `key` with mode 'ecb', 'ctr', or 'cbc'."""
+        return self._aes_block_op(op=1, key=key, data=data, mode=mode, iv=iv)
+
     def start_jam(
         self,
         channel: int,

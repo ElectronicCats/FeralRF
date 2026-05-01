@@ -1243,8 +1243,8 @@ class Radio:
             raise ValueError(f"key must be 16 bytes, got {len(key)}")
         if not 7 <= len(nonce) <= 13:
             raise ValueError(f"nonce length must be 7..13, got {len(nonce)}")
-        if tag_len not in (8, 16):
-            raise ValueError(f"tag_len must be 8 or 16, got {tag_len}")
+        if tag_len not in (4, 6, 8, 10, 12, 14, 16):
+            raise ValueError(f"tag_len must be in {{4,6,8,10,12,14,16}}, got {tag_len}")
         if len(aad) > 0xFFFF or len(data) > 0xFFFF:
             raise ValueError("aad/data length exceeds 16-bit limit")
         if op == 1 and len(tag_in) != tag_len:

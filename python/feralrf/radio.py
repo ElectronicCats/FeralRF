@@ -1211,6 +1211,70 @@ class Radio:
         """Decrypt `data` under `key` with mode 'ecb', 'ctr', or 'cbc'."""
         return self._aes_block_op(op=1, key=key, data=data, mode=mode, iv=iv)
 
+    def aes_ccm_encrypt(
+        self, key: bytes, nonce: bytes, aad: bytes, plaintext: bytes, tag_len: int
+    ) -> tuple:
+        """Encrypt `plaintext` with AES-CCM. Returns (ciphertext, tag)."""
+        return self._aes_ccm_op(
+            op=0, key=key, nonce=nonce, aad=aad, data=plaintext, tag_in=b"", tag_len=tag_len
+        )
+
+    def aes_ccm_decrypt(
+        self,
+        key: bytes,
+        nonce: bytes,
+        aad: bytes,
+        ciphertext: bytes,
+        tag: bytes,
+        tag_len: int,
+    ) -> bytes:
+        """Decrypt `ciphertext` with AES-CCM. Raises CryptoError on tag mismatch."""
+        pt, _ = self._aes_ccm_op(
+            op=1, key=key, nonce=nonce, aad=aad, data=ciphertext, tag_in=tag, tag_len=tag_len
+        )
+        return pt
+
+    def _aes_ccm_op(self, op, key, nonce, aad, data, tag_in, tag_len):
+        from feralrf.exceptions import CryptoError
+
+        if len(key) != 16:
+            raise ValueError(f"key must be 16 bytes, got {len(key)}")
+        if not 7 <= len(nonce) <= 13:
+            raise ValueError(f"nonce length must be 7..13, got {len(nonce)}")
+        if tag_len not in (8, 16):
+            raise ValueError(f"tag_len must be 8 or 16, got {tag_len}")
+        if len(aad) > 0xFFFF or len(data) > 0xFFFF:
+            raise ValueError("aad/data length exceeds 16-bit limit")
+        if op == 1 and len(tag_in) != tag_len:
+            raise ValueError(f"tag length mismatch: expected {tag_len}, got {len(tag_in)}")
+
+        header = bytes(
+            [
+                op,
+                *key,
+                len(nonce),
+                *nonce,
+                len(aad) & 0xFF,
+                (len(aad) >> 8) & 0xFF,
+                len(data) & 0xFF,
+                (len(data) >> 8) & 0xFF,
+                tag_len,
+            ]
+        )
+        payload = header + aad + data + (tag_in if op == 1 else b"")
+
+        self._send_command(Command.CMD_AES_CCM, payload)
+        rsp_id, status, out = self._read_response(expected={Response.RSP_AES_CCM, Response.ERROR})
+        if rsp_id == Response.ERROR:
+            if status == 0x02:
+                raise CryptoError("aes_ccm: tag mismatch")
+            raise CryptoError(f"aes_ccm failed: status={status}")
+        if op == 0:
+            ct = out[: len(data)]
+            tag = out[len(data) : len(data) + tag_len]
+            return (ct, tag)
+        return (out, b"")
+
     def start_jam(
         self,
         channel: int,

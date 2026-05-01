@@ -8,6 +8,7 @@
 #include "crypto_engine.h"
 
 #include <ti/drivers/AESCBC.h>
+#include <ti/drivers/AESCCM.h>
 #include <ti/drivers/AESCTR.h>
 #include <ti/drivers/AESECB.h>
 #include <ti/drivers/cryptoutils/cryptokey/CryptoKeyPlaintext.h>
@@ -180,18 +181,53 @@ crypto_engine_status_t crypto_engine_aes_ccm(uint8_t op, const uint8_t key[16],
                                              const uint8_t *aad, size_t aad_len, const uint8_t *in,
                                              size_t pt_len, uint8_t tag_len, uint8_t *out,
                                              uint8_t *tag) {
-    (void)op;
-    (void)key;
-    (void)nonce;
-    (void)nonce_len;
-    (void)aad;
-    (void)aad_len;
-    (void)in;
-    (void)pt_len;
-    (void)tag_len;
-    (void)out;
-    (void)tag;
-    return CRYPTO_NOT_INITIALIZED;
+    if (key == NULL || nonce == NULL || out == NULL || tag == NULL || op > 1u) {
+        return CRYPTO_BAD_PARAM;
+    }
+    if (nonce_len < 7u || nonce_len > 13u)
+        return CRYPTO_BAD_PARAM;
+    if (tag_len != 8u && tag_len != 16u)
+        return CRYPTO_BAD_PARAM;
+    if (!s_initialized)
+        return CRYPTO_NOT_INITIALIZED;
+
+    AESCCM_Params params;
+    AESCCM_Params_init(&params);
+    params.returnBehavior = AESCCM_RETURN_BEHAVIOR_POLLING;
+
+    AESCCM_Handle h = AESCCM_open(CONFIG_AESCCM_0, &params);
+    if (h == NULL)
+        return CRYPTO_HW_ERROR;
+
+    CryptoKey ck;
+    CryptoKeyPlaintext_initKey(&ck, (uint8_t *)key, 16);
+
+    AESCCM_OneStepOperation oper;
+    AESCCM_OneStepOperation_init(&oper);
+    oper.key = &ck;
+    oper.aad = (uint8_t *)aad;
+    oper.aadLength = aad_len;
+    oper.input = (uint8_t *)in;
+    oper.output = out;
+    oper.inputLength = pt_len;
+    oper.nonce = (uint8_t *)nonce;
+    oper.nonceLength = nonce_len;
+    oper.mac = tag;
+    oper.macLength = tag_len;
+
+    int_fast16_t rc;
+    if (op == 0u) {
+        rc = AESCCM_oneStepEncrypt(h, &oper);
+    } else {
+        rc = AESCCM_oneStepDecrypt(h, &oper);
+    }
+
+    AESCCM_close(h);
+    if (rc == AESCCM_STATUS_SUCCESS)
+        return CRYPTO_OK;
+    if (rc == AESCCM_STATUS_MAC_INVALID)
+        return CRYPTO_TAG_MISMATCH;
+    return CRYPTO_HW_ERROR;
 }
 
 crypto_engine_status_t crypto_engine_aes_gcm(uint8_t op, const uint8_t key[16],

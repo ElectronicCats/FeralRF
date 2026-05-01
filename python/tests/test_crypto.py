@@ -212,3 +212,73 @@ def test_aes_ecb_sends_correct_frame(monkeypatch):
     cmd, payload = sent[0]
     assert cmd == Command.CMD_AES_ECB
     assert payload == bytes([0x00]) + key + pt  # op=encrypt
+
+
+def test_aes_ccm_invalid_tag_len_raises():
+    from feralrf import Radio
+
+    radio = Radio(port="dummy")
+    with pytest.raises(ValueError, match="tag_len"):
+        radio.aes_ccm_encrypt(b"\x00" * 16, b"\x00" * 13, b"", b"hi", tag_len=12)
+
+
+def test_aes_ccm_invalid_nonce_len_raises():
+    from feralrf import Radio
+
+    radio = Radio(port="dummy")
+    with pytest.raises(ValueError, match="nonce"):
+        radio.aes_ccm_encrypt(b"\x00" * 16, b"\x00" * 6, b"", b"hi", tag_len=8)
+
+
+def test_aes_ccm_encrypt_sends_correct_frame(monkeypatch):
+    from feralrf import Radio
+    from feralrf.enums import Command, Response
+
+    radio = Radio(port="dummy")
+    sent = []
+    monkeypatch.setattr(radio, "_send_command", lambda c, p=b"": sent.append((c, bytes(p))))
+    monkeypatch.setattr(
+        radio,
+        "_read_response",
+        lambda timeout=1.0, expected=None: (Response.RSP_AES_CCM, 0, b"\xCC" * 4 + b"\xAA" * 8),
+    )
+
+    ct, tag = radio.aes_ccm_encrypt(
+        key=b"\x11" * 16, nonce=b"\x22" * 13, aad=b"AB", plaintext=b"\x33" * 4, tag_len=8
+    )
+    assert ct == b"\xCC" * 4
+    assert tag == b"\xAA" * 8
+    cmd, payload = sent[0]
+    assert cmd == Command.CMD_AES_CCM
+    assert payload[0] == 0x00  # encrypt
+    assert payload[1:17] == b"\x11" * 16  # key
+    assert payload[17] == 13  # nonce_len
+    assert payload[18:31] == b"\x22" * 13  # nonce
+    assert payload[31:33] == bytes([2, 0])  # aad_len LE u16
+    assert payload[33:35] == bytes([4, 0])  # pt_len LE u16
+    assert payload[35] == 8  # tag_len
+    assert payload[36:38] == b"AB"  # aad
+    assert payload[38:42] == b"\x33" * 4  # pt
+
+
+def test_aes_ccm_decrypt_tag_mismatch_raises(monkeypatch):
+    from feralrf import Radio
+    from feralrf.enums import Response
+    from feralrf.exceptions import CryptoError
+
+    radio = Radio(port="dummy")
+    monkeypatch.setattr(radio, "_send_command", lambda c, p=b"": None)
+    monkeypatch.setattr(
+        radio,
+        "_read_response",
+        lambda timeout=1.0, expected=None: (Response.ERROR, 0x02, b""),  # CRYPTO_TAG_MISMATCH
+    )
+    with pytest.raises(CryptoError, match="tag"):
+        radio.aes_ccm_decrypt(
+            key=b"\x00" * 16,
+            nonce=b"\x00" * 13,
+            aad=b"",
+            ciphertext=b"\x00" * 4,
+            tag=b"\xFF" * 8,
+            tag_len=8,
+        )

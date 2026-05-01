@@ -190,6 +190,7 @@ class Radio:
         "gatt_read",
         "gatt_write",
         "gatt_subscribe",
+        "read_gatt_notifications",
     )
     EXPERIMENTAL_METHODS = (
         "start_jam",
@@ -826,6 +827,50 @@ class Radio:
             raise CommandError("GATT_SUBSCRIBE failed", payload[0] if payload else 0)
         if cmd_id != Response.ACK:
             raise ProtocolError(f"Unexpected response to GATT_SUBSCRIBE: 0x{cmd_id:02X}")
+
+    def read_gatt_notifications(
+        self,
+        timeout: float = 5.0,
+    ) -> "Iterator[GattNotification]":
+        """Yield GattNotification frames as they arrive.
+
+        Iterates over RX frames from the firmware, filtering for
+        RSP_GATT_NOTIFY. Other unsolicited frames (e.g., RSP_DISCONNECTED)
+        end the iterator. Iterator ends quietly on timeout — caller can
+        loop and call again.
+
+        Args:
+            timeout: Seconds to wait for the next frame. The iterator
+                ends when this elapses without a new RSP_GATT_NOTIFY.
+
+        Yields:
+            GattNotification per received frame.
+
+        Note:
+            If the host is slower than the peripheral, the COBS RX buffer
+            can overflow and frames are lost. Backpressure is deferred to
+            F8c.
+        """
+        while True:
+            try:
+                cmd_id, _seq, payload = self._read_response(
+                    timeout=timeout,
+                    expected={Response.GATT_NOTIFY},
+                )
+            except TimeoutError:
+                return
+            if cmd_id != Response.GATT_NOTIFY:
+                return
+            if len(payload) < 2:
+                # Malformed — skip
+                continue
+            handle = int.from_bytes(payload[0:2], "little")
+            value = bytes(payload[2:])
+            yield GattNotification(
+                handle=handle,
+                value=value,
+                timestamp=time.monotonic(),
+            )
 
     def set_ble_scan_mode(self, active: bool = True) -> None:
         """Set BLE scan mode: passive or active.

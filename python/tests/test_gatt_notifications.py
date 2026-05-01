@@ -9,7 +9,7 @@ import pytest
 
 from feralrf import Radio
 from feralrf.enums import Command, Response
-from feralrf.exceptions import CommandError
+from feralrf.exceptions import CommandError, TimeoutError
 
 
 @pytest.fixture
@@ -83,3 +83,62 @@ def test_gatt_notification_repr():
     s = repr(n)
     assert "212" in s or "0xd4" in s.lower() or "GattNotification" in s
     assert "abcd" in s.lower() or "ab cd" in s.lower() or "b'\\xab\\xcd'" in s
+
+
+def test_read_gatt_notifications_yields_parsed(radio_mock):
+    """An RSP_GATT_NOTIFY frame in the RX buffer yields a GattNotification."""
+    from feralrf.radio import GattNotification
+
+    # Frame payload: handle_le[2] + value[N]
+    radio_mock._read_response.side_effect = [
+        (Response.GATT_NOTIFY, 0, b"\xd4\x00\xab\xcd\xef"),
+        TimeoutError("no more frames"),  # signal end-of-stream
+    ]
+
+    results = list(radio_mock.read_gatt_notifications(timeout=1.0))
+
+    assert len(results) == 1
+    n = results[0]
+    assert isinstance(n, GattNotification)
+    assert n.handle == 0xD4
+    assert n.value == b"\xab\xcd\xef"
+    assert n.timestamp > 0
+
+
+def test_read_gatt_notifications_stops_on_timeout(radio_mock):
+    """If no frames arrive, iterator ends cleanly without raising."""
+    radio_mock._read_response.side_effect = TimeoutError("no frames")
+
+    results = list(radio_mock.read_gatt_notifications(timeout=0.5))
+    assert results == []
+
+
+def test_read_gatt_notifications_filters_other_frames(radio_mock):
+    """Other unsolicited frames (e.g., RSP_DISCONNECTED) are ignored or end stream."""
+    radio_mock._read_response.side_effect = [
+        (Response.GATT_NOTIFY, 0, b"\xd4\x00\x11"),
+        (Response.GATT_NOTIFY, 0, b"\xaa\x00\x22\x33"),
+        TimeoutError("end"),
+    ]
+
+    results = list(radio_mock.read_gatt_notifications(timeout=2.0))
+    assert len(results) == 2
+    assert results[0].handle == 0xD4
+    assert results[0].value == b"\x11"
+    assert results[1].handle == 0xAA
+    assert results[1].value == b"\x22\x33"
+
+
+def test_read_gatt_notifications_handles_short_payload(radio_mock):
+    """Malformed payload (< 2 bytes for handle) is skipped, not raised."""
+    radio_mock._read_response.side_effect = [
+        (Response.GATT_NOTIFY, 0, b"\x01"),  # too short
+        (Response.GATT_NOTIFY, 0, b"\xd4\x00"),  # zero-length value (valid)
+        TimeoutError("end"),
+    ]
+
+    results = list(radio_mock.read_gatt_notifications(timeout=1.0))
+    # First frame skipped, second yields handle=0xD4, value=b""
+    assert len(results) == 1
+    assert results[0].handle == 0xD4
+    assert results[0].value == b""

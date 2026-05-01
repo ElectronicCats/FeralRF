@@ -79,6 +79,7 @@ class Command(IntEnum):
 
     # GATT
     GATT_DISCOVER = 0x43
+    GATT_SUBSCRIBE = 0x44
     GATT_READ = 0x45
     GATT_WRITE = 0x46
 
@@ -115,6 +116,7 @@ class Response(IntEnum):
     GATT_CHAR = 0xA3
     GATT_READ_VALUE = 0xA4
     GATT_DONE = 0xA5
+    GATT_NOTIFY = 0xA6
 
     # Diagnostics
     DEBUG_TIMING = 0xA8
@@ -152,6 +154,7 @@ STABLE_COMMANDS = (
     Command.CMD_ECDH,
     Command.CMD_ECDSA_SIGN,
     Command.CMD_ECDSA_VERIFY,
+    Command.GATT_SUBSCRIBE,
 )
 
 EXPERIMENTAL_COMMANDS = (

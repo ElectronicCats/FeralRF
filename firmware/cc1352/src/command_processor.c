@@ -59,6 +59,7 @@
 #define CMD_DISCONNECT 0x41u
 #define CMD_CONN_STATUS 0x42u
 #define CMD_GATT_DISCOVER 0x43u
+#define CMD_GATT_SUBSCRIBE 0x44u
 #define CMD_GATT_READ 0x45u
 #define CMD_GATT_WRITE 0x46u
 
@@ -90,6 +91,7 @@
 #define RSP_GATT_CHAR 0xA3u
 #define RSP_GATT_READ_R 0xA4u
 #define RSP_GATT_DONE 0xA5u
+#define RSP_GATT_NOTIFY 0xA6u
 
 /* Diagnostics */
 #define RSP_DEBUG_TIMING 0xA8u

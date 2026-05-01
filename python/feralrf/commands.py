@@ -198,3 +198,8 @@ class CommandBuilder:
     def gatt_write(handle: int, data: bytes) -> bytes:
         """Payload for CMD_GATT_WRITE: 2-byte LE handle + value bytes."""
         return struct.pack("<H", handle & 0xFFFF) + bytes(data)
+
+    @staticmethod
+    def gatt_subscribe(handle: int, enable: bool, indicate: bool = False) -> bytes:
+        """Build CMD_GATT_SUBSCRIBE payload: handle_le[2] + enable[1] + indicate[1]."""
+        return handle.to_bytes(2, "little") + bytes([1 if enable else 0, 1 if indicate else 0])

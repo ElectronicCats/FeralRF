@@ -219,7 +219,7 @@ def test_aes_ccm_invalid_tag_len_raises():
 
     radio = Radio(port="dummy")
     with pytest.raises(ValueError, match="tag_len"):
-        radio.aes_ccm_encrypt(b"\x00" * 16, b"\x00" * 13, b"", b"hi", tag_len=12)
+        radio.aes_ccm_encrypt(b"\x00" * 16, b"\x00" * 13, b"", b"hi", tag_len=5)
 
 
 def test_aes_ccm_invalid_nonce_len_raises():

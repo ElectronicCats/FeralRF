@@ -34,7 +34,17 @@ bool crypto_engine_init(void) {
      * up before TRNG can be opened. Idempotent dependency add. */
     Power_setDependency(PowerCC26XX_PERIPH_TRNG);
 
+    /* TI driver framework init for every crypto driver we use. Each must
+     * run once at boot before _open() will succeed. */
     TRNG_init();
+    AESECB_init();
+    AESCCM_init();
+    AESCTR_init();
+    AESCBC_init();
+    AESGCM_init();
+    SHA2_init();
+    ECDH_init();
+    ECDSA_init();
 
     s_initialized = true;
     return true;
@@ -191,7 +201,8 @@ crypto_engine_status_t crypto_engine_aes_ccm(uint8_t op, const uint8_t key[16],
     }
     if (nonce_len < 7u || nonce_len > 13u)
         return CRYPTO_BAD_PARAM;
-    if (tag_len != 8u && tag_len != 16u)
+    /* RFC 3610: tag_len must be even and in 4..16. */
+    if (tag_len < 4u || tag_len > 16u || (tag_len % 2u) != 0u)
         return CRYPTO_BAD_PARAM;
     if (!s_initialized)
         return CRYPTO_NOT_INITIALIZED;

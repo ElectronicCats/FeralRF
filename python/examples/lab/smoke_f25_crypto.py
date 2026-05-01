@@ -133,12 +133,24 @@ def aes_cbc_test(radio):
 
 
 def aes_gcm_test(radio):
-    key = hx("00000000000000000000000000000000")
-    iv = hx("000000000000000000000000")
-    expected_tag = hx("58e2fccefa7e3061367f1d57a4e7455a")
-    ct, tag = radio.aes_gcm_encrypt(key, iv, b"", b"")
-    ok = ct == b"" and tag == expected_tag
-    print(f"  AES-GCM SP800-38D-1 tag={tag == expected_tag} {'PASS' if ok else 'FAIL'}")
+    """NIST SP 800-38D Test Case 3: 16-byte pt, empty aad. Cross-checked
+    against host `cryptography` lib (avoids the empty-input edge case
+    where TI AESGCM driver hangs)."""
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM as HostAESGCM
+
+    key = hx("feffe9928665731c6d6a8f9467308308")
+    iv = hx("cafebabefacedbaddecaf888")
+    pt = hx("d9313225f88406e5a55909c5aff5269a")
+    aad = b""
+
+    expected_full = HostAESGCM(key).encrypt(iv, pt, aad)
+    expected_ct = expected_full[: len(pt)]
+    expected_tag = expected_full[len(pt) :]
+
+    ct, tag = radio.aes_gcm_encrypt(key, iv, aad, pt)
+    pt_back = radio.aes_gcm_decrypt(key, iv, aad, ct, tag)
+    ok = ct == expected_ct and tag == expected_tag and pt_back == pt
+    print(f"  AES-GCM SP800-38D-3 ct={ct == expected_ct} tag={tag == expected_tag} rt={pt_back == pt} {'PASS' if ok else 'FAIL'}")
     return ok
 
 

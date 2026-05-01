@@ -2071,8 +2071,35 @@ bool RadioIF_transmitRaw(const uint8_t *data, uint8_t data_len, int8_t power_dbm
 }
 
 bool RadioIF_runTxTest(uint8_t mode) {
+    /* Lazy-open: set_phy() doesn't open the RF handle, so the F22 smoke
+     * flow (set_phy → tx_cw) hits NULL on first call. Mirror the
+     * executeTxCommand pattern: pick mode+setup for the currently-selected
+     * PHY and route through switchRfMode (handles 433 alias / non-433
+     * lazy-open / hot-switch on already-open handle). */
     if (s_rf_handle == NULL) {
-        return false;
+        RF_Mode *rf_mode = NULL;
+        RF_RadioSetup *setup = NULL;
+        if (PhyManager_isBlePhy(s_selected_phy)) {
+            rf_mode = &Ble5_0_mode;
+            setup = (RF_RadioSetup *)&Ble5_0_cmdBle5RadioSetup;
+        } else if (RadioIF_isIeee154PhySelected()) {
+            rf_mode = &Ieee154_0_mode;
+            setup = (RF_RadioSetup *)&Ieee154_0_cmdRadioSetup;
+        } else if (RadioIF_isSub1ghzPhySelected()) {
+            rf_mode = RadioIF_getPropMode();
+            if (rf_mode == &Prop0_mode433) {
+                setup = (RF_RadioSetup *)&Prop0_cmdPropRadioDivSetup433;
+            } else {
+                /* Copy to avoid loDivider corruption on first RF_open. */
+                memcpy(&s_prop_setup_copy, &Prop0_cmdPropRadioDivSetup, sizeof(s_prop_setup_copy));
+                setup = (RF_RadioSetup *)&s_prop_setup_copy;
+            }
+        } else {
+            return false;
+        }
+        if (!RadioIF_switchRfMode(rf_mode, setup)) {
+            return false;
+        }
     }
     /* Idempotent: if a previous test is running, stop it first. */
     if (s_test_cmd_handle >= 0) {

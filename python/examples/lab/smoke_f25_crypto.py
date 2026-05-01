@@ -150,7 +150,9 @@ def aes_gcm_test(radio):
     ct, tag = radio.aes_gcm_encrypt(key, iv, aad, pt)
     pt_back = radio.aes_gcm_decrypt(key, iv, aad, ct, tag)
     ok = ct == expected_ct and tag == expected_tag and pt_back == pt
-    print(f"  AES-GCM SP800-38D-3 ct={ct == expected_ct} tag={tag == expected_tag} rt={pt_back == pt} {'PASS' if ok else 'FAIL'}")
+    print(
+        f"  AES-GCM SP800-38D-3 ct={ct == expected_ct} tag={tag == expected_tag} rt={pt_back == pt} {'PASS' if ok else 'FAIL'}"
+    )
     return ok
 
 

@@ -343,3 +343,49 @@ def test_sha256_sends_correct_frame(monkeypatch):
     cmd, payload = sent[0]
     assert cmd == Command.CMD_SHA256
     assert payload == b"abc"
+
+
+def test_ecdh_invalid_priv_raises():
+    from feralrf import Radio
+
+    radio = Radio(port="dummy")
+    with pytest.raises(ValueError, match="priv"):
+        radio.ecdh(my_priv=b"\x00" * 31, peer_pub=b"\x00" * 64, curve="p256")
+
+
+def test_ecdh_unknown_curve_raises():
+    from feralrf import Radio
+
+    radio = Radio(port="dummy")
+    with pytest.raises(ValueError, match="curve"):
+        radio.ecdh(my_priv=b"\x00" * 32, peer_pub=b"\x00" * 64, curve="p999")
+
+
+def test_ecdh_p256_sends_correct_frame(monkeypatch):
+    from feralrf import Radio
+    from feralrf.enums import Command, Response
+
+    radio = Radio(port="dummy")
+    sent = []
+    monkeypatch.setattr(radio, "_send_command", lambda c, p=b"": sent.append((c, bytes(p))))
+    monkeypatch.setattr(
+        radio,
+        "_read_response",
+        lambda timeout=1.0, expected=None: (Response.RSP_ECDH, 0, b"\xAB" * 32),
+    )
+
+    shared = radio.ecdh(my_priv=b"\x11" * 32, peer_pub=b"\x22" * 64, curve="p256")
+    assert shared == b"\xAB" * 32
+    cmd, payload = sent[0]
+    assert cmd == Command.CMD_ECDH
+    assert payload[0] == 0x00  # P-256
+    assert payload[1:33] == b"\x11" * 32
+    assert payload[33:97] == b"\x22" * 64
+
+
+def test_ecdh_curve25519_pub_length():
+    from feralrf import Radio
+
+    radio = Radio(port="dummy")
+    with pytest.raises(ValueError, match="32"):
+        radio.ecdh(my_priv=b"\x00" * 32, peer_pub=b"\x00" * 64, curve="curve25519")

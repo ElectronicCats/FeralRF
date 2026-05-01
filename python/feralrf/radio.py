@@ -1301,6 +1301,34 @@ class Radio:
             raise CryptoError(f"sha256 returned {len(out)} bytes, expected 32")
         return out
 
+    def ecdh(self, my_priv: bytes, peer_pub: bytes, curve: str) -> bytes:
+        """Compute ECDH shared secret. `curve`: 'p256' (peer_pub=64 B) or 'curve25519' (peer_pub=32 B)."""
+        from feralrf.exceptions import CryptoError
+
+        if len(my_priv) != 32:
+            raise ValueError(f"priv must be 32 bytes, got {len(my_priv)}")
+        if curve == "p256":
+            curve_id = 0
+            if len(peer_pub) != 64:
+                raise ValueError(f"peer_pub must be 64 bytes for p256, got {len(peer_pub)}")
+        elif curve == "curve25519":
+            curve_id = 1
+            if len(peer_pub) != 32:
+                raise ValueError(f"peer_pub must be 32 bytes for curve25519, got {len(peer_pub)}")
+        else:
+            raise ValueError(f"unknown curve {curve!r}; expected p256|curve25519")
+
+        payload = bytes([curve_id]) + my_priv + peer_pub
+        self._send_command(Command.CMD_ECDH, payload)
+        rsp_id, status, out = self._read_response(expected={Response.RSP_ECDH, Response.ERROR})
+        if rsp_id == Response.ERROR:
+            if status == 0x05:
+                raise CryptoError(f"ecdh: curve {curve!r} not supported by firmware")
+            raise CryptoError(f"ecdh failed: status={status}")
+        if len(out) != 32:
+            raise CryptoError(f"ecdh returned {len(out)} bytes, expected 32")
+        return out
+
     def _aes_gcm_op(self, op, key, iv, aad, data, tag_in):
         from feralrf.exceptions import CryptoError
 

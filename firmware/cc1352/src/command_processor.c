@@ -913,6 +913,34 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
         return;
     }
 
+    case CMD_GATT_SUBSCRIBE: {
+        /* Payload: handle_le[2] + enable[1] + indicate[1] = 4 bytes */
+        if (payload_len != 4u) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            return;
+        }
+        if (!BleConn_isConnected()) {
+            send_error(seq, ERR_INVALID_STATE);
+            return;
+        }
+        ensure_gatt_callbacks();
+        s_gatt_seq = seq;
+        uint16_t handle = read_u16_le(payload);
+        bool enable = (payload[2] != 0u);
+        bool indicate = (payload[3] != 0u);
+        uint16_t ccc_value = enable ? (indicate ? 0x0002u : 0x0001u) : 0x0000u;
+        uint8_t ccc_bytes[2] = {(uint8_t)(ccc_value & 0xFFu), (uint8_t)(ccc_value >> 8)};
+        /* CCC handle convention: char value handle + 1.
+         * If a peripheral lays out descriptors differently, the host must call
+         * gatt_write directly to the correct CCC handle. */
+        if (!AttClient_startWrite((uint16_t)(handle + 1u), ccc_bytes, 2u)) {
+            send_error(seq, ERR_INVALID_STATE);
+            return;
+        }
+        send_ack(seq);
+        return;
+    }
+
     case CMD_DEBUG_TIMING: {
         if (payload_len != 0u) {
             send_error(seq, ERR_INVALID_PAYLOAD);

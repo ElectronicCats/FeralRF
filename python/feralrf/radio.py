@@ -1181,7 +1181,7 @@ class Radio:
         elif mode == "ctr":
             if iv is None or len(iv) != 16:
                 raise ValueError("iv must be 16 bytes for CTR")
-            if len(data) > 207:  # 240 - 33 byte header
+            if len(data) > 200:  # firmware out[200] cap
                 raise ValueError(f"data too large for one-shot CTR: {len(data)}")
             cmd = Command.CMD_AES_CTR
             payload = bytes([op]) + key + iv + data

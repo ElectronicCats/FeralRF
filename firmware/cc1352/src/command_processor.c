@@ -45,6 +45,8 @@
 #define CMD_AES_GCM 0x5Eu
 #define CMD_SHA256 0x5Fu
 #define CMD_ECDH 0x60u
+#define CMD_ECDSA_SIGN 0x61u
+#define CMD_ECDSA_VERIFY 0x62u
 #define CMD_SET_ADV_HOP 0x07u
 #define CMD_SET_PROP_CONFIG 0x08u
 #define CMD_SET_BLE_ADDR 0x09u
@@ -75,6 +77,8 @@
 #define RSP_AES_GCM 0x98u
 #define RSP_SHA256 0x99u
 #define RSP_ECDH 0x9Au
+#define RSP_ECDSA_SIG 0x9Bu
+#define RSP_ECDSA_VERIFY 0x9Cu
 
 /* BLE Connection responses */
 #define RSP_CONN_RESULT 0xA0u
@@ -704,6 +708,52 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
             break;
         }
         send_response(RSP_ECDH, seq, shared, 32);
+        break;
+    }
+
+    case CMD_ECDSA_SIGN: {
+        /* payload: curve:1 | priv:32 | hash:32 = 65 B */
+        if (payload_len != 65u) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            break;
+        }
+        uint8_t sig[64];
+        crypto_engine_status_t st =
+            crypto_engine_ecdsa_sign((crypto_curve_t)payload[0], payload + 1, payload + 33, sig);
+        if (st != CRYPTO_OK) {
+            send_error(seq, (uint8_t)st);
+            break;
+        }
+        send_response(RSP_ECDSA_SIG, seq, sig, 64);
+        break;
+    }
+
+    case CMD_ECDSA_VERIFY: {
+        /* payload: curve:1 | pub:32 or 64 | hash:32 | sig:64 */
+        if (payload_len < 1u + 32u + 32u + 64u) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            break;
+        }
+        uint8_t curve = payload[0];
+        size_t pub_len = payload_len - 1u - 32u - 64u;
+        if ((curve == 0u && pub_len != 64u) || (curve == 1u && pub_len != 32u)) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            break;
+        }
+        if (curve > 1u) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            break;
+        }
+        bool valid = false;
+        crypto_engine_status_t st = crypto_engine_ecdsa_verify(
+            (crypto_curve_t)curve, payload + 1, pub_len, payload + 1u + pub_len,
+            payload + 1u + pub_len + 32u, &valid);
+        if (st != CRYPTO_OK) {
+            send_error(seq, (uint8_t)st);
+            break;
+        }
+        uint8_t result = valid ? 1u : 0u;
+        send_response(RSP_ECDSA_VERIFY, seq, &result, 1);
         break;
     }
 

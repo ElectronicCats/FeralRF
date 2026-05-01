@@ -389,3 +389,65 @@ def test_ecdh_curve25519_pub_length():
     radio = Radio(port="dummy")
     with pytest.raises(ValueError, match="32"):
         radio.ecdh(my_priv=b"\x00" * 32, peer_pub=b"\x00" * 64, curve="curve25519")
+
+
+def test_ecdsa_sign_invalid_priv_raises():
+    from feralrf import Radio
+
+    radio = Radio(port="dummy")
+    with pytest.raises(ValueError, match="priv"):
+        radio.ecdsa_sign(priv=b"\x00" * 31, msg_hash=b"\x00" * 32, curve="p256")
+
+
+def test_ecdsa_sign_invalid_hash_raises():
+    from feralrf import Radio
+
+    radio = Radio(port="dummy")
+    with pytest.raises(ValueError, match="hash"):
+        radio.ecdsa_sign(priv=b"\x00" * 32, msg_hash=b"\x00" * 16, curve="p256")
+
+
+def test_ecdsa_sign_sends_correct_frame(monkeypatch):
+    from feralrf import Radio
+    from feralrf.enums import Command, Response
+
+    radio = Radio(port="dummy")
+    sent = []
+    monkeypatch.setattr(radio, "_send_command", lambda c, p=b"": sent.append((c, bytes(p))))
+    monkeypatch.setattr(
+        radio,
+        "_read_response",
+        lambda timeout=1.0, expected=None: (Response.RSP_ECDSA_SIG, 0, b"\xAB" * 32 + b"\xCD" * 32),
+    )
+
+    sig = radio.ecdsa_sign(priv=b"\x11" * 32, msg_hash=b"\x22" * 32, curve="p256")
+    assert len(sig) == 64
+    cmd, payload = sent[0]
+    assert cmd == Command.CMD_ECDSA_SIGN
+    assert payload[0] == 0x00
+
+
+def test_ecdsa_verify_returns_bool(monkeypatch):
+    from feralrf import Radio
+    from feralrf.enums import Response
+
+    radio = Radio(port="dummy")
+    monkeypatch.setattr(radio, "_send_command", lambda c, p=b"": None)
+    monkeypatch.setattr(
+        radio,
+        "_read_response",
+        lambda timeout=1.0, expected=None: (Response.RSP_ECDSA_VERIFY, 0, b"\x01"),
+    )
+    assert (
+        radio.ecdsa_verify(pub=b"\x00" * 64, msg_hash=b"\x00" * 32, sig=b"\x00" * 64, curve="p256")
+        is True
+    )
+    monkeypatch.setattr(
+        radio,
+        "_read_response",
+        lambda timeout=1.0, expected=None: (Response.RSP_ECDSA_VERIFY, 0, b"\x00"),
+    )
+    assert (
+        radio.ecdsa_verify(pub=b"\x00" * 64, msg_hash=b"\x00" * 32, sig=b"\x00" * 64, curve="p256")
+        is False
+    )

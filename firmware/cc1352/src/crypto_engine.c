@@ -15,6 +15,7 @@
 #include <ti/drivers/cryptoutils/cryptokey/CryptoKeyPlaintext.h>
 #include <ti/drivers/cryptoutils/ecc/ECCParams.h>
 #include <ti/drivers/ECDH.h>
+#include <ti/drivers/ECDSA.h>
 #include <ti/drivers/Power.h>
 #include <ti/drivers/power/PowerCC26XX.h>
 #include <ti/drivers/SHA2.h>
@@ -418,23 +419,100 @@ crypto_engine_status_t crypto_engine_ecdh(crypto_curve_t curve, const uint8_t pr
 
 crypto_engine_status_t crypto_engine_ecdsa_sign(crypto_curve_t curve, const uint8_t priv[32],
                                                 const uint8_t hash[32], uint8_t sig[64]) {
-    (void)curve;
-    (void)priv;
-    (void)hash;
-    (void)sig;
-    return CRYPTO_NOT_INITIALIZED;
+    if (priv == NULL || hash == NULL || sig == NULL)
+        return CRYPTO_BAD_PARAM;
+    if (!s_initialized)
+        return CRYPTO_NOT_INITIALIZED;
+
+    const ECCParams_CurveParams *cparams;
+    if (curve == CRYPTO_CURVE_P256) {
+        cparams = &ECCParams_NISTP256;
+    } else {
+        return CRYPTO_UNSUPPORTED_CURVE;
+    }
+
+    ECDSA_Params params;
+    ECDSA_Params_init(&params);
+    params.returnBehavior = ECDSA_RETURN_BEHAVIOR_POLLING;
+
+    ECDSA_Handle h = ECDSA_open(CONFIG_ECDSA_0, &params);
+    if (h == NULL)
+        return CRYPTO_HW_ERROR;
+
+    CryptoKey priv_key;
+    CryptoKeyPlaintext_initKey(&priv_key, (uint8_t *)priv, 32u);
+
+    ECDSA_OperationSign oper;
+    ECDSA_OperationSign_init(&oper);
+    oper.curve = cparams;
+    oper.myPrivateKey = &priv_key;
+    oper.hash = (uint8_t *)hash;
+    oper.r = sig;
+    oper.s = sig + 32u;
+
+    int_fast16_t rc = ECDSA_sign(h, &oper);
+    ECDSA_close(h);
+    return (rc == ECDSA_STATUS_SUCCESS) ? CRYPTO_OK : CRYPTO_HW_ERROR;
 }
 
 crypto_engine_status_t crypto_engine_ecdsa_verify(crypto_curve_t curve, const uint8_t *pub,
                                                   size_t pub_len, const uint8_t hash[32],
                                                   const uint8_t sig[64], bool *valid) {
-    (void)curve;
-    (void)pub;
-    (void)pub_len;
-    (void)hash;
-    (void)sig;
-    if (valid != NULL) {
-        *valid = false;
+    if (pub == NULL || hash == NULL || sig == NULL || valid == NULL)
+        return CRYPTO_BAD_PARAM;
+    if (!s_initialized)
+        return CRYPTO_NOT_INITIALIZED;
+
+    const ECCParams_CurveParams *cparams;
+    if (curve == CRYPTO_CURVE_P256) {
+        cparams = &ECCParams_NISTP256;
+        if (pub_len != 64u)
+            return CRYPTO_BAD_PARAM;
+    } else {
+        return CRYPTO_UNSUPPORTED_CURVE;
     }
-    return CRYPTO_NOT_INITIALIZED;
+
+    ECDSA_Params params;
+    ECDSA_Params_init(&params);
+    params.returnBehavior = ECDSA_RETURN_BEHAVIOR_POLLING;
+
+    ECDSA_Handle h = ECDSA_open(CONFIG_ECDSA_0, &params);
+    if (h == NULL)
+        return CRYPTO_HW_ERROR;
+
+    /* TI ECDSA expects 65-byte uncompressed pub key (0x04 || X || Y).
+     * Our wire format is raw 64-byte X||Y, prepend 0x04 here. */
+    uint8_t pub_uncompressed[65];
+    pub_uncompressed[0] = 0x04u;
+    for (size_t i = 0u; i < 64u; i++)
+        pub_uncompressed[i + 1u] = pub[i];
+
+    CryptoKey pub_key;
+    CryptoKeyPlaintext_initKey(&pub_key, pub_uncompressed, 65u);
+
+    ECDSA_OperationVerify oper;
+    ECDSA_OperationVerify_init(&oper);
+    oper.curve = cparams;
+    oper.theirPublicKey = &pub_key;
+    oper.hash = (uint8_t *)hash;
+    oper.r = (uint8_t *)sig;
+    oper.s = (uint8_t *)(sig + 32u);
+
+    int_fast16_t rc = ECDSA_verify(h, &oper);
+    ECDSA_close(h);
+
+    if (rc == ECDSA_STATUS_SUCCESS) {
+        *valid = true;
+        return CRYPTO_OK;
+    }
+    /* Invalid signature is reported as ECDSA_STATUS_ERROR (-1) in this SDK.
+     * r/s out-of-range are also treated as invalid-signature (not HW fault). */
+    if (rc == ECDSA_STATUS_ERROR || rc == ECDSA_STATUS_R_LARGER_THAN_ORDER ||
+        rc == ECDSA_STATUS_S_LARGER_THAN_ORDER || rc == ECDSA_STATUS_PUBLIC_KEY_NOT_ON_CURVE ||
+        rc == ECDSA_STATUS_PUBLIC_KEY_LARGER_THAN_PRIME || rc == ECDSA_STATUS_POINT_AT_INFINITY) {
+        *valid = false;
+        return CRYPTO_OK;
+    }
+    *valid = false;
+    return CRYPTO_HW_ERROR;
 }

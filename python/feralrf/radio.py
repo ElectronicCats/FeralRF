@@ -1301,6 +1301,57 @@ class Radio:
             raise CryptoError(f"sha256 returned {len(out)} bytes, expected 32")
         return out
 
+    def _resolve_curve_id(self, curve: str) -> int:
+        if curve == "p256":
+            return 0
+        if curve == "curve25519":
+            return 1
+        raise ValueError(f"unknown curve {curve!r}; expected p256|curve25519")
+
+    def ecdsa_sign(self, priv: bytes, msg_hash: bytes, curve: str) -> bytes:
+        """Sign `msg_hash` (32 B) with `priv` (32 B). Returns 64-byte signature (r||s)."""
+        from feralrf.exceptions import CryptoError
+
+        if len(priv) != 32:
+            raise ValueError(f"priv must be 32 bytes, got {len(priv)}")
+        if len(msg_hash) != 32:
+            raise ValueError(f"hash must be 32 bytes, got {len(msg_hash)}")
+        curve_id = self._resolve_curve_id(curve)
+        payload = bytes([curve_id]) + priv + msg_hash
+        self._send_command(Command.CMD_ECDSA_SIGN, payload)
+        rsp_id, status, out = self._read_response(expected={Response.RSP_ECDSA_SIG, Response.ERROR})
+        if rsp_id == Response.ERROR:
+            if status == 0x05:
+                raise CryptoError(f"ecdsa_sign: curve {curve!r} not supported by firmware")
+            raise CryptoError(f"ecdsa_sign failed: status={status}")
+        if len(out) != 64:
+            raise CryptoError(f"ecdsa_sign returned {len(out)} bytes, expected 64")
+        return out
+
+    def ecdsa_verify(self, pub: bytes, msg_hash: bytes, sig: bytes, curve: str) -> bool:
+        """Verify `sig` for `msg_hash` under `pub`. Returns True/False."""
+        from feralrf.exceptions import CryptoError
+
+        if len(msg_hash) != 32:
+            raise ValueError(f"hash must be 32 bytes, got {len(msg_hash)}")
+        if len(sig) != 64:
+            raise ValueError(f"sig must be 64 bytes, got {len(sig)}")
+        curve_id = self._resolve_curve_id(curve)
+        if curve == "p256" and len(pub) != 64:
+            raise ValueError(f"pub must be 64 bytes for p256, got {len(pub)}")
+        if curve == "curve25519" and len(pub) != 32:
+            raise ValueError(f"pub must be 32 bytes for curve25519, got {len(pub)}")
+        payload = bytes([curve_id]) + pub + msg_hash + sig
+        self._send_command(Command.CMD_ECDSA_VERIFY, payload)
+        rsp_id, status, out = self._read_response(
+            expected={Response.RSP_ECDSA_VERIFY, Response.ERROR}
+        )
+        if rsp_id == Response.ERROR:
+            if status == 0x05:
+                raise CryptoError(f"ecdsa_verify: curve {curve!r} not supported")
+            raise CryptoError(f"ecdsa_verify failed: status={status}")
+        return out == b"\x01"
+
     def ecdh(self, my_priv: bytes, peer_pub: bytes, curve: str) -> bytes:
         """Compute ECDH shared secret. `curve`: 'p256' (peer_pub=64 B) or 'curve25519' (peer_pub=32 B)."""
         from feralrf.exceptions import CryptoError

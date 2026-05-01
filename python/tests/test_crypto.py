@@ -271,7 +271,7 @@ def test_aes_ccm_decrypt_tag_mismatch_raises(monkeypatch):
     monkeypatch.setattr(
         radio,
         "_read_response",
-        lambda timeout=1.0, expected=None: (Response.ERROR, 0x02, b""),  # CRYPTO_TAG_MISMATCH
+        lambda timeout=1.0, expected=None: (Response.ERROR, 0x10, b"\x02"),  # err=2 in payload[0]
     )
     with pytest.raises(CryptoError, match="tag"):
         radio.aes_ccm_decrypt(

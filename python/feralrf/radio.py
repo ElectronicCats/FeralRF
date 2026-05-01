@@ -174,6 +174,7 @@ class Radio:
         "gatt_discover",
         "gatt_read",
         "gatt_write",
+        "gatt_subscribe",
     )
     EXPERIMENTAL_METHODS = (
         "start_jam",
@@ -776,6 +777,40 @@ class Radio:
         if cmd_id == Response.ERROR:
             raise CommandError("GATT_WRITE ack error", payload[0] if payload else 0)
         return payload[0] if payload else 0xFF
+
+    def gatt_subscribe(
+        self,
+        handle: int,
+        enable: bool = True,
+        indicate: bool = False,
+        timeout: float = 3.0,
+    ) -> None:
+        """Subscribe to notifications (or indications) for a GATT characteristic.
+
+        Sends CMD_GATT_SUBSCRIBE which the firmware handles by writing
+        0x0001 (notify) or 0x0002 (indicate) — or 0x0000 if disabling — to
+        the CCC descriptor at (handle + 1).
+
+        Args:
+            handle: The characteristic VALUE handle (not declaration).
+                Firmware writes the CCC at handle + 1 per BLE convention.
+            enable: True to subscribe, False to unsubscribe.
+            indicate: True for indications (0x0002), False for notifications (0x0001).
+                Ignored when enable=False.
+            timeout: Seconds to wait for ACK.
+        """
+        self._send_command(
+            Command.GATT_SUBSCRIBE,
+            CommandBuilder.gatt_subscribe(handle, enable, indicate),
+        )
+        cmd_id, _seq, payload = self._read_response(
+            timeout=timeout,
+            expected={Response.ACK, Response.ERROR},
+        )
+        if cmd_id == Response.ERROR:
+            raise CommandError("GATT_SUBSCRIBE failed", payload[0] if payload else 0)
+        if cmd_id != Response.ACK:
+            raise ProtocolError(f"Unexpected response to GATT_SUBSCRIBE: 0x{cmd_id:02X}")
 
     def set_ble_scan_mode(self, active: bool = True) -> None:
         """Set BLE scan mode: passive or active.

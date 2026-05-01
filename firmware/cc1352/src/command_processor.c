@@ -42,6 +42,7 @@
 #define CMD_AES_CCM 0x5Bu
 #define CMD_AES_CTR 0x5Cu
 #define CMD_AES_CBC 0x5Du
+#define CMD_AES_GCM 0x5Eu
 #define CMD_SET_ADV_HOP 0x07u
 #define CMD_SET_PROP_CONFIG 0x08u
 #define CMD_SET_BLE_ADDR 0x09u
@@ -69,6 +70,7 @@
 #define RSP_RANDOM 0x95u
 #define RSP_AES 0x96u
 #define RSP_AES_CCM 0x97u
+#define RSP_AES_GCM 0x98u
 
 /* BLE Connection responses */
 #define RSP_CONN_RESULT 0xA0u
@@ -608,6 +610,54 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
             break;
         }
         send_response(RSP_AES, seq, out, (uint16_t)data_len);
+        break;
+    }
+
+    case CMD_AES_GCM: {
+        /* payload: op:1 | key:16 | iv:12 | aad_len:2_le | pt_len:2_le | aad | data | (tag if
+         * decrypt) */
+        if (payload_len < 33u) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            break;
+        }
+        uint8_t op = payload[0];
+        const uint8_t *key = payload + 1;
+        const uint8_t *iv = payload + 17;
+        uint16_t aad_len = (uint16_t)payload[29] | ((uint16_t)payload[30] << 8);
+        uint16_t pt_len = (uint16_t)payload[31] | ((uint16_t)payload[32] << 8);
+        if (pt_len > 200u) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            break;
+        }
+        size_t off = 33u;
+        if (payload_len < off + (size_t)aad_len + (size_t)pt_len + ((op == 1u) ? 16u : 0u)) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            break;
+        }
+        const uint8_t *aad = payload + off;
+        const uint8_t *data = aad + aad_len;
+        const uint8_t *tag_in = data + pt_len;
+
+        uint8_t out[200];
+        uint8_t tag_buf[16];
+        if (op == 1u)
+            memcpy(tag_buf, tag_in, 16);
+
+        crypto_engine_status_t st =
+            crypto_engine_aes_gcm(op, key, iv, aad, aad_len, data, pt_len, out, tag_buf);
+        if (st != CRYPTO_OK) {
+            send_error(seq, (uint8_t)st);
+            break;
+        }
+
+        if (op == 0u) {
+            uint8_t resp[216];
+            memcpy(resp, out, pt_len);
+            memcpy(resp + pt_len, tag_buf, 16);
+            send_response(RSP_AES_GCM, seq, resp, (uint16_t)(pt_len + 16u));
+        } else {
+            send_response(RSP_AES_GCM, seq, out, pt_len);
+        }
         break;
     }
 

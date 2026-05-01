@@ -11,6 +11,7 @@
 #include <ti/drivers/AESCCM.h>
 #include <ti/drivers/AESCTR.h>
 #include <ti/drivers/AESECB.h>
+#include <ti/drivers/AESGCM.h>
 #include <ti/drivers/cryptoutils/cryptokey/CryptoKeyPlaintext.h>
 #include <ti/drivers/Power.h>
 #include <ti/drivers/power/PowerCC26XX.h>
@@ -234,16 +235,49 @@ crypto_engine_status_t crypto_engine_aes_gcm(uint8_t op, const uint8_t key[16],
                                              const uint8_t iv[12], const uint8_t *aad,
                                              size_t aad_len, const uint8_t *in, size_t pt_len,
                                              uint8_t *out, uint8_t tag[16]) {
-    (void)op;
-    (void)key;
-    (void)iv;
-    (void)aad;
-    (void)aad_len;
-    (void)in;
-    (void)pt_len;
-    (void)out;
-    (void)tag;
-    return CRYPTO_NOT_INITIALIZED;
+    if (key == NULL || iv == NULL || out == NULL || tag == NULL || op > 1u) {
+        return CRYPTO_BAD_PARAM;
+    }
+    if (!s_initialized)
+        return CRYPTO_NOT_INITIALIZED;
+
+    AESGCM_Params params;
+    AESGCM_Params_init(&params);
+    params.returnBehavior = AESGCM_RETURN_BEHAVIOR_POLLING;
+
+    AESGCM_Handle h = AESGCM_open(CONFIG_AESGCM_0, &params);
+    if (h == NULL)
+        return CRYPTO_HW_ERROR;
+
+    CryptoKey ck;
+    CryptoKeyPlaintext_initKey(&ck, (uint8_t *)key, 16);
+
+    AESGCM_OneStepOperation oper;
+    AESGCM_OneStepOperation_init(&oper);
+    oper.key = &ck;
+    oper.aad = (uint8_t *)aad;
+    oper.aadLength = aad_len;
+    oper.input = (uint8_t *)in;
+    oper.output = out;
+    oper.inputLength = pt_len;
+    oper.iv = (uint8_t *)iv;
+    oper.ivLength = 12;
+    oper.mac = tag;
+    oper.macLength = 16;
+
+    int_fast16_t rc;
+    if (op == 0u) {
+        rc = AESGCM_oneStepEncrypt(h, &oper);
+    } else {
+        rc = AESGCM_oneStepDecrypt(h, &oper);
+    }
+
+    AESGCM_close(h);
+    if (rc == AESGCM_STATUS_SUCCESS)
+        return CRYPTO_OK;
+    if (rc == AESGCM_STATUS_MAC_INVALID)
+        return CRYPTO_TAG_MISMATCH;
+    return CRYPTO_HW_ERROR;
 }
 
 crypto_engine_status_t crypto_engine_sha256(const uint8_t *in, size_t len, uint8_t out[32]) {

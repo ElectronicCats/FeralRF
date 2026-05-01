@@ -282,3 +282,36 @@ def test_aes_ccm_decrypt_tag_mismatch_raises(monkeypatch):
             tag=b"\xFF" * 8,
             tag_len=8,
         )
+
+
+def test_aes_gcm_invalid_iv_raises():
+    from feralrf import Radio
+
+    radio = Radio(port="dummy")
+    with pytest.raises(ValueError, match="iv"):
+        radio.aes_gcm_encrypt(b"\x00" * 16, b"\x00" * 8, b"", b"x")
+
+
+def test_aes_gcm_encrypt_roundtrip(monkeypatch):
+    from feralrf import Radio
+    from feralrf.enums import Command, Response
+
+    radio = Radio(port="dummy")
+    sent = []
+    monkeypatch.setattr(radio, "_send_command", lambda c, p=b"": sent.append((c, bytes(p))))
+    monkeypatch.setattr(
+        radio,
+        "_read_response",
+        lambda timeout=1.0, expected=None: (Response.RSP_AES_GCM, 0, b"\xCC" * 4 + b"\xAA" * 16),
+    )
+
+    ct, tag = radio.aes_gcm_encrypt(
+        key=b"\x11" * 16, iv=b"\x22" * 12, aad=b"AB", plaintext=b"\x33" * 4
+    )
+    assert ct == b"\xCC" * 4
+    assert tag == b"\xAA" * 16
+    cmd, payload = sent[0]
+    assert cmd == Command.CMD_AES_GCM
+    assert payload[0] == 0x00
+    assert payload[1:17] == b"\x11" * 16
+    assert payload[17:29] == b"\x22" * 12

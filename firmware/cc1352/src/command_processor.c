@@ -7,6 +7,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 
 #include "att_client.h"
 #include "ble_conn.h"
@@ -38,6 +39,7 @@
 #define CMD_TX_TEST_STOP 0x57u
 #define CMD_RANDOM 0x59u
 #define CMD_AES_ECB 0x5Au
+#define CMD_AES_CCM 0x5Bu
 #define CMD_AES_CTR 0x5Cu
 #define CMD_AES_CBC 0x5Du
 #define CMD_SET_ADV_HOP 0x07u
@@ -66,6 +68,7 @@
 #define RSP_INFO 0x94u
 #define RSP_RANDOM 0x95u
 #define RSP_AES 0x96u
+#define RSP_AES_CCM 0x97u
 
 /* BLE Connection responses */
 #define RSP_CONN_RESULT 0xA0u
@@ -501,6 +504,66 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
             break;
         }
         send_response(RSP_AES, seq, out, 16);
+        break;
+    }
+
+    case CMD_AES_CCM: {
+        /* payload: op:1 | key:16 | nonce_len:1 | nonce:N | aad_len:2_le | pt_len:2_le | tag_len:1 |
+         * aad | data | (tag if decrypt) */
+        if (payload_len < 24u) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            break;
+        }
+        uint8_t op = payload[0];
+        const uint8_t *key = payload + 1;
+        uint8_t nonce_len = payload[17];
+        if (nonce_len < 7u || nonce_len > 13u) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            break;
+        }
+        const uint8_t *nonce = payload + 18;
+        size_t off = 18u + nonce_len;
+        if (payload_len < off + 5u) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            break;
+        }
+        uint16_t aad_len = (uint16_t)payload[off] | ((uint16_t)payload[off + 1] << 8);
+        uint16_t pt_len = (uint16_t)payload[off + 2] | ((uint16_t)payload[off + 3] << 8);
+        uint8_t tag_len = payload[off + 4];
+        off += 5u;
+        if (payload_len <
+            off + (size_t)aad_len + (size_t)pt_len + ((op == 1u) ? (size_t)tag_len : 0u)) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            break;
+        }
+        if (pt_len > 200u) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            break;
+        }
+        const uint8_t *aad = payload + off;
+        const uint8_t *data = aad + aad_len;
+        const uint8_t *tag_in = data + pt_len;
+
+        uint8_t out[200];
+        uint8_t tag_buf[16];
+        if (op == 1u) {
+            memcpy(tag_buf, tag_in, tag_len);
+        }
+        crypto_engine_status_t st = crypto_engine_aes_ccm(op, key, nonce, nonce_len, aad, aad_len,
+                                                          data, pt_len, tag_len, out, tag_buf);
+        if (st != CRYPTO_OK) {
+            send_error(seq, (uint8_t)st);
+            break;
+        }
+
+        if (op == 0u) {
+            uint8_t resp[216];
+            memcpy(resp, out, pt_len);
+            memcpy(resp + pt_len, tag_buf, tag_len);
+            send_response(RSP_AES_CCM, seq, resp, (uint16_t)(pt_len + tag_len));
+        } else {
+            send_response(RSP_AES_CCM, seq, out, pt_len);
+        }
         break;
     }
 

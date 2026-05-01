@@ -7,6 +7,10 @@
 
 #include "crypto_engine.h"
 
+#include <ti/drivers/AESCBC.h>
+#include <ti/drivers/AESCTR.h>
+#include <ti/drivers/AESECB.h>
+#include <ti/drivers/cryptoutils/cryptokey/CryptoKeyPlaintext.h>
 #include <ti/drivers/Power.h>
 #include <ti/drivers/power/PowerCC26XX.h>
 #include <ti/drivers/TRNG.h>
@@ -55,39 +59,120 @@ crypto_engine_status_t crypto_engine_random(uint8_t n, uint8_t *out) {
     return CRYPTO_OK;
 }
 
-/* Stub bodies — replaced in subsequent tasks (T5-T10). */
-
 crypto_engine_status_t crypto_engine_aes_ecb(uint8_t op, const uint8_t key[16],
                                              const uint8_t in[16], uint8_t out[16]) {
-    (void)op;
-    (void)key;
-    (void)in;
-    (void)out;
-    return CRYPTO_NOT_INITIALIZED;
+    if (key == NULL || in == NULL || out == NULL || op > 1u) {
+        return CRYPTO_BAD_PARAM;
+    }
+    if (!s_initialized)
+        return CRYPTO_NOT_INITIALIZED;
+
+    AESECB_Params params;
+    AESECB_Params_init(&params);
+    params.returnBehavior = AESECB_RETURN_BEHAVIOR_POLLING;
+
+    AESECB_Handle h = AESECB_open(CONFIG_AESECB_0, &params);
+    if (h == NULL)
+        return CRYPTO_HW_ERROR;
+
+    CryptoKey ck;
+    CryptoKeyPlaintext_initKey(&ck, (uint8_t *)key, 16);
+
+    AESECB_Operation oper;
+    AESECB_Operation_init(&oper);
+    oper.key = &ck;
+    oper.input = (uint8_t *)in;
+    oper.output = out;
+    oper.inputLength = 16;
+
+    int_fast16_t rc;
+    if (op == 0u) {
+        rc = AESECB_oneStepEncrypt(h, &oper);
+    } else {
+        rc = AESECB_oneStepDecrypt(h, &oper);
+    }
+
+    AESECB_close(h);
+    return (rc == AESECB_STATUS_SUCCESS) ? CRYPTO_OK : CRYPTO_HW_ERROR;
 }
 
 crypto_engine_status_t crypto_engine_aes_ctr(uint8_t op, const uint8_t key[16],
                                              const uint8_t iv[16], const uint8_t *in, size_t len,
                                              uint8_t *out) {
-    (void)op;
-    (void)key;
-    (void)iv;
-    (void)in;
-    (void)len;
-    (void)out;
-    return CRYPTO_NOT_INITIALIZED;
+    if (key == NULL || iv == NULL || in == NULL || out == NULL || op > 1u || len == 0u) {
+        return CRYPTO_BAD_PARAM;
+    }
+    if (!s_initialized)
+        return CRYPTO_NOT_INITIALIZED;
+
+    AESCTR_Params params;
+    AESCTR_Params_init(&params);
+    params.returnBehavior = AESCTR_RETURN_BEHAVIOR_POLLING;
+
+    AESCTR_Handle h = AESCTR_open(CONFIG_AESCTR_0, &params);
+    if (h == NULL)
+        return CRYPTO_HW_ERROR;
+
+    CryptoKey ck;
+    CryptoKeyPlaintext_initKey(&ck, (uint8_t *)key, 16);
+
+    AESCTR_OneStepOperation oper;
+    AESCTR_OneStepOperation_init(&oper);
+    oper.key = &ck;
+    oper.input = (uint8_t *)in;
+    oper.output = out;
+    oper.inputLength = len;
+    oper.initialCounter = (uint8_t *)iv;
+
+    int_fast16_t rc;
+    if (op == 0u) {
+        rc = AESCTR_oneStepEncrypt(h, &oper);
+    } else {
+        rc = AESCTR_oneStepDecrypt(h, &oper);
+    }
+
+    AESCTR_close(h);
+    return (rc == AESCTR_STATUS_SUCCESS) ? CRYPTO_OK : CRYPTO_HW_ERROR;
 }
 
 crypto_engine_status_t crypto_engine_aes_cbc(uint8_t op, const uint8_t key[16],
                                              const uint8_t iv[16], const uint8_t *in, size_t len,
                                              uint8_t *out) {
-    (void)op;
-    (void)key;
-    (void)iv;
-    (void)in;
-    (void)len;
-    (void)out;
-    return CRYPTO_NOT_INITIALIZED;
+    if (key == NULL || iv == NULL || in == NULL || out == NULL || op > 1u || len == 0u ||
+        (len % 16u) != 0u) {
+        return CRYPTO_BAD_PARAM;
+    }
+    if (!s_initialized)
+        return CRYPTO_NOT_INITIALIZED;
+
+    AESCBC_Params params;
+    AESCBC_Params_init(&params);
+    params.returnBehavior = AESCBC_RETURN_BEHAVIOR_POLLING;
+
+    AESCBC_Handle h = AESCBC_open(CONFIG_AESCBC_0, &params);
+    if (h == NULL)
+        return CRYPTO_HW_ERROR;
+
+    CryptoKey ck;
+    CryptoKeyPlaintext_initKey(&ck, (uint8_t *)key, 16);
+
+    AESCBC_OneStepOperation oper;
+    AESCBC_OneStepOperation_init(&oper);
+    oper.key = &ck;
+    oper.input = (uint8_t *)in;
+    oper.output = out;
+    oper.inputLength = len;
+    oper.iv = (uint8_t *)iv;
+
+    int_fast16_t rc;
+    if (op == 0u) {
+        rc = AESCBC_oneStepEncrypt(h, &oper);
+    } else {
+        rc = AESCBC_oneStepDecrypt(h, &oper);
+    }
+
+    AESCBC_close(h);
+    return (rc == AESCBC_STATUS_SUCCESS) ? CRYPTO_OK : CRYPTO_HW_ERROR;
 }
 
 crypto_engine_status_t crypto_engine_aes_ccm(uint8_t op, const uint8_t key[16],

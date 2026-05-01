@@ -158,3 +158,57 @@ def test_random_bytes_two_calls_differ(monkeypatch):
     a = radio.random_bytes(8)
     b = radio.random_bytes(8)
     assert a != b
+
+
+def test_aes_ecb_invalid_key_raises():
+    from feralrf import Radio
+
+    radio = Radio(port="dummy")
+    with pytest.raises(ValueError, match="key.*16"):
+        radio.aes_encrypt(b"\x00" * 8, b"\x00" * 16, mode="ecb")
+
+
+def test_aes_ecb_invalid_data_raises():
+    from feralrf import Radio
+
+    radio = Radio(port="dummy")
+    with pytest.raises(ValueError, match="data.*16|block"):
+        radio.aes_encrypt(b"\x00" * 16, b"\x00" * 8, mode="ecb")
+
+
+def test_aes_unknown_mode_raises():
+    from feralrf import Radio
+
+    radio = Radio(port="dummy")
+    with pytest.raises(ValueError, match="mode"):
+        radio.aes_encrypt(b"\x00" * 16, b"\x00" * 16, mode="foo")
+
+
+def test_aes_ctr_requires_iv():
+    from feralrf import Radio
+
+    radio = Radio(port="dummy")
+    with pytest.raises(ValueError, match="iv"):
+        radio.aes_encrypt(b"\x00" * 16, b"\x00" * 16, mode="ctr")
+
+
+def test_aes_ecb_sends_correct_frame(monkeypatch):
+    from feralrf import Radio
+    from feralrf.enums import Command, Response
+
+    radio = Radio(port="dummy")
+    sent = []
+    monkeypatch.setattr(radio, "_send_command", lambda c, p=b"": sent.append((c, bytes(p))))
+    monkeypatch.setattr(
+        radio,
+        "_read_response",
+        lambda timeout=1.0, expected=None: (Response.RSP_AES, 0, b"\x99" * 16),
+    )
+
+    key = b"\x00" * 16
+    pt = b"\x11" * 16
+    radio.aes_encrypt(key, pt, mode="ecb")
+
+    cmd, payload = sent[0]
+    assert cmd == Command.CMD_AES_ECB
+    assert payload == bytes([0x00]) + key + pt  # op=encrypt

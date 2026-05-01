@@ -62,4 +62,53 @@ void AttClient_reset(void);
 
 AttClient_State AttClient_getState(void);
 
+/* ── Debug instrumentation (Task 0.2 of F8b Track A) ──
+ *
+ * Captures every public-API entry/exit and every state-machine transition
+ * into a small ring buffer that can be dumped via CMD_ATT_DEBUG.
+ */
+#define ATT_DBG_LOG_DEPTH 32u
+
+/* Tag identifies which call site emitted the entry. Keep small (u8). */
+typedef enum {
+    ATT_DBG_TAG_INIT = 1,
+    ATT_DBG_TAG_RESET = 2,
+    ATT_DBG_TAG_START_DISC_ENTER = 3,
+    ATT_DBG_TAG_START_DISC_EXIT_OK = 4,
+    ATT_DBG_TAG_START_DISC_EXIT_FAIL = 5,
+    ATT_DBG_TAG_START_READ_ENTER = 6,
+    ATT_DBG_TAG_START_READ_EXIT_OK = 7,
+    ATT_DBG_TAG_START_READ_EXIT_FAIL = 8,
+    ATT_DBG_TAG_START_WRITE_ENTER = 9,
+    ATT_DBG_TAG_START_WRITE_EXIT_OK = 10,
+    ATT_DBG_TAG_START_WRITE_EXIT_FAIL = 11,
+    ATT_DBG_TAG_L2CAP_RX = 12,
+    ATT_DBG_TAG_MTU_RSP = 13,
+    ATT_DBG_TAG_GROUP_RSP = 14,
+    ATT_DBG_TAG_TYPE_RSP = 15,
+    ATT_DBG_TAG_READ_RSP = 16,
+    ATT_DBG_TAG_WRITE_RSP = 17,
+    ATT_DBG_TAG_ERROR_RSP = 18,
+    ATT_DBG_TAG_POLL_DONE = 19,
+    ATT_DBG_TAG_POLL_TX_GROUP = 20,
+    ATT_DBG_TAG_POLL_TX_TYPE = 21,
+    ATT_DBG_TAG_POLL_TX_READ = 22,
+    ATT_DBG_TAG_POLL_TX_MTU = 23,
+    ATT_DBG_TAG_DONE_CB = 24,
+} AttClient_DbgTag;
+
+/* 8 bytes per entry. Keep packed-ish (struct alignment puts u16 first). */
+typedef struct {
+    uint16_t seq;       /* monotonic counter, never reset */
+    uint8_t tag;        /* AttClient_DbgTag */
+    uint8_t oldState;   /* AttClient_State before this event */
+    uint8_t newState;   /* AttClient_State after */
+    uint8_t connAlive;  /* 1 if BleConn_isConnected at entry */
+    uint8_t mtu;        /* low byte of s_mtu (always ≤ 23 in practice) */
+    uint8_t reqPending; /* s_request_pending at entry */
+} AttClient_DbgEntry;
+
+/* Copy oldest-to-newest into out[]; returns number copied (≤ maxEntries). */
+uint8_t AttClient_getDebugLog(AttClient_DbgEntry *out, uint8_t maxEntries);
+
 #endif /* ATT_CLIENT_H */

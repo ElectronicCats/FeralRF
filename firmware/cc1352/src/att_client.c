@@ -10,6 +10,7 @@
  */
 
 #include "att_client.h"
+#include "ble_conn.h"
 #include "tx_queue.h"
 
 #include <string.h>
@@ -62,6 +63,27 @@ static uint8_t s_service_idx;
 
 /* For read/write requests */
 static uint16_t s_rw_handle;
+
+/* ── Debug ring buffer (Task 0.2) ── */
+static AttClient_DbgEntry s_dbg_log[ATT_DBG_LOG_DEPTH];
+static uint8_t s_dbg_head;  /* next write slot */
+static uint8_t s_dbg_count; /* valid entries, saturates at depth */
+static uint16_t s_dbg_seq;  /* monotonic sequence */
+
+static void att_dbg(uint8_t tag, AttClient_State oldState) {
+    AttClient_DbgEntry *e = &s_dbg_log[s_dbg_head];
+    e->seq = s_dbg_seq++;
+    e->tag = tag;
+    e->oldState = (uint8_t)oldState;
+    e->newState = (uint8_t)s_state;
+    e->connAlive = BleConn_isConnected() ? 1u : 0u;
+    e->mtu = (uint8_t)s_mtu;
+    e->reqPending = s_request_pending ? 1u : 0u;
+    s_dbg_head = (uint8_t)((s_dbg_head + 1u) % ATT_DBG_LOG_DEPTH);
+    if (s_dbg_count < ATT_DBG_LOG_DEPTH) {
+        s_dbg_count++;
+    }
+}
 
 /* ── L2CAP + ATT TX helper ── */
 
@@ -144,7 +166,9 @@ static uint16_t le16(const uint8_t *p) {
 /* ── ATT Response handlers ── */
 
 static void handle_mtu_rsp(const uint8_t *pdu, uint8_t len) {
+    AttClient_State old = s_state;
     if (len < 3 || s_state != ATT_STATE_WAIT_MTU_RSP) {
+        att_dbg(ATT_DBG_TAG_MTU_RSP, old);
         return;
     }
     uint16_t server_mtu = le16(&pdu[1]);
@@ -155,10 +179,13 @@ static void handle_mtu_rsp(const uint8_t *pdu, uint8_t len) {
     s_disc_next_handle = 0x0001;
     s_service_count = 0;
     s_state = ATT_STATE_WAIT_DISCOVER_RSP;
+    att_dbg(ATT_DBG_TAG_MTU_RSP, old);
 }
 
 static void handle_read_by_group_type_rsp(const uint8_t *pdu, uint8_t len) {
+    AttClient_State old = s_state;
     if (len < 4 || s_state != ATT_STATE_WAIT_DISCOVER_RSP) {
+        att_dbg(ATT_DBG_TAG_GROUP_RSP, old);
         return;
     }
     s_request_pending = false;
@@ -195,10 +222,13 @@ static void handle_read_by_group_type_rsp(const uint8_t *pdu, uint8_t len) {
         s_state = ATT_STATE_WAIT_CHAR_RSP;
     }
     /* Otherwise poll() will send next request */
+    att_dbg(ATT_DBG_TAG_GROUP_RSP, old);
 }
 
 static void handle_read_by_type_rsp(const uint8_t *pdu, uint8_t len) {
+    AttClient_State old = s_state;
     if (len < 4 || s_state != ATT_STATE_WAIT_CHAR_RSP) {
+        att_dbg(ATT_DBG_TAG_TYPE_RSP, old);
         return;
     }
     s_request_pending = false;
@@ -220,10 +250,13 @@ static void handle_read_by_type_rsp(const uint8_t *pdu, uint8_t len) {
         s_disc_next_handle = handle + 1u;
         offset += entry_len;
     }
+    att_dbg(ATT_DBG_TAG_TYPE_RSP, old);
 }
 
 static void handle_read_rsp(const uint8_t *pdu, uint8_t len) {
+    AttClient_State old = s_state;
     if (s_state != ATT_STATE_WAIT_READ_RSP) {
+        att_dbg(ATT_DBG_TAG_READ_RSP, old);
         return;
     }
     s_request_pending = false;
@@ -232,7 +265,9 @@ static void handle_read_rsp(const uint8_t *pdu, uint8_t len) {
         s_cb.onRead(s_rw_handle, &pdu[1], len - 1u);
     }
     s_state = ATT_STATE_IDLE;
+    att_dbg(ATT_DBG_TAG_READ_RSP, old);
     if (s_cb.onDone) {
+        att_dbg(ATT_DBG_TAG_DONE_CB, s_state);
         s_cb.onDone(0);
     }
 }
@@ -240,18 +275,24 @@ static void handle_read_rsp(const uint8_t *pdu, uint8_t len) {
 static void handle_write_rsp(const uint8_t *pdu, uint8_t len) {
     (void)pdu;
     (void)len;
+    AttClient_State old = s_state;
     if (s_state != ATT_STATE_WAIT_WRITE_RSP) {
+        att_dbg(ATT_DBG_TAG_WRITE_RSP, old);
         return;
     }
     s_request_pending = false;
     s_state = ATT_STATE_IDLE;
+    att_dbg(ATT_DBG_TAG_WRITE_RSP, old);
     if (s_cb.onDone) {
+        att_dbg(ATT_DBG_TAG_DONE_CB, s_state);
         s_cb.onDone(0);
     }
 }
 
 static void handle_error_rsp(const uint8_t *pdu, uint8_t len) {
+    AttClient_State old = s_state;
     if (len < 5) {
+        att_dbg(ATT_DBG_TAG_ERROR_RSP, old);
         return;
     }
     s_request_pending = false;
@@ -265,6 +306,7 @@ static void handle_error_rsp(const uint8_t *pdu, uint8_t len) {
             s_service_idx = 0;
             s_disc_next_handle = 0;
             s_state = ATT_STATE_WAIT_CHAR_RSP;
+            att_dbg(ATT_DBG_TAG_ERROR_RSP, old);
             return;
         }
         if (s_state == ATT_STATE_WAIT_CHAR_RSP) {
@@ -274,10 +316,14 @@ static void handle_error_rsp(const uint8_t *pdu, uint8_t len) {
             if (s_service_idx >= s_service_count) {
                 /* All done */
                 s_state = ATT_STATE_IDLE;
+                att_dbg(ATT_DBG_TAG_ERROR_RSP, old);
                 if (s_cb.onDone) {
+                    att_dbg(ATT_DBG_TAG_DONE_CB, s_state);
                     s_cb.onDone(0);
                 }
+                return;
             }
+            att_dbg(ATT_DBG_TAG_ERROR_RSP, old);
             return;
         }
     }
@@ -285,7 +331,9 @@ static void handle_error_rsp(const uint8_t *pdu, uint8_t len) {
     /* Actual error */
     (void)req_opcode;
     s_state = ATT_STATE_IDLE;
+    att_dbg(ATT_DBG_TAG_ERROR_RSP, old);
     if (s_cb.onDone) {
+        att_dbg(ATT_DBG_TAG_DONE_CB, s_state);
         s_cb.onDone(1);
     }
 }
@@ -293,12 +341,17 @@ static void handle_error_rsp(const uint8_t *pdu, uint8_t len) {
 /* ── Public API ── */
 
 void AttClient_init(void) {
+    AttClient_State old = s_state;
     s_state = ATT_STATE_IDLE;
     s_mtu = ATT_DEFAULT_MTU;
     s_request_pending = false;
     s_service_count = 0;
     s_service_idx = 0;
     memset(&s_cb, 0, sizeof(s_cb));
+    /* NB: dbg ring is intentionally NOT reset on init/reset — we want to
+     * see the last events of cycle N to diagnose cycle N+1's failure.
+     * It is only reset on chip boot via static initialization. */
+    att_dbg(ATT_DBG_TAG_INIT, old);
 }
 
 void AttClient_setCallbacks(const AttClient_Callbacks *cb) {
@@ -306,7 +359,10 @@ void AttClient_setCallbacks(const AttClient_Callbacks *cb) {
 }
 
 bool AttClient_startDiscover(void) {
+    AttClient_State old = s_state;
+    att_dbg(ATT_DBG_TAG_START_DISC_ENTER, old);
     if (s_state != ATT_STATE_IDLE) {
+        att_dbg(ATT_DBG_TAG_START_DISC_EXIT_FAIL, old);
         return false;
     }
     s_service_count = 0;
@@ -317,35 +373,47 @@ bool AttClient_startDiscover(void) {
      * ignore MTU requests from raw RF connections. Go straight to
      * service discovery. */
     s_state = ATT_STATE_WAIT_DISCOVER_RSP;
+    att_dbg(ATT_DBG_TAG_START_DISC_EXIT_OK, old);
     return true;
 }
 
 bool AttClient_startRead(uint16_t handle) {
+    AttClient_State old = s_state;
+    att_dbg(ATT_DBG_TAG_START_READ_ENTER, old);
     if (s_state != ATT_STATE_IDLE) {
+        att_dbg(ATT_DBG_TAG_START_READ_EXIT_FAIL, old);
         return false;
     }
     s_rw_handle = handle;
     s_request_pending = false;
     s_state = ATT_STATE_WAIT_READ_RSP;
+    att_dbg(ATT_DBG_TAG_START_READ_EXIT_OK, old);
     return true;
 }
 
 bool AttClient_startWrite(uint16_t handle, const uint8_t *data, uint8_t len) {
+    AttClient_State old = s_state;
+    att_dbg(ATT_DBG_TAG_START_WRITE_ENTER, old);
     if (s_state != ATT_STATE_IDLE) {
+        att_dbg(ATT_DBG_TAG_START_WRITE_EXIT_FAIL, old);
         return false;
     }
     s_rw_handle = handle;
     s_request_pending = false;
     /* Queue the write immediately since we have the data now */
     if (!send_write_req(handle, data, len)) {
+        att_dbg(ATT_DBG_TAG_START_WRITE_EXIT_FAIL, old);
         return false;
     }
     s_request_pending = true;
     s_state = ATT_STATE_WAIT_WRITE_RSP;
+    att_dbg(ATT_DBG_TAG_START_WRITE_EXIT_OK, old);
     return true;
 }
 
 void AttClient_onL2capRx(const uint8_t *l2capPayload, uint8_t len) {
+    AttClient_State old = s_state;
+    att_dbg(ATT_DBG_TAG_L2CAP_RX, old);
     /* l2capPayload = [L2CAP_Length:2][CID:2][ATT PDU] */
     if (len < 5) {
         return;
@@ -391,12 +459,14 @@ void AttClient_poll(void) {
     if (s_state == ATT_STATE_IDLE || s_request_pending) {
         return;
     }
+    AttClient_State old = s_state;
 
     switch (s_state) {
     case ATT_STATE_WAIT_MTU_RSP:
         if (!s_request_pending) {
             if (send_exchange_mtu_req()) {
                 s_request_pending = true;
+                att_dbg(ATT_DBG_TAG_POLL_TX_MTU, old);
             }
         }
         break;
@@ -407,13 +477,16 @@ void AttClient_poll(void) {
         }
         if (send_read_by_group_type_req(s_disc_next_handle, 0xFFFF, GATT_PRIMARY_SERVICE_UUID)) {
             s_request_pending = true;
+            att_dbg(ATT_DBG_TAG_POLL_TX_GROUP, old);
         }
         break;
 
     case ATT_STATE_WAIT_CHAR_RSP:
         if (s_service_idx >= s_service_count) {
             s_state = ATT_STATE_IDLE;
+            att_dbg(ATT_DBG_TAG_POLL_DONE, old);
             if (s_cb.onDone) {
+                att_dbg(ATT_DBG_TAG_DONE_CB, s_state);
                 s_cb.onDone(0);
             }
             break;
@@ -426,6 +499,7 @@ void AttClient_poll(void) {
             uint16_t end = s_services[s_service_idx].endHandle;
             if (send_read_by_type_req(start, end, GATT_CHARACTERISTIC_UUID)) {
                 s_request_pending = true;
+                att_dbg(ATT_DBG_TAG_POLL_TX_TYPE, old);
             }
         }
         break;
@@ -433,6 +507,7 @@ void AttClient_poll(void) {
     case ATT_STATE_WAIT_READ_RSP:
         if (send_read_req(s_rw_handle)) {
             s_request_pending = true;
+            att_dbg(ATT_DBG_TAG_POLL_TX_READ, old);
         }
         break;
 
@@ -442,13 +517,28 @@ void AttClient_poll(void) {
 }
 
 void AttClient_reset(void) {
+    AttClient_State old = s_state;
     s_state = ATT_STATE_IDLE;
     s_request_pending = false;
     s_mtu = ATT_DEFAULT_MTU;
     s_service_count = 0;
     s_service_idx = 0;
+    att_dbg(ATT_DBG_TAG_RESET, old);
 }
 
 AttClient_State AttClient_getState(void) {
     return s_state;
+}
+
+uint8_t AttClient_getDebugLog(AttClient_DbgEntry *out, uint8_t maxEntries) {
+    if (out == NULL || maxEntries == 0u) {
+        return 0u;
+    }
+    uint8_t n = (s_dbg_count < maxEntries) ? s_dbg_count : maxEntries;
+    /* Walk oldest-to-newest. With saturating ring, oldest is (head-count) mod depth. */
+    uint8_t start = (uint8_t)((ATT_DBG_LOG_DEPTH + s_dbg_head - s_dbg_count) % ATT_DBG_LOG_DEPTH);
+    for (uint8_t i = 0; i < n; i++) {
+        out[i] = s_dbg_log[(start + i) % ATT_DBG_LOG_DEPTH];
+    }
+    return n;
 }

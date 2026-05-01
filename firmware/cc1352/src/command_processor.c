@@ -65,6 +65,7 @@
 /* Diagnostics */
 #define CMD_DEBUG_TIMING 0x47u
 #define CMD_DEBUG_CONN_PARAMS 0x48u
+#define CMD_ATT_DEBUG 0x49u /* F8b Track A Task 0.2 */
 
 /* Responses (match python/feralrf/enums.py) */
 #define RSP_ACK 0x80u
@@ -93,6 +94,7 @@
 /* Diagnostics */
 #define RSP_DEBUG_TIMING 0xA8u
 #define RSP_DEBUG_CONN_PARAMS 0xA9u
+#define RSP_ATT_DEBUG 0xAAu /* F8b Track A Task 0.2 */
 
 /* Error codes */
 #define ERR_INVALID_CMD 0x01u
@@ -999,6 +1001,36 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
         rsp[27] = st->connected ? 1u : 0u;
         memcpy(&rsp[28], ll, 22);
         send_response(RSP_DEBUG_CONN_PARAMS, seq, rsp, 50u);
+        return;
+    }
+
+    case CMD_ATT_DEBUG: {
+        /* F8b Track A Task 0.2: dump AttClient state-machine event ring buffer.
+         * Wire layout: count(u8) + count × 8 bytes per entry, where the 8
+         * bytes are: seq(u16) tag(u8) oldState(u8) newState(u8) connAlive(u8)
+         * mtu(u8) reqPending(u8). 1 + 32*8 = 257 — but we cap at 31 entries
+         * to fit in PROTOCOL_MAX_PAYLOAD=255. */
+        if (payload_len != 0u) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            return;
+        }
+        AttClient_DbgEntry entries[ATT_DBG_LOG_DEPTH];
+        uint8_t cap = (uint8_t)(ATT_DBG_LOG_DEPTH > 31u ? 31u : ATT_DBG_LOG_DEPTH);
+        uint8_t n = AttClient_getDebugLog(entries, cap);
+        uint8_t rsp[1u + 31u * 8u];
+        rsp[0] = n;
+        for (uint8_t i = 0; i < n; i++) {
+            uint8_t *p = &rsp[1u + (uint16_t)i * 8u];
+            p[0] = (uint8_t)(entries[i].seq & 0xFFu);
+            p[1] = (uint8_t)((entries[i].seq >> 8) & 0xFFu);
+            p[2] = entries[i].tag;
+            p[3] = entries[i].oldState;
+            p[4] = entries[i].newState;
+            p[5] = entries[i].connAlive;
+            p[6] = entries[i].mtu;
+            p[7] = entries[i].reqPending;
+        }
+        send_response(RSP_ATT_DEBUG, seq, rsp, (uint16_t)(1u + (uint16_t)n * 8u));
         return;
     }
 

@@ -36,6 +36,8 @@
 #define ATT_READ_BY_GROUP_TYPE_REQ 0x10u
 #define ATT_READ_BY_GROUP_TYPE_RSP 0x11u
 #define ATT_HANDLE_VALUE_NOTIFICATION 0x1Bu
+#define ATT_HANDLE_VALUE_INDICATION 0x1Du
+#define ATT_HANDLE_VALUE_CONFIRMATION 0x1Eu
 
 /* ATT Error codes */
 #define ATT_ERR_ATTRIBUTE_NOT_FOUND 0x0Au
@@ -125,6 +127,16 @@ static void AttClient_emitNotification(const uint8_t *handle_and_value, uint8_t 
      * payload bytes through unchanged. seq=0 because notifications are
      * unsolicited streaming responses (no host-side request to correlate). */
     OutputIF_sendResponse(RSP_GATT_NOTIFY, 0u, handle_and_value, (uint16_t)len);
+}
+
+static void AttClient_sendCfm(void) {
+    /* ATT_HANDLE_VALUE_CONFIRMATION is a single-byte PDU sent on the ATT
+     * L2CAP channel. Per BT Core Spec Vol 3 Part F §3.4.7.3, the client must
+     * acknowledge every received indication; failure to do so will stall
+     * further indications from the peer. Reuse att_send (the same TX path
+     * all ATT requests already use). */
+    uint8_t cfm = ATT_HANDLE_VALUE_CONFIRMATION;
+    (void)att_send(&cfm, 1u);
 }
 
 /* ── ATT Request builders ── */
@@ -485,6 +497,19 @@ void AttClient_onL2capRx(const uint8_t *l2capPayload, uint8_t len) {
         AttClient_emitNotification(&att_pdu[1], (uint8_t)(att_len - 1u));
         s_metrics.notif_rx++;
         att_dbg(ATT_DBG_TAG_NOTIFY_RX, old);
+        return;
+    case ATT_HANDLE_VALUE_INDICATION:
+        /* Same shape as 0x1B (handle[2] + value[N]) but requires a
+         * CONFIRMATION (0x1E) reply or the peer will stall. */
+        if (att_len < 3u) {
+            s_metrics.notif_bad++;
+            att_dbg(ATT_DBG_TAG_INDICATE_RX, old);
+            return;
+        }
+        AttClient_emitNotification(&att_pdu[1], (uint8_t)(att_len - 1u));
+        s_metrics.notif_rx++;
+        AttClient_sendCfm();
+        att_dbg(ATT_DBG_TAG_INDICATE_RX, old);
         return;
     default:
         break;

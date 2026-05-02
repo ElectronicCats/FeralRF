@@ -132,6 +132,27 @@ class GattNotification:
 
 
 @dataclass
+class LLPacket:
+    """A captured LL data PDU from a followed BLE connection.
+
+    Emitted by the firmware's connection follower (CMD_FOLLOW_START) for
+    every data-channel PDU it captures from a non-FeralRF central↔peripheral
+    link. Capture-only — the firmware never injects on followed links.
+
+    direction is "M->S" or "S->M" inferred from the LL header SN/NESN
+    transitions, or "?" if the firmware could not determine direction.
+    payload is the raw LL PDU starting at the 2-byte LL header.
+    """
+
+    direction: str
+    channel: int
+    rssi_dbm: int
+    event_counter: int
+    payload: bytes
+    timestamp: float  # host monotonic at receive
+
+
+@dataclass
 class GattDiscoveryResult:
     """Aggregated output of a full gatt_discover() call."""
 

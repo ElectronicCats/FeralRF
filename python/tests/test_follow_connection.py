@@ -29,3 +29,37 @@ class TestFollowStartBuilder:
 class TestFollowStopBuilder:
     def test_empty_payload(self):
         assert CommandBuilder.follow_stop() == b""
+
+
+class TestLLPacketDataclass:
+    def test_construct_with_required_fields(self):
+        from feralrf.radio import LLPacket
+        pkt = LLPacket(
+            direction="M->S",
+            channel=10,
+            rssi_dbm=-60,
+            event_counter=42,
+            payload=b"\x03\x05\x12\x00\x60\x01\x00",
+            timestamp=1234.5,
+        )
+        assert pkt.direction == "M->S"
+        assert pkt.channel == 10
+        assert pkt.rssi_dbm == -60
+        assert pkt.event_counter == 42
+        assert pkt.payload == b"\x03\x05\x12\x00\x60\x01\x00"
+        assert pkt.timestamp == 1234.5
+
+    def test_direction_must_be_known_token(self):
+        from feralrf.radio import LLPacket
+        # Validation is deliberately *not* enforced in __init__; the firmware
+        # is the source of truth. The host preserves whatever string it
+        # was given. This test pins that the dataclass is permissive.
+        pkt = LLPacket(
+            direction="UNKNOWN",
+            channel=0,
+            rssi_dbm=0,
+            event_counter=0,
+            payload=b"",
+            timestamp=0.0,
+        )
+        assert pkt.direction == "UNKNOWN"

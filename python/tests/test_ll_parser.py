@@ -61,3 +61,48 @@ class TestParseLLData:
         # LLID=00 is reserved; parser should mark it but still return shape
         result = parse_ll_pdu(b"\x00\x00")
         assert result.kind == LLPduKind.RESERVED
+
+
+class TestParseATT:
+    def test_att_write_req(self):
+        from feralrf._ll_parser import parse_att_pdu, ATT_OPCODE_NAMES
+        # ATT_WRITE_REQ to handle 0x00d5, value=01 00 (CCC notify enable)
+        result = parse_att_pdu(b"\x12\xd5\x00\x01\x00")
+        assert result.opcode == 0x12
+        assert result.opcode_name == "ATT_WRITE_REQ"
+        assert result.handle == 0x00d5
+        assert result.value == b"\x01\x00"
+
+    def test_att_handle_value_notification(self):
+        from feralrf._ll_parser import parse_att_pdu
+        # Handle 0x0064, value=AA BB CC
+        result = parse_att_pdu(b"\x1b\x64\x00\xaa\xbb\xcc")
+        assert result.opcode == 0x1B
+        assert result.opcode_name == "ATT_HANDLE_VALUE_NTF"
+        assert result.handle == 0x0064
+        assert result.value == b"\xaa\xbb\xcc"
+
+    def test_att_error_response(self):
+        from feralrf._ll_parser import parse_att_pdu
+        # ATT_ERROR_RSP: opcode=01, req_op=0x0a (READ), handle=0x0010, code=0x05 (insuf auth)
+        result = parse_att_pdu(b"\x01\x0a\x10\x00\x05")
+        assert result.opcode == 0x01
+        assert result.opcode_name == "ATT_ERROR_RSP"
+
+    def test_truncated_handle_returns_opcode_only(self):
+        from feralrf._ll_parser import parse_att_pdu
+        # Just an opcode, no handle bytes
+        result = parse_att_pdu(b"\x12")
+        assert result.opcode == 0x12
+        assert result.handle is None
+
+    def test_extract_att_from_l2cap_start(self):
+        from feralrf._ll_parser import parse_ll_pdu, parse_att_pdu
+        # LL data PDU containing a complete L2CAP frame with ATT_WRITE_REQ
+        raw = b"\x02\x09\x05\x00\x04\x00\x12\xd5\x00\x01\x00"
+        ll = parse_ll_pdu(raw)
+        # L2CAP header is first 4 bytes of payload: [len:2][cid:2]
+        att_bytes = ll.payload[4:]
+        att = parse_att_pdu(att_bytes)
+        assert att.opcode_name == "ATT_WRITE_REQ"
+        assert att.handle == 0x00d5

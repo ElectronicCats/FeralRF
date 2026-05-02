@@ -2531,6 +2531,123 @@ void RadioIF_bleDrainRxQueue(void) {
     RadioIF_processBlePackets();
 }
 
+/* ── F8b Track B — passive follower primitives ── */
+
+#define BLE_ADV_AA 0x8E89BED6u
+#define BLE_ADV_CRC_INIT 0x555555u
+
+/* Drain the RF data queue and invoke the callback per packet.
+ * This walks the dataEntry ring populated by Ble5_0_cmdBle5GenericRx,
+ * matching the pattern in RadioIF_poll(). */
+static void RadioIF_drainFollowQueue(RadioIF_FollowPacketCb cb, void *user,
+                                     uint8_t channel) {
+    while (RadioIF_rfHasPacket()) {
+        rfc_dataEntryGeneral_t *entry =
+            (rfc_dataEntryGeneral_t *)s_rf_data_queue.pCurrEntry;
+        if (entry == NULL) {
+            break;
+        }
+        if (entry->status == DATA_ENTRY_FINISHED) {
+            uint8_t *data = (uint8_t *)&entry->data;
+            /* GenericRx with bIncludeLenByte=1, bIncludeCrc=1, bAppendRssi=1,
+             * bAppendStatus=1, bAppendTimestamp=1.
+             * Layout: [len:1][LL hdr 2][LL body N][CRC:3][RSSI:1][status:1][ts:4]
+             * The "len" byte is the LL PDU length INCLUDING header. */
+            uint8_t total_len = data[0];
+            uint8_t pdu_len = total_len; /* LL hdr + body */
+            int8_t rssi = (int8_t)data[1 + total_len + 3]; /* skip len+pdu+CRC */
+
+            if (cb != NULL && pdu_len >= 2u) {
+                cb(&data[1], pdu_len, channel, rssi, user);
+            }
+        }
+        RadioIF_rfConsumeEntry();
+    }
+}
+
+int RadioIF_followAdvOnce(uint8_t adv_channel, uint32_t end_time_rat,
+                          RadioIF_FollowPacketCb cb, void *user) {
+    if (adv_channel < 37u || adv_channel > 39u) {
+        return -1;
+    }
+    /* Lazy-init RF in BLE mode if the handle is not yet open in BLE
+     * (matches F22.b lazy-open pattern). */
+    if (s_rf_handle == NULL || s_rf_mode != RADIO_IF_RF_MODE_BLE) {
+        if (!RadioIF_switchRfMode(&Ble5_0_mode, (RF_RadioSetup *)&Ble5_0_cmdBle5RadioSetup)) {
+            return -2;
+        }
+        s_rf_mode = RADIO_IF_RF_MODE_BLE;
+    }
+
+    RadioIF_resetRfDataQueue();
+
+    /* Configure GenericRx for ADV channel scan */
+    RadioIF_applyBleChannelConfig(adv_channel);
+    Ble5_0_cmdBle5GenericRx.pParams->accessAddress = BLE_ADV_AA;
+    Ble5_0_cmdBle5GenericRx.pParams->crcInit0 = (uint8_t)(BLE_ADV_CRC_INIT & 0xFFu);
+    Ble5_0_cmdBle5GenericRx.pParams->crcInit1 = (uint8_t)((BLE_ADV_CRC_INIT >> 8) & 0xFFu);
+    Ble5_0_cmdBle5GenericRx.pParams->crcInit2 = (uint8_t)((BLE_ADV_CRC_INIT >> 16) & 0xFFu);
+    Ble5_0_cmdBle5GenericRx.pParams->endTrigger.triggerType =
+        (end_time_rat == 0u) ? TRIG_NEVER : TRIG_ABSTIME;
+    Ble5_0_cmdBle5GenericRx.pParams->endTime = end_time_rat;
+    Ble5_0_cmdBle5GenericRx.pParams->pRxQ = &s_rf_data_queue;
+    Ble5_0_cmdBle5GenericRx.startTrigger.triggerType = TRIG_NOW;
+
+    /* Run command first; then drain. Polling-during-RX would race with the
+     * data queue. RF_runCmd blocks until end trigger fires (or peer adv
+     * completes if we cancel). */
+    RF_EventMask events = RF_runCmd(s_rf_handle, (RF_Op *)&Ble5_0_cmdBle5GenericRx,
+                                    RF_PriorityNormal, NULL,
+                                    RF_EventLastCmdDone | RF_EventCmdAborted);
+    (void)events;
+
+    RadioIF_drainFollowQueue(cb, user, adv_channel);
+    return (int)Ble5_0_cmdBle5GenericRx.status;
+}
+
+int RadioIF_followDataOnce(uint8_t data_channel, uint32_t accessAddr,
+                           uint32_t crcInit, uint32_t end_time_rat,
+                           RadioIF_FollowPacketCb cb, void *user) {
+    if (data_channel > 36u) {
+        return -1;
+    }
+    if (s_rf_handle == NULL || s_rf_mode != RADIO_IF_RF_MODE_BLE) {
+        if (!RadioIF_switchRfMode(&Ble5_0_mode, (RF_RadioSetup *)&Ble5_0_cmdBle5RadioSetup)) {
+            return -2;
+        }
+        s_rf_mode = RADIO_IF_RF_MODE_BLE;
+    }
+
+    RadioIF_resetRfDataQueue();
+
+    /* Data-channel whitening uses the BLE channel index (0..36 mapped to
+     * RF channels 0..39 with 37/38/39 reserved for ADV). For data channels
+     * we whitening init = (0x40 | data_channel). */
+    Ble5_0_cmdBle5GenericRx.channel = data_channel;
+    Ble5_0_cmdBle5GenericRx.whitening.init = (uint8_t)(0x40u | (data_channel & 0x3Fu));
+    Ble5_0_cmdBle5GenericRx.whitening.bOverride = 1u;
+    Ble5_0_cmdFs.frequency = RadioIF_bleChannelToFrequency(data_channel);
+    Ble5_0_cmdFs.fractFreq = 0u;
+
+    Ble5_0_cmdBle5GenericRx.pParams->accessAddress = accessAddr;
+    Ble5_0_cmdBle5GenericRx.pParams->crcInit0 = (uint8_t)(crcInit & 0xFFu);
+    Ble5_0_cmdBle5GenericRx.pParams->crcInit1 = (uint8_t)((crcInit >> 8) & 0xFFu);
+    Ble5_0_cmdBle5GenericRx.pParams->crcInit2 = (uint8_t)((crcInit >> 16) & 0xFFu);
+    Ble5_0_cmdBle5GenericRx.pParams->endTrigger.triggerType =
+        (end_time_rat == 0u) ? TRIG_NEVER : TRIG_ABSTIME;
+    Ble5_0_cmdBle5GenericRx.pParams->endTime = end_time_rat;
+    Ble5_0_cmdBle5GenericRx.pParams->pRxQ = &s_rf_data_queue;
+    Ble5_0_cmdBle5GenericRx.startTrigger.triggerType = TRIG_NOW;
+
+    RF_EventMask events = RF_runCmd(s_rf_handle, (RF_Op *)&Ble5_0_cmdBle5GenericRx,
+                                    RF_PriorityNormal, NULL,
+                                    RF_EventLastCmdDone | RF_EventCmdAborted);
+    (void)events;
+
+    RadioIF_drainFollowQueue(cb, user, data_channel);
+    return (int)Ble5_0_cmdBle5GenericRx.status;
+}
+
 bool RadioIF_startJamSession(uint8_t phy, uint8_t channel, int8_t power_dbm) {
     RF_Params rf_params;
     RF_Mode *mode;

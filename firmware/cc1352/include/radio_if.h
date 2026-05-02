@@ -137,6 +137,31 @@ typedef struct {
 void RadioIF_getRfDebug(RadioIF_RfDebug *out);
 void *RadioIF_getRfHandle(void);
 
+/* F8b Track B — Passive connection follower primitives.
+ *
+ * Both helpers wrap CMD_BLE5_GENERIC_RX as a blocking single-shot RX.
+ * The packet callback is invoked from the same task context that called
+ * the helper, after the RF command terminates and the data queue has been
+ * drained. Callback signature receives the raw LL bytes (header + body),
+ * channel, RSSI, and a user pointer for state.
+ *
+ * Returns 0 on RX_OK / TIMEOUT / END (normal terminations), non-zero on
+ * RF stack error. */
+typedef void (*RadioIF_FollowPacketCb)(const uint8_t *ll_pdu, uint8_t pdu_len,
+                                       uint8_t channel, int8_t rssi_dbm, void *user);
+
+/* Listen on an advertising channel (37/38/39) with AA=0x8E89BED6,
+ * CRC init=0x555555. end_time_rat is absolute RAT tick (4 MHz); 0 means
+ * listen forever. */
+int RadioIF_followAdvOnce(uint8_t adv_channel, uint32_t end_time_rat,
+                          RadioIF_FollowPacketCb cb, void *user);
+
+/* Listen on a data channel (0..36) with caller-supplied accessAddr and
+ * crcInit. end_time_rat is absolute RAT tick; 0 means listen forever. */
+int RadioIF_followDataOnce(uint8_t data_channel, uint32_t accessAddr,
+                           uint32_t crcInit, uint32_t end_time_rat,
+                           RadioIF_FollowPacketCb cb, void *user);
+
 /* Jamming functions - optimized continuous transmission */
 bool RadioIF_startJamSession(uint8_t phy, uint8_t channel, int8_t power_dbm);
 void RadioIF_stopJamSession(void);

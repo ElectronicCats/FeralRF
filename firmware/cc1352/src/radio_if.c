@@ -2577,7 +2577,19 @@ int RadioIF_followAdvOnce(uint8_t adv_channel, uint32_t end_time_rat, RadioIF_Fo
         s_rf_mode = RADIO_IF_RF_MODE_BLE;
     }
 
-    RadioIF_resetRfDataQueue();
+    /* Create the data queue if not already done by start_rx/bleInitiate.
+     * Without this the RF Core has no entries to write into and silently
+     * drops every received packet. resetRfDataQueue alone only re-points
+     * pCurrEntry; it does NOT allocate the entry ring. */
+    if (s_rf_data_queue.pCurrEntry == NULL) {
+        if (!RadioIF_createRfDataQueue(&s_rf_data_queue, s_rf_rx_data_buffer,
+                                       (uint16_t)sizeof(s_rf_rx_data_buffer),
+                                       RF_QUEUE_NUM_DATA_ENTRIES, RF_QUEUE_ENTRY_PAYLOAD_LEN)) {
+            return -3;
+        }
+    } else {
+        RadioIF_resetRfDataQueue();
+    }
 
     /* Configure GenericRx for ADV channel scan */
     RadioIF_applyBleChannelConfig(adv_channel);
@@ -2635,7 +2647,15 @@ int RadioIF_followDataOnce(uint8_t data_channel, uint32_t accessAddr, uint32_t c
         s_rf_mode = RADIO_IF_RF_MODE_BLE;
     }
 
-    RadioIF_resetRfDataQueue();
+    if (s_rf_data_queue.pCurrEntry == NULL) {
+        if (!RadioIF_createRfDataQueue(&s_rf_data_queue, s_rf_rx_data_buffer,
+                                       (uint16_t)sizeof(s_rf_rx_data_buffer),
+                                       RF_QUEUE_NUM_DATA_ENTRIES, RF_QUEUE_ENTRY_PAYLOAD_LEN)) {
+            return -3;
+        }
+    } else {
+        RadioIF_resetRfDataQueue();
+    }
 
     /* Data-channel whitening uses the BLE channel index (0..36 mapped to
      * RF channels 0..39 with 37/38/39 reserved for ADV). For data channels

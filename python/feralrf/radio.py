@@ -212,6 +212,9 @@ class Radio:
         "gatt_write",
         "gatt_subscribe",
         "read_gatt_notifications",
+        "follow_connection",
+        "stop_follow_connection",
+        "read_ll_packets",
     )
     EXPERIMENTAL_METHODS = (
         "start_jam",
@@ -892,6 +895,47 @@ class Radio:
                 value=value,
                 timestamp=time.monotonic(),
             )
+
+    def follow_connection(
+        self,
+        target_mac: "str | bytes | None" = None,
+        timeout: float = 3.0,
+    ) -> None:
+        """Start a passive connection follower (F8b Track B).
+
+        Listens on BLE advertising channels for a CONNECT_IND with InitA
+        matching target_mac. On capture, switches to data-channel hopping
+        per CSA #2 and emits each captured LL data PDU as RSP_LL_PACKET.
+        Pure capture — no transmission on the followed link.
+
+        Args:
+            target_mac: 6-byte MAC as either an "AA:BB:CC:DD:EE:FF" string,
+                raw bytes (already LE), or None for wildcard.
+            timeout: Seconds to wait for the firmware ACK.
+        """
+        if target_mac is None:
+            mac_le: "bytes | None" = None
+        elif isinstance(target_mac, str):
+            mac_le = bytes.fromhex("".join(target_mac.split(":")[::-1]))
+        else:
+            mac_le = bytes(target_mac)
+        self._send_command(
+            Command.FOLLOW_START, CommandBuilder.follow_start(mac_le)
+        )
+        cmd_id, _seq, payload = self._read_response(
+            timeout=timeout, expected={Response.ACK, Response.ERROR}
+        )
+        if cmd_id == Response.ERROR:
+            raise CommandError("FOLLOW_START failed", payload[0] if payload else 0)
+
+    def stop_follow_connection(self, timeout: float = 3.0) -> None:
+        """Stop the passive connection follower."""
+        self._send_command(Command.FOLLOW_STOP, CommandBuilder.follow_stop())
+        cmd_id, _seq, payload = self._read_response(
+            timeout=timeout, expected={Response.ACK, Response.ERROR}
+        )
+        if cmd_id == Response.ERROR:
+            raise CommandError("FOLLOW_STOP failed", payload[0] if payload else 0)
 
     def set_ble_scan_mode(self, active: bool = True) -> None:
         """Set BLE scan mode: passive or active.

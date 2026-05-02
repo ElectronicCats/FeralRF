@@ -63,3 +63,51 @@ class TestLLPacketDataclass:
             timestamp=0.0,
         )
         assert pkt.direction == "UNKNOWN"
+
+
+class TestFollowConnectionAPI:
+    """Mocked-serial tests for Radio.follow_connection / read_ll_packets."""
+
+    def _make_radio_with_fake_serial(self, response_frames):
+        """Build a Radio with a mocked serial that emits the given frames in order."""
+        from unittest.mock import MagicMock
+        from feralrf.radio import Radio
+        from feralrf.protocol import build_frame
+
+        r = Radio("/dev/null")
+        r._serial = MagicMock()
+        r._serial.is_open = True
+        # Build COBS-encoded responses concatenated into the read stream
+        stream = bytearray()
+        for cmd_id, seq, payload in response_frames:
+            frame = build_frame(cmd_id, seq, payload)
+            stream.extend(frame)
+
+        # MagicMock for serial.read(n): return one byte at a time
+        idx = [0]
+        def fake_read(n=1):
+            if idx[0] >= len(stream):
+                return b""
+            out = stream[idx[0] : idx[0] + n]
+            idx[0] += n
+            return bytes(out)
+        r._serial.read = fake_read
+        r._serial.timeout = 1.0
+        return r
+
+    def test_follow_connection_with_mac_sends_correct_command(self):
+        from feralrf.enums import Response
+        r = self._make_radio_with_fake_serial([(Response.ACK, 0, b"")])
+        r.follow_connection(target_mac="A8:E6:E8:8A:7D:F8", timeout=1.0)
+        # Verify the bytes written to serial included CMD_FOLLOW_START + LE MAC
+        write_calls = [c[0][0] for c in r._serial.write.call_args_list]
+        assert len(write_calls) == 1
+        # The command sent should contain the MAC in LE order (F8 7D 8A E8 E6 A8)
+        assert b"\xf8\x7d\x8a\xe8\xe6\xa8" in write_calls[0]
+
+    def test_stop_follow_connection_sends_stop(self):
+        from feralrf.enums import Response
+        r = self._make_radio_with_fake_serial([(Response.ACK, 0, b"")])
+        r.stop_follow_connection(timeout=1.0)
+        write_calls = [c[0][0] for c in r._serial.write.call_args_list]
+        assert len(write_calls) == 1

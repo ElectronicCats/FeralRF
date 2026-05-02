@@ -2589,11 +2589,31 @@ int RadioIF_followAdvOnce(uint8_t adv_channel, uint32_t end_time_rat, RadioIF_Fo
         (end_time_rat == 0u) ? TRIG_NEVER : TRIG_ABSTIME;
     Ble5_0_cmdBle5GenericRx.pParams->endTime = end_time_rat;
     Ble5_0_cmdBle5GenericRx.pParams->pRxQ = &s_rf_data_queue;
+    /* rxConfig flags MUST be set so the RF Core writes len + RSSI + status
+     * + timestamp into the data entry — RadioIF_drainFollowQueue reads
+     * data[0] as length and assumes that layout. Mirrors RadioIF_startRx. */
+    Ble5_0_cmdBle5GenericRx.pParams->rxConfig.bAutoFlushIgnored = 1u;
+    Ble5_0_cmdBle5GenericRx.pParams->rxConfig.bAutoFlushCrcErr = 0u;
+    Ble5_0_cmdBle5GenericRx.pParams->rxConfig.bAutoFlushEmpty = 0u;
+    Ble5_0_cmdBle5GenericRx.pParams->rxConfig.bIncludeLenByte = 1u;
+    Ble5_0_cmdBle5GenericRx.pParams->rxConfig.bIncludeCrc = 1u;
+    Ble5_0_cmdBle5GenericRx.pParams->rxConfig.bAppendRssi = 1u;
+    Ble5_0_cmdBle5GenericRx.pParams->rxConfig.bAppendStatus = 1u;
+    Ble5_0_cmdBle5GenericRx.pParams->rxConfig.bAppendTimestamp = 1u;
     Ble5_0_cmdBle5GenericRx.startTrigger.triggerType = TRIG_NOW;
+    Ble5_0_cmdBle5GenericRx.startTrigger.pastTrig = 1u;
+    Ble5_0_cmdBle5GenericRx.condition.rule = COND_NEVER;
+    Ble5_0_cmdBle5GenericRx.pNextOp = 0;
 
-    /* Run command first; then drain. Polling-during-RX would race with the
-     * data queue. RF_runCmd blocks until end trigger fires (or peer adv
-     * completes if we cancel). */
+    /* Tune synthesizer to the right frequency before RX. CMD_FS via RF_postCmd
+     * because RF_runCmd(FS) can hang on TI-RTOS with loDivider=0x0A
+     * (see RadioIF_runFsAndPostRx for the same workaround). */
+    Ble5_0_cmdFs.status = 0x0000;
+    (void)RF_postCmd(s_rf_handle, (RF_Op *)&Ble5_0_cmdFs, RF_PriorityNormal, NULL, 0);
+
+    /* Run RX. Blocking: RF_runCmd unblocks when end trigger fires or cmd is
+     * aborted. Polling-during-RX would race with the data queue. */
+    Ble5_0_cmdBle5GenericRx.status = 0x0000;
     RF_EventMask events =
         RF_runCmd(s_rf_handle, (RF_Op *)&Ble5_0_cmdBle5GenericRx, RF_PriorityNormal, NULL,
                   RF_EventLastCmdDone | RF_EventCmdAborted);
@@ -2634,8 +2654,25 @@ int RadioIF_followDataOnce(uint8_t data_channel, uint32_t accessAddr, uint32_t c
         (end_time_rat == 0u) ? TRIG_NEVER : TRIG_ABSTIME;
     Ble5_0_cmdBle5GenericRx.pParams->endTime = end_time_rat;
     Ble5_0_cmdBle5GenericRx.pParams->pRxQ = &s_rf_data_queue;
+    /* Match rxConfig setup with RadioIF_startRx so drain layout is consistent. */
+    Ble5_0_cmdBle5GenericRx.pParams->rxConfig.bAutoFlushIgnored = 1u;
+    Ble5_0_cmdBle5GenericRx.pParams->rxConfig.bAutoFlushCrcErr = 0u;
+    Ble5_0_cmdBle5GenericRx.pParams->rxConfig.bAutoFlushEmpty = 0u;
+    Ble5_0_cmdBle5GenericRx.pParams->rxConfig.bIncludeLenByte = 1u;
+    Ble5_0_cmdBle5GenericRx.pParams->rxConfig.bIncludeCrc = 1u;
+    Ble5_0_cmdBle5GenericRx.pParams->rxConfig.bAppendRssi = 1u;
+    Ble5_0_cmdBle5GenericRx.pParams->rxConfig.bAppendStatus = 1u;
+    Ble5_0_cmdBle5GenericRx.pParams->rxConfig.bAppendTimestamp = 1u;
     Ble5_0_cmdBle5GenericRx.startTrigger.triggerType = TRIG_NOW;
+    Ble5_0_cmdBle5GenericRx.startTrigger.pastTrig = 1u;
+    Ble5_0_cmdBle5GenericRx.condition.rule = COND_NEVER;
+    Ble5_0_cmdBle5GenericRx.pNextOp = 0;
 
+    /* Tune synthesizer to data-channel frequency first. */
+    Ble5_0_cmdFs.status = 0x0000;
+    (void)RF_postCmd(s_rf_handle, (RF_Op *)&Ble5_0_cmdFs, RF_PriorityNormal, NULL, 0);
+
+    Ble5_0_cmdBle5GenericRx.status = 0x0000;
     RF_EventMask events =
         RF_runCmd(s_rf_handle, (RF_Op *)&Ble5_0_cmdBle5GenericRx, RF_PriorityNormal, NULL,
                   RF_EventLastCmdDone | RF_EventCmdAborted);

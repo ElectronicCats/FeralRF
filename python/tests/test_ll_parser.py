@@ -106,3 +106,46 @@ class TestParseATT:
         att = parse_att_pdu(att_bytes)
         assert att.opcode_name == "ATT_WRITE_REQ"
         assert att.handle == 0x00d5
+
+
+class TestExportPcap:
+    def test_export_creates_valid_pcapng(self, tmp_path):
+        from feralrf._ll_parser import export_pcap
+        from feralrf.radio import LLPacket
+
+        pkts = [
+            LLPacket(
+                direction="M->S",
+                channel=10,
+                rssi_dbm=-55,
+                event_counter=1,
+                payload=b"\x02\x09\x05\x00\x04\x00\x12\xd5\x00\x01\x00",
+                timestamp=1700000000.0,
+            ),
+            LLPacket(
+                direction="S->M",
+                channel=10,
+                rssi_dbm=-58,
+                event_counter=1,
+                payload=b"\x02\x05\x01\x00\x04\x00\x13",
+                timestamp=1700000000.001,
+            ),
+        ]
+        path = tmp_path / "f8b.pcapng"
+        export_pcap(pkts, str(path))
+        data = path.read_bytes()
+        # pcap-NG starts with Section Header Block magic 0x0A0D0D0A
+        assert data[:4] == b"\x0a\x0d\x0d\x0a"
+        # Byte order magic 0x1A2B3C4D should appear in the section header
+        assert b"\x4d\x3c\x2b\x1a" in data[:32]
+        # Should contain at least 2 enhanced packet blocks (type 0x06)
+        assert data.count(b"\x06\x00\x00\x00") >= 2
+
+    def test_export_empty_list_creates_section_header_only(self, tmp_path):
+        from feralrf._ll_parser import export_pcap
+        path = tmp_path / "empty.pcapng"
+        export_pcap([], str(path))
+        data = path.read_bytes()
+        assert data[:4] == b"\x0a\x0d\x0d\x0a"
+        # No EPB
+        assert data.count(b"\x06\x00\x00\x00") == 0

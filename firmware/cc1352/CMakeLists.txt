@@ -133,6 +133,7 @@ set(APP_SOURCES
     src/data_task.c
     src/host_if.c
     src/host_if_task.c
+    src/ll_follower.c
     src/ll_manager.c
     src/output_if.c
     src/packet_queue.c

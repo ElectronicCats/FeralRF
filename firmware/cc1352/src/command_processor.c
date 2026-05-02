@@ -14,6 +14,7 @@
 #include "ble_conn_mgr.h"
 #include "control_task.h"
 #include "crypto_engine.h"
+#include "ll_follower.h"
 #include "ll_manager.h"
 #include "output_if.h"
 #include "protocol.h"
@@ -68,6 +69,10 @@
 #define CMD_DEBUG_CONN_PARAMS 0x48u
 #define CMD_ATT_DEBUG 0x49u /* F8b Track A Task 0.2 */
 
+/* F8b Track B — passive connection follower */
+#define CMD_FOLLOW_START 0x50u
+#define CMD_FOLLOW_STOP 0x51u
+
 /* Responses (match python/feralrf/enums.py) */
 #define RSP_ACK 0x80u
 #define RSP_ERROR 0x81u
@@ -97,6 +102,10 @@
 #define RSP_DEBUG_TIMING 0xA8u
 #define RSP_DEBUG_CONN_PARAMS 0xA9u
 #define RSP_ATT_DEBUG 0xAAu /* F8b Track A Task 0.2 */
+
+/* F8b Track B */
+#define RSP_LL_PACKET 0xABu
+#define RSP_FOLLOW_DONE 0xACu
 
 /* Error codes */
 #define ERR_INVALID_CMD 0x01u
@@ -265,6 +274,44 @@ static void send_stats(uint8_t seq) {
     write_u32_le(&payload[28], ll_stats.kind_connect);
     write_u32_le(&payload[32], ll_stats.kind_data);
     send_response(RSP_STATS, seq, payload, sizeof(payload));
+}
+
+/* ── F8b Track B follower callbacks ── */
+
+static void follower_on_packet(const uint8_t *ll_pdu, uint8_t pdu_len, uint8_t channel,
+                               int8_t rssi_dbm, uint16_t event_counter, uint8_t direction) {
+    /* Wire format: [direction:1][channel:1][rssi:1][event:2LE][ll_pdu:N] */
+    uint8_t buf[5 + 257];
+    if (pdu_len > sizeof(buf) - 5u) {
+        return;
+    }
+    buf[0] = direction;
+    buf[1] = channel;
+    buf[2] = (uint8_t)rssi_dbm;
+    buf[3] = (uint8_t)(event_counter & 0xFFu);
+    buf[4] = (uint8_t)(event_counter >> 8);
+    memcpy(&buf[5], ll_pdu, pdu_len);
+    OutputIF_sendResponse(RSP_LL_PACKET, 0u, buf, (uint16_t)(5u + pdu_len));
+}
+
+static void follower_on_done(const LlFollower_DoneInfo *info) {
+    /* Wire format: [reason:1][packets_captured:4LE] */
+    uint8_t buf[5];
+    buf[0] = info->reason;
+    write_u32_le(&buf[1], info->packets_captured);
+    OutputIF_sendResponse(RSP_FOLLOW_DONE, 0u, buf, sizeof(buf));
+}
+
+static bool follower_callbacks_installed = false;
+static void ensure_follower_callbacks(void) {
+    if (!follower_callbacks_installed) {
+        LlFollower_Callbacks cb = {
+            .onPacket = follower_on_packet,
+            .onDone = follower_on_done,
+        };
+        LlFollower_setCallbacks(&cb);
+        follower_callbacks_installed = true;
+    }
 }
 
 static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uint16_t payload_len) {
@@ -1095,6 +1142,33 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
             p[7] = entries[i].reqPending;
         }
         send_response(RSP_ATT_DEBUG, seq, rsp, (uint16_t)(1u + (uint16_t)n * 8u));
+        return;
+    }
+
+    case CMD_FOLLOW_START: {
+        if (payload_len != LL_FOLLOWER_MAC_LEN) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            return;
+        }
+        ensure_follower_callbacks();
+        if (!LlFollower_start(payload)) {
+            send_error(seq, ERR_INVALID_STATE);
+            return;
+        }
+        send_ack(seq);
+        return;
+    }
+
+    case CMD_FOLLOW_STOP: {
+        if (payload_len != 0u) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            return;
+        }
+        if (!LlFollower_stop()) {
+            send_error(seq, ERR_INVALID_STATE);
+            return;
+        }
+        send_ack(seq);
         return;
     }
 

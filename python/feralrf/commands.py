@@ -205,3 +205,26 @@ class CommandBuilder:
         return struct.pack("<H", handle & 0xFFFF) + bytes(
             [1 if enable else 0, 1 if indicate else 0]
         )
+
+    @staticmethod
+    def follow_start(target_mac_le: "bytes | None" = None) -> bytes:
+        """Build CMD_FOLLOW_START payload.
+
+        Args:
+            target_mac_le: 6-byte MAC in BLE little-endian (LSB first), or
+                None for wildcard (capture any CONNECT_IND seen).
+
+        Wire format: [target_mac_le:6]  (all-zero ⇒ wildcard).
+        """
+        if target_mac_le is None:
+            return b"\x00" * 6
+        if len(target_mac_le) != 6:
+            raise ValueError(
+                f"target_mac_le must be exactly 6 bytes, got {len(target_mac_le)}"
+            )
+        return bytes(target_mac_le)
+
+    @staticmethod
+    def follow_stop() -> bytes:
+        """Build CMD_FOLLOW_STOP payload (empty)."""
+        return b""

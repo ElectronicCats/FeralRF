@@ -161,6 +161,14 @@ static void send_error(uint8_t seq, uint8_t error_code) {
 /* ── GATT ATT callbacks ── */
 static uint8_t s_gatt_seq;
 
+/* CMD_GATT_SUBSCRIBE defers its ACK until the ATT WRITE_RSP arrives.
+ * Without this, two back-to-back CMD_GATT_SUBSCRIBE calls race: the second
+ * arrives while AttClient is still in WAIT_WRITE_RSP from the first, and
+ * AttClient_startWrite returns false → ERR_INVALID_STATE.
+ * The host's gatt_subscribe() only awaits ACK, so the ACK must mean
+ * "AttClient is idle again", not just "command queued". */
+static bool s_gatt_subscribe_pending = false;
+
 static void gatt_on_service(uint16_t startHandle, uint16_t endHandle, const uint8_t *uuid,
                             uint8_t uuidLen) {
     uint8_t rsp[4 + 16]; /* max: 4 handles + 16-byte UUID */
@@ -202,6 +210,18 @@ static void gatt_on_read(uint16_t handle, const uint8_t *data, uint8_t len) {
 }
 
 static void gatt_on_done(uint8_t status) {
+    if (s_gatt_subscribe_pending) {
+        /* Deferred ACK for CMD_GATT_SUBSCRIBE: ATT WRITE_RSP has arrived
+         * (or AttClient reported error) and the state machine is back to
+         * IDLE, so the next subscribe can proceed without racing. */
+        s_gatt_subscribe_pending = false;
+        if (status == 0u) {
+            send_ack(s_gatt_seq);
+        } else {
+            send_error(s_gatt_seq, ERR_INVALID_STATE);
+        }
+        return;
+    }
     uint8_t rsp[1] = {status};
     send_response(RSP_GATT_DONE, s_gatt_seq, rsp, 1);
 }
@@ -920,6 +940,17 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
             return;
         }
         if (!BleConn_isConnected()) {
+            /* Clear any stale pending flag from a connection that dropped
+             * mid-subscribe — otherwise the first subscribe of the next
+             * connection would falsely report ERR_INVALID_STATE. */
+            s_gatt_subscribe_pending = false;
+            send_error(seq, ERR_INVALID_STATE);
+            return;
+        }
+        /* If a previous subscribe is still in flight (WRITE_RSP not yet
+         * received), reject so the host gets a clean error rather than
+         * silently mixing acks. */
+        if (s_gatt_subscribe_pending) {
             send_error(seq, ERR_INVALID_STATE);
             return;
         }
@@ -937,7 +968,10 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
             send_error(seq, ERR_INVALID_STATE);
             return;
         }
-        send_ack(seq);
+        /* ACK is deferred to gatt_on_done(): once ATT WRITE_RSP arrives and
+         * AttClient is back to IDLE, the host can issue the next subscribe
+         * without racing the state machine. */
+        s_gatt_subscribe_pending = true;
         return;
     }
 

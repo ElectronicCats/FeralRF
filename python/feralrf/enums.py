@@ -87,6 +87,10 @@ class Command(IntEnum):
     DEBUG_TIMING = 0x47
     DEBUG_CONN_PARAMS = 0x48
 
+    # F8b Track B — passive connection follower
+    FOLLOW_START = 0x50
+    FOLLOW_STOP = 0x51
+
 
 class Response(IntEnum):
     """Response IDs"""
@@ -121,6 +125,10 @@ class Response(IntEnum):
     # Diagnostics
     DEBUG_TIMING = 0xA8
     DEBUG_CONN_PARAMS = 0xA9
+
+    # F8b Track B — passive connection follower
+    LL_PACKET = 0xAB
+    FOLLOW_DONE = 0xAC
 
 
 STABLE_COMMANDS = (

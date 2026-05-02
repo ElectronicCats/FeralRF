@@ -61,8 +61,7 @@ static uint32_t s_rd24_le(const uint8_t *p) {
 }
 
 static uint32_t s_rd32_le(const uint8_t *p) {
-    return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) |
-           ((uint32_t)p[3] << 24);
+    return (uint32_t)p[0] | ((uint32_t)p[1] << 8) | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
 }
 
 static uint16_t s_rd16_le(const uint8_t *p) {
@@ -263,8 +262,7 @@ void LlFollower_poll(void) {
         uint32_t window_ticks = (uint32_t)s_hop_interval * 5000u;
         uint32_t end = s_next_anchor_rat + window_ticks;
         uint32_t pre = s_packets_captured;
-        (void)RadioIF_followDataOnce(chan, s_access_addr, s_crc_init, end,
-                                     s_on_data_packet, NULL);
+        (void)RadioIF_followDataOnce(chan, s_access_addr, s_crc_init, end, s_on_data_packet, NULL);
 
         /* Termination conditions */
         if (s_zero_rx_streak == 0xFFu) {
@@ -279,8 +277,7 @@ void LlFollower_poll(void) {
                 return;
             }
             /* supervision: 10 ms units; very generous timeout for capture-only */
-            if (RF_getCurrentTime() - s_last_rx_rat >
-                (uint32_t)s_supervision * 40000u) {
+            if (RF_getCurrentTime() - s_last_rx_rat > (uint32_t)s_supervision * 40000u) {
                 s_emit_done(LL_FOLLOWER_DONE_SUPERVISION);
                 return;
             }

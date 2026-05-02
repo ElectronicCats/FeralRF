@@ -8,10 +8,14 @@ References:
   - Bluetooth Core Spec 5.4 Vol 6 Part B §2.4 (Data Channel PDU)
   - Bluetooth Core Spec 5.4 Vol 3 Part F §3.4 (ATT Protocol)
 """
+
 import struct
 from dataclasses import dataclass
 from enum import IntEnum
-from typing import List, Optional
+from typing import TYPE_CHECKING, List, Optional
+
+if TYPE_CHECKING:
+    from feralrf.radio import LLPacket
 
 
 class LLPduKind(IntEnum):
@@ -89,9 +93,7 @@ def parse_ll_pdu(raw: bytes) -> Optional[LLPdu]:
 
     if kind == LLPduKind.CONTROL and len(payload) >= 1:
         pdu.opcode = payload[0]
-        pdu.opcode_name = LL_OPCODE_NAMES.get(
-            pdu.opcode, f"LL_RFU_{pdu.opcode:#04x}"
-        )
+        pdu.opcode_name = LL_OPCODE_NAMES.get(pdu.opcode, f"LL_RFU_{pdu.opcode:#04x}")
 
     return pdu
 
@@ -175,11 +177,7 @@ def _block(block_type: int, body: bytes) -> bytes:
     body_padded = body + (b"\x00" * pad)
     # Block: [type:4][len:4][body+pad:N][len:4]
     total_len = 12 + len(body_padded)
-    return (
-        struct.pack("<II", block_type, total_len)
-        + body_padded
-        + struct.pack("<I", total_len)
-    )
+    return struct.pack("<II", block_type, total_len) + body_padded + struct.pack("<I", total_len)
 
 
 def export_pcap(packets: List["LLPacket"], filename: str) -> None:
@@ -210,7 +208,5 @@ def export_pcap(packets: List["LLPacket"], filename: str) -> None:
             ts_high = (ts_us >> 32) & 0xFFFFFFFF
             ts_low = ts_us & 0xFFFFFFFF
             data = pkt.payload
-            epb_body = struct.pack(
-                "<IIIII", 0, ts_high, ts_low, len(data), len(data)
-            ) + data
+            epb_body = struct.pack("<IIIII", 0, ts_high, ts_low, len(data), len(data)) + data
             f.write(_block(0x00000006, epb_body))

@@ -1,6 +1,7 @@
 """Unit tests for F8b Track B passive connection follower API."""
-import struct
+
 import pytest
+
 from feralrf.commands import CommandBuilder
 
 
@@ -34,6 +35,7 @@ class TestFollowStopBuilder:
 class TestLLPacketDataclass:
     def test_construct_with_required_fields(self):
         from feralrf.radio import LLPacket
+
         pkt = LLPacket(
             direction="M->S",
             channel=10,
@@ -51,6 +53,7 @@ class TestLLPacketDataclass:
 
     def test_direction_must_be_known_token(self):
         from feralrf.radio import LLPacket
+
         # Validation is deliberately *not* enforced in __init__; the firmware
         # is the source of truth. The host preserves whatever string it
         # was given. This test pins that the dataclass is permissive.
@@ -71,8 +74,9 @@ class TestFollowConnectionAPI:
     def _make_radio_with_fake_serial(self, response_frames):
         """Build a Radio with a mocked serial that emits the given frames in order."""
         from unittest.mock import MagicMock
-        from feralrf.radio import Radio
+
         from feralrf.protocol import build_frame
+        from feralrf.radio import Radio
 
         r = Radio("/dev/null")
         r._serial = MagicMock()
@@ -85,18 +89,21 @@ class TestFollowConnectionAPI:
 
         # MagicMock for serial.read(n): return one byte at a time
         idx = [0]
+
         def fake_read(n=1):
             if idx[0] >= len(stream):
                 return b""
             out = stream[idx[0] : idx[0] + n]
             idx[0] += n
             return bytes(out)
+
         r._serial.read = fake_read
         r._serial.timeout = 1.0
         return r
 
     def test_follow_connection_with_mac_sends_correct_command(self):
         from feralrf.enums import Response
+
         r = self._make_radio_with_fake_serial([(Response.ACK, 0, b"")])
         r.follow_connection(target_mac="A8:E6:E8:8A:7D:F8", timeout=1.0)
         # Verify the bytes written to serial included CMD_FOLLOW_START + LE MAC
@@ -107,6 +114,7 @@ class TestFollowConnectionAPI:
 
     def test_stop_follow_connection_sends_stop(self):
         from feralrf.enums import Response
+
         r = self._make_radio_with_fake_serial([(Response.ACK, 0, b"")])
         r.stop_follow_connection(timeout=1.0)
         write_calls = [c[0][0] for c in r._serial.write.call_args_list]
@@ -117,6 +125,7 @@ class TestReadLLPackets:
     def test_iterator_yields_parsed_packets(self):
         from feralrf.enums import Response
         from feralrf.radio import LLPacket
+
         # Wire format: [dir:1][ch:1][rssi:1][event:2LE][ll_pdu:N]
         payload1 = (
             b"M"  # direction
@@ -139,6 +148,7 @@ class TestReadLLPackets:
 
     def test_iterator_ends_on_follow_done(self):
         from feralrf.enums import Response
+
         helper = TestFollowConnectionAPI()
         # Single FOLLOW_DONE frame should end the iterator quietly
         done_payload = b"\x00" + (0).to_bytes(4, "little")  # reason=HOST_STOP, count=0

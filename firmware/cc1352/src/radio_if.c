@@ -2539,11 +2539,9 @@ void RadioIF_bleDrainRxQueue(void) {
 /* Drain the RF data queue and invoke the callback per packet.
  * This walks the dataEntry ring populated by Ble5_0_cmdBle5GenericRx,
  * matching the pattern in RadioIF_poll(). */
-static void RadioIF_drainFollowQueue(RadioIF_FollowPacketCb cb, void *user,
-                                     uint8_t channel) {
+static void RadioIF_drainFollowQueue(RadioIF_FollowPacketCb cb, void *user, uint8_t channel) {
     while (RadioIF_rfHasPacket()) {
-        rfc_dataEntryGeneral_t *entry =
-            (rfc_dataEntryGeneral_t *)s_rf_data_queue.pCurrEntry;
+        rfc_dataEntryGeneral_t *entry = (rfc_dataEntryGeneral_t *)s_rf_data_queue.pCurrEntry;
         if (entry == NULL) {
             break;
         }
@@ -2554,7 +2552,7 @@ static void RadioIF_drainFollowQueue(RadioIF_FollowPacketCb cb, void *user,
              * Layout: [len:1][LL hdr 2][LL body N][CRC:3][RSSI:1][status:1][ts:4]
              * The "len" byte is the LL PDU length INCLUDING header. */
             uint8_t total_len = data[0];
-            uint8_t pdu_len = total_len; /* LL hdr + body */
+            uint8_t pdu_len = total_len;                   /* LL hdr + body */
             int8_t rssi = (int8_t)data[1 + total_len + 3]; /* skip len+pdu+CRC */
 
             if (cb != NULL && pdu_len >= 2u) {
@@ -2565,8 +2563,8 @@ static void RadioIF_drainFollowQueue(RadioIF_FollowPacketCb cb, void *user,
     }
 }
 
-int RadioIF_followAdvOnce(uint8_t adv_channel, uint32_t end_time_rat,
-                          RadioIF_FollowPacketCb cb, void *user) {
+int RadioIF_followAdvOnce(uint8_t adv_channel, uint32_t end_time_rat, RadioIF_FollowPacketCb cb,
+                          void *user) {
     if (adv_channel < 37u || adv_channel > 39u) {
         return -1;
     }
@@ -2596,18 +2594,17 @@ int RadioIF_followAdvOnce(uint8_t adv_channel, uint32_t end_time_rat,
     /* Run command first; then drain. Polling-during-RX would race with the
      * data queue. RF_runCmd blocks until end trigger fires (or peer adv
      * completes if we cancel). */
-    RF_EventMask events = RF_runCmd(s_rf_handle, (RF_Op *)&Ble5_0_cmdBle5GenericRx,
-                                    RF_PriorityNormal, NULL,
-                                    RF_EventLastCmdDone | RF_EventCmdAborted);
+    RF_EventMask events =
+        RF_runCmd(s_rf_handle, (RF_Op *)&Ble5_0_cmdBle5GenericRx, RF_PriorityNormal, NULL,
+                  RF_EventLastCmdDone | RF_EventCmdAborted);
     (void)events;
 
     RadioIF_drainFollowQueue(cb, user, adv_channel);
     return (int)Ble5_0_cmdBle5GenericRx.status;
 }
 
-int RadioIF_followDataOnce(uint8_t data_channel, uint32_t accessAddr,
-                           uint32_t crcInit, uint32_t end_time_rat,
-                           RadioIF_FollowPacketCb cb, void *user) {
+int RadioIF_followDataOnce(uint8_t data_channel, uint32_t accessAddr, uint32_t crcInit,
+                           uint32_t end_time_rat, RadioIF_FollowPacketCb cb, void *user) {
     if (data_channel > 36u) {
         return -1;
     }
@@ -2639,9 +2636,9 @@ int RadioIF_followDataOnce(uint8_t data_channel, uint32_t accessAddr,
     Ble5_0_cmdBle5GenericRx.pParams->pRxQ = &s_rf_data_queue;
     Ble5_0_cmdBle5GenericRx.startTrigger.triggerType = TRIG_NOW;
 
-    RF_EventMask events = RF_runCmd(s_rf_handle, (RF_Op *)&Ble5_0_cmdBle5GenericRx,
-                                    RF_PriorityNormal, NULL,
-                                    RF_EventLastCmdDone | RF_EventCmdAborted);
+    RF_EventMask events =
+        RF_runCmd(s_rf_handle, (RF_Op *)&Ble5_0_cmdBle5GenericRx, RF_PriorityNormal, NULL,
+                  RF_EventLastCmdDone | RF_EventCmdAborted);
     (void)events;
 
     RadioIF_drainFollowQueue(cb, user, data_channel);

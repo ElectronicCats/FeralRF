@@ -30,11 +30,11 @@
 
 /* Reasons reported in LlFollower_DoneInfo.reason */
 typedef enum {
-    LL_FOLLOWER_DONE_HOST_STOP = 0,    /* host called LlFollower_stop */
-    LL_FOLLOWER_DONE_PEER_TERMINATE,   /* LL_TERMINATE_IND seen on link */
-    LL_FOLLOWER_DONE_SUPERVISION,      /* > supervisionTimeout without RX */
-    LL_FOLLOWER_DONE_SYNC_FAILED,      /* CONNECT_IND captured but >5 events with 0 packets */
-    LL_FOLLOWER_DONE_CONNECT_TIMEOUT,  /* no CONNECT_IND for target within scan window */
+    LL_FOLLOWER_DONE_HOST_STOP = 0,   /* host called LlFollower_stop */
+    LL_FOLLOWER_DONE_PEER_TERMINATE,  /* LL_TERMINATE_IND seen on link */
+    LL_FOLLOWER_DONE_SUPERVISION,     /* > supervisionTimeout without RX */
+    LL_FOLLOWER_DONE_SYNC_FAILED,     /* CONNECT_IND captured but >5 events with 0 packets */
+    LL_FOLLOWER_DONE_CONNECT_TIMEOUT, /* no CONNECT_IND for target within scan window */
 } LlFollower_DoneReason;
 
 typedef struct {
@@ -45,9 +45,8 @@ typedef struct {
 /* Callbacks the host application installs to receive captured packets and
  * the terminal "done" event. Both fire from the same task that calls
  * LlFollower_poll(). */
-typedef void (*LlFollower_PacketCb)(const uint8_t *ll_pdu, uint8_t pdu_len,
-                                    uint8_t channel, int8_t rssi_dbm,
-                                    uint16_t event_counter, uint8_t direction);
+typedef void (*LlFollower_PacketCb)(const uint8_t *ll_pdu, uint8_t pdu_len, uint8_t channel,
+                                    int8_t rssi_dbm, uint16_t event_counter, uint8_t direction);
 
 typedef void (*LlFollower_DoneCb)(const LlFollower_DoneInfo *info);
 

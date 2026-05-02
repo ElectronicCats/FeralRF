@@ -219,9 +219,7 @@ class CommandBuilder:
         if target_mac_le is None:
             return b"\x00" * 6
         if len(target_mac_le) != 6:
-            raise ValueError(
-                f"target_mac_le must be exactly 6 bytes, got {len(target_mac_le)}"
-            )
+            raise ValueError(f"target_mac_le must be exactly 6 bytes, got {len(target_mac_le)}")
         return bytes(target_mac_le)
 
     @staticmethod

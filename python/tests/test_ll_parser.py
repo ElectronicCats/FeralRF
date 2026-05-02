@@ -1,6 +1,6 @@
 """Unit tests for BLE LL / ATT PDU parser (host-side helper)."""
-import pytest
-from feralrf._ll_parser import parse_ll_pdu, LLPduKind, LL_OPCODE_NAMES
+
+from feralrf._ll_parser import LLPduKind, parse_ll_pdu
 
 
 class TestParseLLData:
@@ -65,16 +65,18 @@ class TestParseLLData:
 
 class TestParseATT:
     def test_att_write_req(self):
-        from feralrf._ll_parser import parse_att_pdu, ATT_OPCODE_NAMES
+        from feralrf._ll_parser import parse_att_pdu
+
         # ATT_WRITE_REQ to handle 0x00d5, value=01 00 (CCC notify enable)
         result = parse_att_pdu(b"\x12\xd5\x00\x01\x00")
         assert result.opcode == 0x12
         assert result.opcode_name == "ATT_WRITE_REQ"
-        assert result.handle == 0x00d5
+        assert result.handle == 0x00D5
         assert result.value == b"\x01\x00"
 
     def test_att_handle_value_notification(self):
         from feralrf._ll_parser import parse_att_pdu
+
         # Handle 0x0064, value=AA BB CC
         result = parse_att_pdu(b"\x1b\x64\x00\xaa\xbb\xcc")
         assert result.opcode == 0x1B
@@ -84,6 +86,7 @@ class TestParseATT:
 
     def test_att_error_response(self):
         from feralrf._ll_parser import parse_att_pdu
+
         # ATT_ERROR_RSP: opcode=01, req_op=0x0a (READ), handle=0x0010, code=0x05 (insuf auth)
         result = parse_att_pdu(b"\x01\x0a\x10\x00\x05")
         assert result.opcode == 0x01
@@ -91,13 +94,15 @@ class TestParseATT:
 
     def test_truncated_handle_returns_opcode_only(self):
         from feralrf._ll_parser import parse_att_pdu
+
         # Just an opcode, no handle bytes
         result = parse_att_pdu(b"\x12")
         assert result.opcode == 0x12
         assert result.handle is None
 
     def test_extract_att_from_l2cap_start(self):
-        from feralrf._ll_parser import parse_ll_pdu, parse_att_pdu
+        from feralrf._ll_parser import parse_att_pdu, parse_ll_pdu
+
         # LL data PDU containing a complete L2CAP frame with ATT_WRITE_REQ
         raw = b"\x02\x09\x05\x00\x04\x00\x12\xd5\x00\x01\x00"
         ll = parse_ll_pdu(raw)
@@ -105,7 +110,7 @@ class TestParseATT:
         att_bytes = ll.payload[4:]
         att = parse_att_pdu(att_bytes)
         assert att.opcode_name == "ATT_WRITE_REQ"
-        assert att.handle == 0x00d5
+        assert att.handle == 0x00D5
 
 
 class TestExportPcap:
@@ -143,6 +148,7 @@ class TestExportPcap:
 
     def test_export_empty_list_creates_section_header_only(self, tmp_path):
         from feralrf._ll_parser import export_pcap
+
         path = tmp_path / "empty.pcapng"
         export_pcap([], str(path))
         data = path.read_bytes()

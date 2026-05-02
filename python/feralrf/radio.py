@@ -919,9 +919,7 @@ class Radio:
             mac_le = bytes.fromhex("".join(target_mac.split(":")[::-1]))
         else:
             mac_le = bytes(target_mac)
-        self._send_command(
-            Command.FOLLOW_START, CommandBuilder.follow_start(mac_le)
-        )
+        self._send_command(Command.FOLLOW_START, CommandBuilder.follow_start(mac_le))
         cmd_id, _seq, payload = self._read_response(
             timeout=timeout, expected={Response.ACK, Response.ERROR}
         )

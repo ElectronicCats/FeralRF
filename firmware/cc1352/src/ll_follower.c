@@ -287,12 +287,14 @@ void LlFollower_poll(void) {
         return;
 
     case LL_FOLLOWER_STATE_SCAN_ADV: {
-        /* Listen on current ADV channel for ~100 ms (was 10 ms — too short
-         * relative to per-call setup overhead, capture rate was ~0.6 pkt/s
-         * vs baseline start_rx 41 pkt/s). 100 ms is still short enough to
-         * cycle all 3 ADV channels every 300 ms which catches ADV intervals
-         * up to 200 ms with high probability. */
-        uint32_t end = RF_getCurrentTime() + (100u * 4000u); /* 100 ms in RAT */
+        /* Listen on current ADV channel for ~1000 ms.  Larger dwell minimizes
+         * the fraction of time spent in setup/teardown (which is the gap
+         * where CONNECT_IND following an observed ADV_IND can fall and be
+         * missed — CONNECT_IND fires ~150us after ADV_IND on the SAME
+         * channel). Trade-off: cycle period 3s means a single CONNECT_IND
+         * has 1/3 chance of being caught by channel; multiple pair attempts
+         * accumulate. */
+        uint32_t end = RF_getCurrentTime() + (1000u * 4000u); /* 1000 ms in RAT */
         s_dbg_adv_calls++;
         s_dbg_last_adv_status =
             (int16_t)RadioIF_followAdvOnce(s_scan_channel, end, s_on_adv_packet, NULL);

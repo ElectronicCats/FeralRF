@@ -2541,23 +2541,22 @@ void RadioIF_bleDrainRxQueue(void) {
  * matching the pattern in RadioIF_poll(). */
 static void RadioIF_drainFollowQueue(RadioIF_FollowPacketCb cb, void *user, uint8_t channel) {
     while (RadioIF_rfHasPacket()) {
-        rfc_dataEntryGeneral_t *entry = (rfc_dataEntryGeneral_t *)s_rf_data_queue.pCurrEntry;
-        if (entry == NULL) {
-            break;
-        }
-        if (entry->status == DATA_ENTRY_FINISHED) {
-            uint8_t *data = (uint8_t *)&entry->data;
-            /* GenericRx with bIncludeLenByte=1, bIncludeCrc=1, bAppendRssi=1,
-             * bAppendStatus=1, bAppendTimestamp=1.
-             * Layout: [len:1][LL hdr 2][LL body N][CRC:3][RSSI:1][status:1][ts:4]
-             * The "len" byte is the LL PDU length INCLUDING header. */
-            uint8_t total_len = data[0];
-            uint8_t pdu_len = total_len;                   /* LL hdr + body */
-            int8_t rssi = (int8_t)data[1 + total_len + 3]; /* skip len+pdu+CRC */
+        /* RadioIF_rfHasPacket already verified s_rf_read_entry is non-NULL
+         * and FINISHED. We MUST read from s_rf_read_entry (the read head),
+         * NOT from s_rf_data_queue.pCurrEntry (the write head — where the
+         * RF Core puts the NEXT packet, often partially-filled or stale). */
+        rfc_dataEntryGeneral_t *entry = s_rf_read_entry;
+        uint8_t *data = (uint8_t *)&entry->data;
+        /* GenericRx with bIncludeLenByte=1, bIncludeCrc=1, bAppendRssi=1,
+         * bAppendStatus=1, bAppendTimestamp=1.
+         * Layout: [len:1][LL hdr 2][LL body N][CRC:3][RSSI:1][status:1][ts:4]
+         * The "len" byte is the LL PDU length INCLUDING header. */
+        uint8_t total_len = data[0];
+        uint8_t pdu_len = total_len;                   /* LL hdr + body */
+        int8_t rssi = (int8_t)data[1 + total_len + 3]; /* skip len+pdu+CRC */
 
-            if (cb != NULL && pdu_len >= 2u) {
-                cb(&data[1], pdu_len, channel, rssi, user);
-            }
+        if (cb != NULL && pdu_len >= 2u) {
+            cb(&data[1], pdu_len, channel, rssi, user);
         }
         RadioIF_rfConsumeEntry();
     }

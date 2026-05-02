@@ -72,6 +72,7 @@
 /* F8b Track B — passive connection follower */
 #define CMD_FOLLOW_START 0x50u
 #define CMD_FOLLOW_STOP 0x51u
+#define CMD_FOLLOW_DEBUG 0x54u
 
 /* Responses (match python/feralrf/enums.py) */
 #define RSP_ACK 0x80u
@@ -106,6 +107,7 @@
 /* F8b Track B */
 #define RSP_LL_PACKET 0xABu
 #define RSP_FOLLOW_DONE 0xACu
+#define RSP_FOLLOW_DEBUG 0xAFu
 
 /* Error codes */
 #define ERR_INVALID_CMD 0x01u
@@ -1169,6 +1171,48 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
             return;
         }
         send_ack(seq);
+        return;
+    }
+
+    case CMD_FOLLOW_DEBUG: {
+        if (payload_len != 0u) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            return;
+        }
+        LlFollower_DebugSnapshot snap;
+        LlFollower_getDebug(&snap);
+        uint8_t buf[42];
+        buf[0] = snap.state;
+        buf[1] = snap.scan_channel;
+        buf[2] = (uint8_t)(snap.adv_call_count & 0xFFu);
+        buf[3] = (uint8_t)(snap.adv_call_count >> 8);
+        buf[4] = (uint8_t)(snap.data_call_count & 0xFFu);
+        buf[5] = (uint8_t)(snap.data_call_count >> 8);
+        buf[6] = (uint8_t)(snap.adv_packets_seen & 0xFFu);
+        buf[7] = (uint8_t)(snap.adv_packets_seen >> 8);
+        buf[8] = (uint8_t)(snap.connect_inds_seen & 0xFFu);
+        buf[9] = (uint8_t)(snap.connect_inds_seen >> 8);
+        buf[10] = (uint8_t)(snap.data_packets_seen & 0xFFu);
+        buf[11] = (uint8_t)(snap.data_packets_seen >> 8);
+        buf[12] = (uint8_t)(snap.last_adv_cmd_status & 0xFFu);
+        buf[13] = (uint8_t)((uint16_t)snap.last_adv_cmd_status >> 8);
+        buf[14] = (uint8_t)(snap.last_data_cmd_status & 0xFFu);
+        buf[15] = (uint8_t)((uint16_t)snap.last_data_cmd_status >> 8);
+        write_u32_le(&buf[16], snap.last_adv_event_mask_lo);
+        write_u32_le(&buf[20], snap.packets_captured);
+        /* PDU type histogram — 9 × uint16 LE = 18 bytes */
+        struct {
+            uint16_t v;
+        } *p;
+        (void)p;
+        uint16_t hist[9] = {snap.pt_adv_ind,      snap.pt_adv_direct, snap.pt_adv_nonconn,
+                            snap.pt_scan_req,     snap.pt_scan_rsp,   snap.pt_connect_ind,
+                            snap.pt_adv_scan_ind, snap.pt_ext_adv,    snap.pt_other};
+        for (uint8_t i = 0u; i < 9u; i++) {
+            buf[24 + i * 2] = (uint8_t)(hist[i] & 0xFFu);
+            buf[24 + i * 2 + 1] = (uint8_t)(hist[i] >> 8);
+        }
+        send_response(RSP_FOLLOW_DEBUG, seq, buf, sizeof(buf));
         return;
     }
 

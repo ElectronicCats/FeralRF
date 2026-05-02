@@ -54,6 +54,17 @@ static uint8_t s_zero_rx_streak;
 /* For ADV-channel scan callback marshalling */
 static bool s_connect_ind_pending;
 
+/* F8b.b debug instrumentation — populated by LlFollower_poll + callbacks */
+static uint16_t s_dbg_adv_calls;
+static uint16_t s_dbg_data_calls;
+static uint16_t s_dbg_adv_packets_seen;
+static uint16_t s_dbg_connect_inds_seen;
+static uint16_t s_dbg_data_packets_seen;
+static int16_t s_dbg_last_adv_status;
+static int16_t s_dbg_last_data_status;
+static uint32_t s_dbg_last_adv_event_mask_lo;
+static uint16_t s_dbg_pt[16]; /* histogram of pdu_type at s_on_adv_packet entry */
+
 /* ── Helpers ── */
 
 static uint32_t s_rd24_le(const uint8_t *p) {
@@ -113,15 +124,18 @@ static void s_on_adv_packet(const uint8_t *ll_pdu, uint8_t pdu_len, uint8_t chan
     (void)user;
     (void)rssi_dbm;
     (void)channel;
+    s_dbg_adv_packets_seen++;
     if (pdu_len < 2u) {
         return;
     }
     /* ADV channel PDU header: byte0[3:0]=PduType, [6]=TxAdd, [7]=RxAdd; byte1=Length */
     uint8_t pdu_type = ll_pdu[0] & 0x0Fu;
+    s_dbg_pt[pdu_type]++;
     /* CONNECT_IND PduType = 0x05 (legacy). AdvLen = 34. Total LL = header(2) + 34 = 36. */
     if (pdu_type != 0x05u || pdu_len < 36u) {
         return;
     }
+    s_dbg_connect_inds_seen++;
     /* Layout: byte0..1 hdr, byte2..7 InitA (LE), byte8..13 AdvA (LE), byte14..35 LLData */
     const uint8_t *adv_a = &ll_pdu[8];
     if (s_have_target && memcmp(adv_a, s_target_mac, LL_FOLLOWER_MAC_LEN) != 0) {
@@ -151,6 +165,7 @@ static void s_on_adv_packet(const uint8_t *ll_pdu, uint8_t pdu_len, uint8_t chan
 static void s_on_data_packet(const uint8_t *ll_pdu, uint8_t pdu_len, uint8_t channel,
                              int8_t rssi_dbm, void *user) {
     (void)user;
+    s_dbg_data_packets_seen++;
     if (pdu_len < 2u) {
         return;
     }
@@ -211,7 +226,47 @@ bool LlFollower_start(const uint8_t target_mac_le[LL_FOLLOWER_MAC_LEN]) {
     s_scan_channel = 37u;
     s_connect_ind_pending = false;
     s_packets_captured = 0u;
+    /* Reset debug counters at session start */
+    s_dbg_adv_calls = 0u;
+    s_dbg_data_calls = 0u;
+    s_dbg_adv_packets_seen = 0u;
+    s_dbg_connect_inds_seen = 0u;
+    s_dbg_data_packets_seen = 0u;
+    s_dbg_last_adv_status = 0;
+    s_dbg_last_data_status = 0;
+    s_dbg_last_adv_event_mask_lo = 0u;
+    memset(s_dbg_pt, 0, sizeof(s_dbg_pt));
     return true;
+}
+
+void LlFollower_getDebug(LlFollower_DebugSnapshot *out) {
+    if (out == NULL) {
+        return;
+    }
+    out->state = (uint8_t)s_state;
+    out->scan_channel = s_scan_channel;
+    out->adv_call_count = s_dbg_adv_calls;
+    out->data_call_count = s_dbg_data_calls;
+    out->adv_packets_seen = s_dbg_adv_packets_seen;
+    out->connect_inds_seen = s_dbg_connect_inds_seen;
+    out->data_packets_seen = s_dbg_data_packets_seen;
+    out->last_adv_cmd_status = s_dbg_last_adv_status;
+    out->last_data_cmd_status = s_dbg_last_data_status;
+    out->last_adv_event_mask_lo = s_dbg_last_adv_event_mask_lo;
+    out->packets_captured = s_packets_captured;
+    out->pt_adv_ind = s_dbg_pt[0x00];
+    out->pt_adv_direct = s_dbg_pt[0x01];
+    out->pt_adv_nonconn = s_dbg_pt[0x02];
+    out->pt_scan_req = s_dbg_pt[0x03];
+    out->pt_scan_rsp = s_dbg_pt[0x04];
+    out->pt_connect_ind = s_dbg_pt[0x05];
+    out->pt_adv_scan_ind = s_dbg_pt[0x06];
+    out->pt_ext_adv = s_dbg_pt[0x07];
+    uint16_t other = 0u;
+    for (uint8_t i = 0x08u; i < 0x10u; i++) {
+        other = (uint16_t)(other + s_dbg_pt[i]);
+    }
+    out->pt_other = other;
 }
 
 bool LlFollower_stop(void) {
@@ -232,11 +287,15 @@ void LlFollower_poll(void) {
         return;
 
     case LL_FOLLOWER_STATE_SCAN_ADV: {
-        /* Listen on current ADV channel for ~10 ms. If a CONNECT_IND lands
-         * for our target, the callback flips s_connect_ind_pending true and
-         * we transition. Otherwise rotate to the next ADV channel. */
-        uint32_t end = RF_getCurrentTime() + (10u * 4000u); /* 10 ms in RAT */
-        (void)RadioIF_followAdvOnce(s_scan_channel, end, s_on_adv_packet, NULL);
+        /* Listen on current ADV channel for ~100 ms (was 10 ms — too short
+         * relative to per-call setup overhead, capture rate was ~0.6 pkt/s
+         * vs baseline start_rx 41 pkt/s). 100 ms is still short enough to
+         * cycle all 3 ADV channels every 300 ms which catches ADV intervals
+         * up to 200 ms with high probability. */
+        uint32_t end = RF_getCurrentTime() + (100u * 4000u); /* 100 ms in RAT */
+        s_dbg_adv_calls++;
+        s_dbg_last_adv_status =
+            (int16_t)RadioIF_followAdvOnce(s_scan_channel, end, s_on_adv_packet, NULL);
 
         if (s_connect_ind_pending) {
             s_state = LL_FOLLOWER_STATE_FOLLOWING;
@@ -262,7 +321,9 @@ void LlFollower_poll(void) {
         uint32_t window_ticks = (uint32_t)s_hop_interval * 5000u;
         uint32_t end = s_next_anchor_rat + window_ticks;
         uint32_t pre = s_packets_captured;
-        (void)RadioIF_followDataOnce(chan, s_access_addr, s_crc_init, end, s_on_data_packet, NULL);
+        s_dbg_data_calls++;
+        s_dbg_last_data_status = (int16_t)RadioIF_followDataOnce(chan, s_access_addr, s_crc_init,
+                                                                 end, s_on_data_packet, NULL);
 
         /* Termination conditions */
         if (s_zero_rx_streak == 0xFFu) {

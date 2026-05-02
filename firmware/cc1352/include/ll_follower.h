@@ -69,4 +69,32 @@ bool LlFollower_isRunning(void);
  * loop while the follower is running. */
 void LlFollower_poll(void);
 
+/* F8b.b debug snapshot — exposes RF cmd status + counters so the host can
+ * diagnose why the follower captures 0 packets. */
+typedef struct {
+    uint8_t state;                   /* current LlFollower_State */
+    uint8_t scan_channel;            /* 37/38/39 */
+    uint16_t adv_call_count;         /* RadioIF_followAdvOnce invocations */
+    uint16_t data_call_count;        /* RadioIF_followDataOnce invocations */
+    uint16_t adv_packets_seen;       /* times s_on_adv_packet entered (any pdu) */
+    uint16_t connect_inds_seen;      /* CONNECT_IND that passed pdu_type+len filter */
+    uint16_t data_packets_seen;      /* s_on_data_packet entered */
+    int16_t last_adv_cmd_status;     /* Ble5_0_cmdBle5GenericRx.status from last followAdvOnce */
+    int16_t last_data_cmd_status;    /* status from last followDataOnce */
+    uint32_t last_adv_event_mask_lo; /* lower 32 bits of last RF_runCmd EventMask */
+    uint32_t packets_captured;       /* cumulative for the current session */
+    /* PDU type histogram (counts at s_on_adv_packet entry) */
+    uint16_t pt_adv_ind;      /* 0x00 ADV_IND */
+    uint16_t pt_adv_direct;   /* 0x01 ADV_DIRECT_IND */
+    uint16_t pt_adv_nonconn;  /* 0x02 ADV_NONCONN_IND */
+    uint16_t pt_scan_req;     /* 0x03 SCAN_REQ */
+    uint16_t pt_scan_rsp;     /* 0x04 SCAN_RSP */
+    uint16_t pt_connect_ind;  /* 0x05 CONNECT_IND (pre-len-filter) */
+    uint16_t pt_adv_scan_ind; /* 0x06 ADV_SCAN_IND */
+    uint16_t pt_ext_adv;      /* 0x07 ADV_EXT_IND (extended adv) */
+    uint16_t pt_other;        /* 0x08-0x0F */
+} LlFollower_DebugSnapshot;
+
+void LlFollower_getDebug(LlFollower_DebugSnapshot *out);
+
 #endif /* LL_FOLLOWER_H */

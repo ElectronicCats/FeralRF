@@ -108,6 +108,9 @@ void DataTask_poll(void) {
     /* Poll jam session timeout (runs independently from TX continuous) */
     ControlTask_processJamTimeout();
 
+    /* Poll LL follower state machine */
+    ControlTask_poll();
+
     /* Keep jam session transmitting */
     RadioIF_pollJamSession();
 

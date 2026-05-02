@@ -9,6 +9,7 @@
 #include <stdint.h>
 
 void ControlTask_init(void);
+void ControlTask_poll(void);
 void ControlTask_onRadioInit(void);
 bool ControlTask_onSetPhy(uint8_t phy, uint16_t channel, uint32_t frequency_hz);
 void ControlTask_onSetChannel(uint8_t channel);

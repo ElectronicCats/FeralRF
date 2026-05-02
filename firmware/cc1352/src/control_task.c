@@ -17,6 +17,7 @@
 
 #include "ble_conn.h"
 #include "config.h"
+#include "ll_follower.h"
 #include "ll_manager.h"
 #include "phy_manager.h"
 #include "radio_if.h"
@@ -207,6 +208,7 @@ void ControlTask_init(void) {
     ControlTask_resetTxPowerState();
     memset(s_jam_payload, 0xFF, sizeof(s_jam_payload));
     BleConn_init();
+    LlFollower_init();
 }
 
 void ControlTask_onRadioInit(void) {
@@ -446,6 +448,12 @@ void ControlTask_onRxStop(void) {
 
 bool ControlTask_isRxEnabled(void) {
     return s_rx_enabled;
+}
+
+void ControlTask_poll(void) {
+    if (LlFollower_isRunning()) {
+        LlFollower_poll();
+    }
 }
 
 void ControlTask_getInfoPayload(uint8_t *payload, uint16_t payload_len) {

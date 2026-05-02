@@ -111,3 +111,43 @@ class TestFollowConnectionAPI:
         r.stop_follow_connection(timeout=1.0)
         write_calls = [c[0][0] for c in r._serial.write.call_args_list]
         assert len(write_calls) == 1
+
+
+class TestReadLLPackets:
+    def test_iterator_yields_parsed_packets(self):
+        from feralrf.enums import Response
+        from feralrf.radio import LLPacket
+        # Wire format: [dir:1][ch:1][rssi:1][event:2LE][ll_pdu:N]
+        payload1 = (
+            b"M"  # direction
+            + bytes([10])  # channel
+            + bytes([0xC4])  # rssi -60 as signed byte
+            + b"\x05\x00"  # event counter 5
+            + b"\x02\x09\x05\x00\x04\x00\x12\xd5\x00\x01\x00"  # LL PDU
+        )
+        # Make the test simple by reusing the helper from prior class
+        helper = TestFollowConnectionAPI()
+        r = helper._make_radio_with_fake_serial([(Response.LL_PACKET, 0, payload1)])
+        pkts = list(r.read_ll_packets(timeout=0.5))
+        assert len(pkts) == 1
+        assert isinstance(pkts[0], LLPacket)
+        assert pkts[0].channel == 10
+        assert pkts[0].rssi_dbm == -60
+        assert pkts[0].event_counter == 5
+        assert pkts[0].direction == "M"
+        assert pkts[0].payload.startswith(b"\x02\x09\x05")
+
+    def test_iterator_ends_on_follow_done(self):
+        from feralrf.enums import Response
+        helper = TestFollowConnectionAPI()
+        # Single FOLLOW_DONE frame should end the iterator quietly
+        done_payload = b"\x00" + (0).to_bytes(4, "little")  # reason=HOST_STOP, count=0
+        r = helper._make_radio_with_fake_serial([(Response.FOLLOW_DONE, 0, done_payload)])
+        pkts = list(r.read_ll_packets(timeout=0.5))
+        assert pkts == []
+
+    def test_iterator_ends_on_timeout(self):
+        helper = TestFollowConnectionAPI()
+        r = helper._make_radio_with_fake_serial([])  # nothing to read → timeout
+        pkts = list(r.read_ll_packets(timeout=0.1))
+        assert pkts == []

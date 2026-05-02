@@ -937,6 +937,41 @@ class Radio:
         if cmd_id == Response.ERROR:
             raise CommandError("FOLLOW_STOP failed", payload[0] if payload else 0)
 
+    def read_ll_packets(self, timeout: float = 30.0) -> "Iterator[LLPacket]":
+        """Yield LLPacket frames as the firmware captures them.
+
+        Iterates over RX frames filtering for RSP_LL_PACKET. A RSP_FOLLOW_DONE
+        frame ends the iterator quietly (the follow session terminated). A
+        timeout (no frame for `timeout` seconds) also ends the iterator
+        quietly so callers can poll-loop.
+        """
+        while True:
+            try:
+                cmd_id, _seq, payload = self._read_response(
+                    timeout=timeout,
+                    expected={Response.LL_PACKET, Response.FOLLOW_DONE},
+                )
+            except TimeoutError:
+                return
+            if cmd_id == Response.FOLLOW_DONE:
+                return
+            if cmd_id != Response.LL_PACKET or len(payload) < 5:
+                continue
+            direction = chr(payload[0]) if 32 <= payload[0] < 127 else "?"
+            channel = payload[1]
+            # Convert unsigned byte to signed int8
+            rssi_byte = payload[2]
+            rssi_dbm = rssi_byte - 256 if rssi_byte > 127 else rssi_byte
+            event_counter = int.from_bytes(payload[3:5], "little")
+            yield LLPacket(
+                direction=direction,
+                channel=channel,
+                rssi_dbm=rssi_dbm,
+                event_counter=event_counter,
+                payload=bytes(payload[5:]),
+                timestamp=time.monotonic(),
+            )
+
     def set_ble_scan_mode(self, active: bool = True) -> None:
         """Set BLE scan mode: passive or active.
 

@@ -117,6 +117,14 @@ class GattCharacteristic:
 
 
 @dataclass
+class GattAttribute:
+    """Single (handle, value) pair returned by Read by UUID."""
+
+    handle: int
+    value: bytes
+
+
+@dataclass
 class GattNotification:
     """An ATT notification or indication received on a subscribed CCC.
 
@@ -212,6 +220,7 @@ class Radio:
         "gatt_write",
         "gatt_subscribe",
         "gatt_exchange_mtu",
+        "gatt_read_by_uuid",
         "read_gatt_notifications",
         "follow_connection",
         "stop_follow_connection",
@@ -908,6 +917,72 @@ class Radio:
         except TimeoutError:
             pass
         return peer_mtu
+
+    def gatt_read_by_uuid(
+        self,
+        uuid: int,
+        start: int = 0x0001,
+        end: int = 0xFFFF,
+        timeout: float = 5.0,
+    ) -> "list[GattAttribute]":
+        """ATT Read by Type with an arbitrary UUID16; return matching attrs.
+
+        Useful when the host already knows the UUID it wants (e.g.,
+        Device Name = 0x2A00) and wants to skip a full discovery.
+
+        Args:
+            uuid: 16-bit attribute type UUID.
+            start: First handle to search (inclusive).
+            end: Last handle to search (inclusive).
+            timeout: Seconds to wait for ACK + entries + GATT_DONE.
+
+        Returns:
+            List of GattAttribute (may be empty if peer replied with
+            ATTRIBUTE_NOT_FOUND).
+
+        Raises:
+            CommandError: firmware refused or peer returned a non-spec error.
+            ProtocolError: unexpected opcode received.
+        """
+        self._send_command(
+            Command.GATT_READ_BY_UUID,
+            CommandBuilder.gatt_read_by_uuid(start, end, uuid),
+        )
+        cmd_id, _seq, payload = self._read_response(
+            timeout=min(timeout, 3.0),
+            expected={Response.ACK, Response.ERROR},
+        )
+        if cmd_id == Response.ERROR:
+            raise CommandError("GATT_READ_BY_UUID failed", payload[0] if payload else 0)
+        if cmd_id != Response.ACK:
+            raise ProtocolError(f"Unexpected response to GATT_READ_BY_UUID: 0x{cmd_id:02X}")
+
+        attributes: list[GattAttribute] = []
+        deadline = time.monotonic() + timeout
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError("GATT_READ_BY_UUID stream timeout")
+            cmd_id, _seq, payload = self._read_response(
+                timeout=remaining,
+                expected={Response.GATT_ATTRIBUTE, Response.GATT_DONE, Response.ERROR},
+            )
+            if cmd_id == Response.ERROR:
+                raise CommandError(
+                    "GATT_READ_BY_UUID stream error",
+                    payload[0] if payload else 0,
+                )
+            if cmd_id == Response.GATT_DONE:
+                # status byte: 0=ok (entries present), 1=ATTRIBUTE_NOT_FOUND (empty)
+                return attributes
+            if len(payload) < 2:
+                raise ProtocolError(f"GATT_ATTRIBUTE payload too short: {len(payload)}")
+            attributes.append(
+                GattAttribute(
+                    handle=int.from_bytes(payload[0:2], "little"),
+                    value=bytes(payload[2:]),
+                )
+            )
 
     def read_gatt_notifications(
         self,

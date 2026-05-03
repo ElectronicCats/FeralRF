@@ -423,3 +423,68 @@ def test_gatt_exchange_mtu_raises_on_error_after_ack():
 
     with pytest.raises(CommandError):
         radio.gatt_exchange_mtu(client_mtu=23, timeout=1.0)
+
+
+# --- Radio.gatt_read_by_uuid ---
+
+
+def test_radio_has_gatt_read_by_uuid_method():
+    from feralrf.radio import Radio
+
+    assert hasattr(Radio, "gatt_read_by_uuid")
+
+
+def test_gatt_attribute_dataclass_exists():
+    from feralrf.radio import GattAttribute
+
+    a = GattAttribute(handle=0x002A, value=b"\x01\x02")
+    assert a.handle == 0x002A
+    assert a.value == b"\x01\x02"
+
+
+def test_gatt_read_by_uuid_returns_attribute_list():
+    radio, fake = _radio_with_fake_serial()
+    fake.queue_response(Response.ACK, seq=0)
+    fake.queue_response(
+        Response.GATT_ATTRIBUTE,
+        seq=0,
+        payload=struct.pack("<H", 0x002A) + b"FeralRF",
+    )
+    fake.queue_response(
+        Response.GATT_ATTRIBUTE,
+        seq=0,
+        payload=struct.pack("<H", 0x003B) + b"\x01\x02\x03",
+    )
+    fake.queue_response(Response.GATT_DONE, seq=0, payload=b"\x00")
+
+    attrs = radio.gatt_read_by_uuid(uuid=0x2A00, timeout=2.0)
+
+    assert len(attrs) == 2
+    assert attrs[0].handle == 0x002A
+    assert attrs[0].value == b"FeralRF"
+    assert attrs[1].handle == 0x003B
+    assert attrs[1].value == b"\x01\x02\x03"
+    frames = fake.written_frames()
+    assert len(frames) == 1
+    cmd_id, _seq, payload = frames[0]
+    assert cmd_id == Command.GATT_READ_BY_UUID
+    assert payload == struct.pack("<HHH", 0x0001, 0xFFFF, 0x2A00)
+
+
+def test_gatt_read_by_uuid_returns_empty_on_attribute_not_found():
+    """Firmware sends just GATT_DONE(0) when peer replied with ATTRIBUTE_NOT_FOUND."""
+    radio, fake = _radio_with_fake_serial()
+    fake.queue_response(Response.ACK, seq=0)
+    fake.queue_response(Response.GATT_DONE, seq=0, payload=b"\x00")
+
+    attrs = radio.gatt_read_by_uuid(uuid=0x2A00, timeout=1.0)
+
+    assert attrs == []
+
+
+def test_gatt_read_by_uuid_raises_on_initial_error():
+    radio, fake = _radio_with_fake_serial()
+    fake.queue_response(Response.ERROR, seq=0, payload=b"\x05")
+
+    with pytest.raises(CommandError):
+        radio.gatt_read_by_uuid(uuid=0x2A00, timeout=1.0)

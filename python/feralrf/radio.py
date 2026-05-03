@@ -515,21 +515,20 @@ class Radio:
 
                     # F8f #7 — async RF errors arrive as RSP_ERROR with seq=0
                     # (post-F8f #7a firmware) or seq=0xFF (pre-#7a — kept
-                    # permanently for forward-compat with old firmware).
-                    # When the caller is waiting for a specific response set
-                    # that does NOT include ERROR, buffer the async error so
-                    # the next read_packets()/_read_response with matching
-                    # expected can drain it (mirrors RSP_DISCONNECTED handling
-                    # below). When expected is None (streaming) or ERROR is in
-                    # expected, fall through and return the frame to the
-                    # caller — read_packets() converts to RxStreamError.
+                    # permanently for forward-compat with old firmware and
+                    # for the host_if_task busy-path which still emits 0xFF
+                    # in some firmware revisions). RETURN directly here when
+                    # the caller is streaming (expected=None) or explicitly
+                    # waiting for ERROR — bypassing the stale-seq filter
+                    # below, which would otherwise drop seq=0xFF as stale.
+                    # Buffer for a later consumer otherwise.
                     if cmd_id == Response.ERROR.value and seq in (0, 0xFF):
-                        if expected is not None and Response.ERROR.value not in expected:
-                            self._pending_async[cmd_id].append((cmd_id, seq, payload))
-                            ignored_unexpected_responses += 1
-                            last_unexpected_response = cmd_id
-                            continue
-                        # else fall through and return to the caller below
+                        if expected is None or Response.ERROR.value in expected:
+                            return cmd_id, seq, payload
+                        self._pending_async[cmd_id].append((cmd_id, seq, payload))
+                        ignored_unexpected_responses += 1
+                        last_unexpected_response = cmd_id
+                        continue
 
                     # Skip stale responses with mismatched seq — only when
                     # expecting a command response (not during RX stream).

@@ -12,6 +12,7 @@
 
 #include "command_processor.h"
 #include "host_if.h"
+#include "output_if.h"
 #include "packet_queue.h"
 #include "protocol.h"
 #include "task_event.h"
@@ -89,11 +90,14 @@ void HostIFTask_poll(void) {
             TaskEvent_set(TASK_EVENT_HOST_IF_RX_FRAME);
             /* Defer to RF task — copy frame and signal via semaphore */
             if (s_pending_ready) {
-                /* Previous command still pending — send async error to host */
-                static const uint8_t busy_err[] = {0x05u}; /* ERR_INVALID_STATE */
-                extern void OutputIF_sendResponse(uint8_t cmd_id, uint8_t seq,
-                                                  const uint8_t *payload, uint16_t payload_len);
-                OutputIF_sendResponse(0x81u, 0xFFu, busy_err, 1u);
+                /* Previous command still pending — send async error to host.
+                 * F8f follow-up: align with the #7a contract used by
+                 * data_task / control_task. RSP_ERROR with seq=0 (was 0xFF
+                 * + 0x81u literal). Python compat permanently accepts both
+                 * seq=0 and seq=0xFF, so older firmware revisions stay
+                 * forward-compatible with new hosts. */
+                static const uint8_t busy_err[] = {ERR_INVALID_STATE};
+                OutputIF_sendResponse(RSP_ERROR, 0u, busy_err, 1u);
             } else if (s_encoded_len <= sizeof(s_pending_frame)) {
                 size_t j;
                 for (j = 0; j < s_encoded_len; j++) {

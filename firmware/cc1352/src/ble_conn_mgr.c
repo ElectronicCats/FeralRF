@@ -52,8 +52,15 @@ static uint16_t s_dbg_total_rx_count;
 static uint32_t s_dbg_total_tx_done;
 static BleConnMgr_DisconnectCb s_disconnect_cb;
 /* Sticky reason for the most recent termination — captured on entry into
- * BleConnMgr_stop so the callback always sees the same value the caller
- * intended, even if some other path also calls stop later. */
+ * BleConnMgr_stop so the callback always sees the value the FIRST caller
+ * intended, even if a later path also calls stop.
+ *
+ * Concurrency: these statics are only mutated from the BleConnMgr_poll
+ * task context (handle_ll_ctrl runs from process_rx_packets which is
+ * called by poll; the supervision-timeout branch is also in poll). They
+ * are NOT touched from RF Hwi/Swi callbacks. The mutex-free first-caller-
+ * wins pattern below is therefore safe. If a future caller from a
+ * different context is added, this needs revisiting. */
 static uint8_t s_pending_dc_reason;
 static bool s_dc_reason_pending;
 
@@ -166,6 +173,8 @@ void BleConnMgr_init(void) {
 }
 
 void BleConnMgr_setDisconnectCb(BleConnMgr_DisconnectCb cb) {
+    /* NULL is allowed and clears the registered callback — _stop guards
+     * with `if (s_disconnect_cb)` so a cleared hook is silently skipped. */
     s_disconnect_cb = cb;
 }
 
@@ -264,6 +273,11 @@ void BleConnMgr_stop(void) {
     s_running = false;
     s_event_counter = 0;
     AttClient_reset();
+    /* Fire the disconnect callback HERE rather than in BleConnMgr_stopWithReason
+     * because internal callers (notably BleConn_disconnect, which calls back
+     * into BleConnMgr_stop) bypass _stopWithReason. By gating on `was_running`
+     * we still fire exactly once per connection lifetime — the second _stop
+     * call from BleConn_disconnect sees was_running=false and skips. */
     if (was_running && s_dc_reason_pending) {
         uint8_t reason = s_pending_dc_reason;
         s_dc_reason_pending = false;

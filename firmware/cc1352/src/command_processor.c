@@ -244,6 +244,33 @@ static void gatt_on_done(uint8_t status) {
     send_response(RSP_GATT_DONE, s_gatt_seq, rsp, 1);
 }
 
+static void gatt_on_mtu(uint16_t peerServerMtu) {
+    uint8_t rsp[2];
+    rsp[0] = (uint8_t)(peerServerMtu & 0xFF);
+    rsp[1] = (uint8_t)(peerServerMtu >> 8);
+    send_response(RSP_GATT_MTU, s_gatt_seq, rsp, sizeof(rsp));
+}
+
+static void gatt_on_attribute(uint16_t handle, const uint8_t *value, uint8_t valueLen) {
+    /* Wire format: [handle:2LE][value:N], capped at MTU-2 = 21 bytes. */
+    uint8_t rsp[2 + 21];
+    rsp[0] = (uint8_t)(handle & 0xFF);
+    rsp[1] = (uint8_t)(handle >> 8);
+    if (valueLen > 21u) {
+        valueLen = 21u;
+    }
+    for (uint8_t i = 0; i < valueLen; i++) {
+        rsp[2 + i] = value[i];
+    }
+    send_response(RSP_GATT_ATTRIBUTE, s_gatt_seq, rsp, (uint16_t)(2u + valueLen));
+}
+
+static void gatt_on_disconnected(uint8_t reason) {
+    /* Async — seq=0 since this is unsolicited. Host filters by RSP code. */
+    uint8_t rsp[1] = {reason};
+    OutputIF_sendResponse(RSP_DISCONNECTED, 0u, rsp, sizeof(rsp));
+}
+
 static bool gatt_callbacks_installed = false;
 
 static void ensure_gatt_callbacks(void) {
@@ -253,8 +280,11 @@ static void ensure_gatt_callbacks(void) {
             .onChar = gatt_on_char,
             .onRead = gatt_on_read,
             .onDone = gatt_on_done,
+            .onMtu = gatt_on_mtu,
+            .onAttribute = gatt_on_attribute,
         };
         AttClient_setCallbacks(&cb);
+        BleConnMgr_setDisconnectCb(gatt_on_disconnected);
         gatt_callbacks_installed = true;
     }
 }
@@ -881,6 +911,11 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
             send_error(seq, ERR_INVALID_PAYLOAD);
             return;
         }
+        ensure_gatt_callbacks();
+        /* Mark host-initiated reason BEFORE BleConn_disconnect so the
+         * subsequent BleConnMgr_stop callback sees 0x16, not whatever
+         * sticks around from the previous session. */
+        BleConnMgr_stopWithReason(0x16u);
         BleConn_disconnect();
         send_ack(seq);
         return;
@@ -1028,6 +1063,50 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
          * AttClient is back to IDLE, the host can issue the next subscribe
          * without racing the state machine. */
         s_gatt_subscribe_pending = true;
+        return;
+    }
+
+    case CMD_GATT_EXCHANGE_MTU: {
+        /* Payload: client_mtu[2LE]. */
+        if (payload_len != 2u) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            return;
+        }
+        if (!BleConn_isConnected()) {
+            send_error(seq, ERR_INVALID_STATE);
+            return;
+        }
+        ensure_gatt_callbacks();
+        s_gatt_seq = seq;
+        uint16_t client_mtu = read_u16_le(payload);
+        if (!AttClient_startMtuExchange(client_mtu)) {
+            send_error(seq, ERR_INVALID_STATE);
+            return;
+        }
+        send_ack(seq);
+        return;
+    }
+
+    case CMD_GATT_READ_BY_UUID: {
+        /* Payload: start[2LE] + end[2LE] + uuid16[2LE] = 6 bytes. */
+        if (payload_len != 6u) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            return;
+        }
+        if (!BleConn_isConnected()) {
+            send_error(seq, ERR_INVALID_STATE);
+            return;
+        }
+        ensure_gatt_callbacks();
+        s_gatt_seq = seq;
+        uint16_t start = read_u16_le(&payload[0]);
+        uint16_t end = read_u16_le(&payload[2]);
+        uint16_t uuid = read_u16_le(&payload[4]);
+        if (!AttClient_startReadByUuid(start, end, uuid)) {
+            send_error(seq, ERR_INVALID_STATE);
+            return;
+        }
+        send_ack(seq);
         return;
     }
 

@@ -387,3 +387,39 @@ def test_radio_stable_methods_includes_gatt_exchange_mtu():
     from feralrf.radio import Radio
 
     assert "gatt_exchange_mtu" in Radio.STABLE_METHODS
+
+
+def test_gatt_exchange_mtu_returns_peer_mtu():
+    radio, fake = _radio_with_fake_serial()
+    # Firmware sequence: ACK → GATT_MTU(peer=247) → GATT_DONE(status=0)
+    fake.queue_response(Response.ACK, seq=0)
+    fake.queue_response(Response.GATT_MTU, seq=0, payload=struct.pack("<H", 247))
+    fake.queue_response(Response.GATT_DONE, seq=0, payload=b"\x00")
+
+    peer_mtu = radio.gatt_exchange_mtu(client_mtu=23, timeout=2.0)
+
+    assert peer_mtu == 247
+    frames = fake.written_frames()
+    assert len(frames) == 1
+    cmd_id, _seq, payload = frames[0]
+    assert cmd_id == Command.GATT_EXCHANGE_MTU
+    assert payload == struct.pack("<H", 23)
+
+
+def test_gatt_exchange_mtu_raises_when_done_arrives_without_mtu():
+    """If firmware sends GATT_DONE before GATT_MTU, raise CommandError."""
+    radio, fake = _radio_with_fake_serial()
+    fake.queue_response(Response.ACK, seq=0)
+    fake.queue_response(Response.GATT_DONE, seq=0, payload=b"\x01")
+
+    with pytest.raises(CommandError):
+        radio.gatt_exchange_mtu(client_mtu=23, timeout=1.0)
+
+
+def test_gatt_exchange_mtu_raises_on_error_after_ack():
+    radio, fake = _radio_with_fake_serial()
+    fake.queue_response(Response.ACK, seq=0)
+    fake.queue_response(Response.ERROR, seq=0, payload=b"\x05")
+
+    with pytest.raises(CommandError):
+        radio.gatt_exchange_mtu(client_mtu=23, timeout=1.0)

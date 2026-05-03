@@ -226,4 +226,17 @@ PROP_PRESETS = {
         rx_bw=0x52,
         sync_word=0x930B51DE,
     ),
+    # === MIOTY TS-UNB (ETSI TS 103 357) — 868 MHz EU SRD ===
+    # WARNING: 396 baud es ultra-low-rate. Viability sobre CC1352 pendiente
+    # validación OTA en Task 1 del plan F29.b. Si rx_bw mínimo del CC1352
+    # no llega a ~5 kHz, escape M3: probar GFSK, escalación rx_bw, fallback
+    # a "pending native support" excluido del smoke loop.
+    "mioty_868_tsunb": dict(
+        frequency_hz=868000000,
+        mod_type=0,  # FSK puro como primer intento
+        symbol_rate=396,  # ETSI TS 103 357
+        deviation=1,  # ~250 Hz unidad CC1352 → mod index ~1.3
+        rx_bw=0x4A,  # mínimo BW soportado típicamente ~5 kHz
+        sync_word=0x930B51DE,
+    ),
 }

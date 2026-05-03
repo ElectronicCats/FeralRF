@@ -196,3 +196,32 @@ def test_f29_preset_count():
     """F29 vuelta 1 — exactamente 3 presets nuevos en banda 915."""
     f29 = [n for n in PROP_PRESETS if n in F29_PRESET_NAMES]
     assert len(f29) == 3, f"Esperaba 3 F29 presets, encontré {len(f29)}: {f29}"
+
+
+# F29.b — cierre completo (MIOTY + Wi-SUN restantes)
+
+
+F29B_MIOTY_NAME = "mioty_868_tsunb"
+F29B_WISUN_NAMES = (
+    "wisun_915_fsk_100k",
+    "wisun_915_fsk_150k",
+    "wisun_915_fsk_200k",
+    "wisun_915_fsk_300k",
+)
+F29B_PRESET_NAMES = (F29B_MIOTY_NAME,) + F29B_WISUN_NAMES
+
+
+def test_f29b_mioty_present():
+    """F29.b — MIOTY TS-UNB preset presente."""
+    assert F29B_MIOTY_NAME in PROP_PRESETS
+
+
+def test_f29b_mioty_in_868_band():
+    """F29.b — MIOTY TS-UNB en banda 868 EU SRD (863-870 MHz)."""
+    f = PROP_PRESETS[F29B_MIOTY_NAME]["frequency_hz"]
+    assert 863_000_000 <= f <= 870_000_000
+
+
+def test_f29b_mioty_symbol_rate_396():
+    """F29.b — MIOTY symbol rate per ETSI TS 103 357 (396 baud)."""
+    assert PROP_PRESETS[F29B_MIOTY_NAME]["symbol_rate"] == 396

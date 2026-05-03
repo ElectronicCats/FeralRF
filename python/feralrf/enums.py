@@ -82,6 +82,8 @@ class Command(IntEnum):
     GATT_SUBSCRIBE = 0x44
     GATT_READ = 0x45
     GATT_WRITE = 0x46
+    GATT_EXCHANGE_MTU = 0x4A
+    GATT_READ_BY_UUID = 0x4B
 
     # Diagnostics
     DEBUG_TIMING = 0x47
@@ -129,6 +131,11 @@ class Response(IntEnum):
     # F8b Track B — passive connection follower
     LL_PACKET = 0xAB
     FOLLOW_DONE = 0xAC
+
+    # F8c — MTU + Read by UUID + Disconnect reason
+    GATT_MTU = 0xB0
+    GATT_ATTRIBUTE = 0xB1
+    DISCONNECTED = 0xB2
 
 
 STABLE_COMMANDS = (

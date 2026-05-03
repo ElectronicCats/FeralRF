@@ -63,6 +63,8 @@
 #define CMD_GATT_SUBSCRIBE 0x44u
 #define CMD_GATT_READ 0x45u
 #define CMD_GATT_WRITE 0x46u
+#define CMD_GATT_EXCHANGE_MTU 0x4Au
+#define CMD_GATT_READ_BY_UUID 0x4Bu
 
 /* Diagnostics */
 #define CMD_DEBUG_TIMING 0x47u
@@ -108,6 +110,11 @@
 #define RSP_LL_PACKET 0xABu
 #define RSP_FOLLOW_DONE 0xACu
 #define RSP_FOLLOW_DEBUG 0xAFu
+
+/* F8c — MTU + Read by UUID + Disconnect reason */
+#define RSP_GATT_MTU 0xB0u
+#define RSP_GATT_ATTRIBUTE 0xB1u
+#define RSP_DISCONNECTED 0xB2u
 
 /* Error codes */
 #define ERR_INVALID_CMD 0x01u

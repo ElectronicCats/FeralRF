@@ -333,3 +333,41 @@ def test_gatt_methods_are_declared_stable():
     assert "gatt_read" in Radio.STABLE_METHODS
     assert "gatt_write" in Radio.STABLE_METHODS
     assert "gatt_discovery" not in Radio.PENDING_FEATURES
+
+
+# --- F8c protocol IDs ---
+
+
+def test_f8c_command_ids_are_assigned():
+    assert Command.GATT_EXCHANGE_MTU == 0x4A
+    assert Command.GATT_READ_BY_UUID == 0x4B
+
+
+def test_f8c_response_ids_are_assigned():
+    assert Response.GATT_MTU == 0xB0
+    assert Response.GATT_ATTRIBUTE == 0xB1
+    assert Response.DISCONNECTED == 0xB2
+
+
+def test_gatt_exchange_mtu_payload_is_u16_le_client_mtu():
+    assert CommandBuilder.gatt_exchange_mtu(client_mtu=23) == b"\x17\x00"
+    assert CommandBuilder.gatt_exchange_mtu(client_mtu=247) == b"\xF7\x00"
+
+
+def test_gatt_exchange_mtu_rejects_too_small():
+    import pytest
+
+    with pytest.raises(ValueError):
+        CommandBuilder.gatt_exchange_mtu(client_mtu=22)  # MTU must be >= 23 per spec
+
+
+def test_gatt_read_by_uuid_uuid16_payload_is_start_end_uuid_le():
+    payload = CommandBuilder.gatt_read_by_uuid(start=0x0001, end=0xFFFF, uuid=0x2A00)
+    assert payload == b"\x01\x00\xFF\xFF\x00\x2A"
+
+
+def test_gatt_read_by_uuid_rejects_inverted_range():
+    import pytest
+
+    with pytest.raises(ValueError):
+        CommandBuilder.gatt_read_by_uuid(start=0x0010, end=0x0001, uuid=0x2A00)

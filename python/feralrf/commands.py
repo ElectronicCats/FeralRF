@@ -207,6 +207,31 @@ class CommandBuilder:
         )
 
     @staticmethod
+    def gatt_exchange_mtu(client_mtu: int = 23) -> bytes:
+        """Payload for CMD_GATT_EXCHANGE_MTU: 2-byte LE client MTU.
+
+        Args:
+            client_mtu: MTU we advertise to the peer. Per BT Core Spec
+                Vol 3 Part F §3.2.8, ATT MTU MUST be >= 23.
+        """
+        if client_mtu < 23 or client_mtu > 0xFFFF:
+            raise ValueError(f"client_mtu must be in [23, 65535], got {client_mtu}")
+        return struct.pack("<H", client_mtu & 0xFFFF)
+
+    @staticmethod
+    def gatt_read_by_uuid(start: int, end: int, uuid: int) -> bytes:
+        """Payload for CMD_GATT_READ_BY_UUID: start[2] + end[2] + uuid16[2].
+
+        Only 16-bit UUIDs are supported in this revision (matches firmware
+        send_read_by_type_req). 128-bit UUID support deferred.
+        """
+        if start < 1 or start > 0xFFFF:
+            raise ValueError(f"start handle out of range: {start}")
+        if end < start or end > 0xFFFF:
+            raise ValueError(f"end ({end}) must be >= start ({start}) and <= 0xFFFF")
+        return struct.pack("<HHH", start & 0xFFFF, end & 0xFFFF, uuid & 0xFFFF)
+
+    @staticmethod
     def follow_start(target_mac_le: "bytes | None" = None) -> bytes:
         """Build CMD_FOLLOW_START payload.
 

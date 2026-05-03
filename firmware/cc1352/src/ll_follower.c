@@ -300,6 +300,12 @@ void LlFollower_poll(void) {
             (int16_t)RadioIF_followAdvOnce(s_scan_channel, end, s_on_adv_packet, NULL);
 
         if (s_connect_ind_pending) {
+            /* F6 fix: baseline supervision timestamp at the moment we commit
+             * to following. Without this, s_last_rx_rat stays at BSS zero
+             * until the first data packet arrives, and the supervision
+             * check (s_supervision * 40000u) may fire spuriously before
+             * sync. */
+            s_last_rx_rat = RF_getCurrentTime();
             s_state = LL_FOLLOWER_STATE_FOLLOWING;
             s_connect_ind_pending = false;
             return;

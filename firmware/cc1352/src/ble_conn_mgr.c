@@ -50,6 +50,12 @@ static uint16_t s_event_counter;
 static uint16_t s_dbg_l2cap_rx_count;
 static uint16_t s_dbg_total_rx_count;
 static uint32_t s_dbg_total_tx_done;
+static BleConnMgr_DisconnectCb s_disconnect_cb;
+/* Sticky reason for the most recent termination — captured on entry into
+ * BleConnMgr_stop so the callback always sees the same value the caller
+ * intended, even if some other path also calls stop later. */
+static uint8_t s_pending_dc_reason;
+static bool s_dc_reason_pending;
 
 /* Debug timing ring buffer — populated each call to BleConnMgr_poll().
  * Cleared on BleConnMgr_start so each connect attempt sees a fresh log. */
@@ -66,10 +72,13 @@ static void handle_ll_ctrl(const uint8_t *payload, uint8_t len) {
     uint8_t opcode = payload[0];
 
     switch (opcode) {
-    case LL_TERMINATE_IND:
-        BleConnMgr_stop();
+    case LL_TERMINATE_IND: {
+        /* payload = [opcode:1][reason:1] per BT Core Spec Vol 6 Part B §2.4.2.6 */
+        uint8_t reason = (len >= 2) ? payload[1] : 0x13u; /* default REMOTE_USER_TERMINATED */
+        BleConnMgr_stopWithReason(reason);
         BleConn_disconnect();
         break;
+    }
 
     case LL_FEATURE_REQ: {
         /* Respond with empty feature set — we don't support any optional LL features */
@@ -156,6 +165,18 @@ void BleConnMgr_init(void) {
     AttClient_init();
 }
 
+void BleConnMgr_setDisconnectCb(BleConnMgr_DisconnectCb cb) {
+    s_disconnect_cb = cb;
+}
+
+void BleConnMgr_stopWithReason(uint8_t reason) {
+    if (!s_dc_reason_pending) {
+        s_pending_dc_reason = reason;
+        s_dc_reason_pending = true;
+    }
+    BleConnMgr_stop();
+}
+
 uint16_t BleConnMgr_getL2capRxCount(void) {
     return s_dbg_l2cap_rx_count;
 }
@@ -176,6 +197,8 @@ void BleConnMgr_start(void) {
     }
 
     s_event_counter = 0;
+    s_dc_reason_pending = false;
+    s_pending_dc_reason = 0;
     s_dbg_l2cap_rx_count = 0;
     s_dbg_total_rx_count = 0;
     s_dbg_total_tx_done = 0;
@@ -237,9 +260,18 @@ void BleConnMgr_start(void) {
 }
 
 void BleConnMgr_stop(void) {
+    bool was_running = s_running;
     s_running = false;
     s_event_counter = 0;
     AttClient_reset();
+    if (was_running && s_dc_reason_pending) {
+        uint8_t reason = s_pending_dc_reason;
+        s_dc_reason_pending = false;
+        s_pending_dc_reason = 0;
+        if (s_disconnect_cb) {
+            s_disconnect_cb(reason);
+        }
+    }
 }
 
 bool BleConnMgr_poll(void) {
@@ -268,7 +300,8 @@ bool BleConnMgr_poll(void) {
     /* Check supervision timeout */
     now = RF_getCurrentTime();
     if (now - s_last_rx_time > s_superv_timeout_ticks) {
-        BleConnMgr_stop();
+        /* 0x22 = LL_RESPONSE_TIMEOUT per BT Core Spec Vol 1 Part F §1.3.2 */
+        BleConnMgr_stopWithReason(0x22u);
         BleConn_disconnect();
         return false;
     }

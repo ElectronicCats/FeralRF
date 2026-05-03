@@ -22,6 +22,19 @@ int BleConnMgr_getLastStatus(void);
 uint16_t BleConnMgr_getL2capRxCount(void);
 uint16_t BleConnMgr_getTotalRxCount(void);
 
+/* Disconnect callback. Fires exactly once per connection lifetime when the
+ * link terminates, with the BT Core Spec reason byte. Three reason sources:
+ *   - Peer LL_TERMINATE_IND payload[1] (e.g., 0x13 REMOTE_USER_TERMINATED)
+ *   - Supervision timeout    → 0x22 (LL_RESPONSE_TIMEOUT)
+ *   - Host-initiated stop    → 0x16 (LOCAL_HOST_TERMINATED)
+ * Setter is idempotent; passing NULL clears the registered callback. */
+typedef void (*BleConnMgr_DisconnectCb)(uint8_t reason);
+void BleConnMgr_setDisconnectCb(BleConnMgr_DisconnectCb cb);
+
+/* Synthetic reason for host-initiated disconnect. Caller uses this when
+ * BleConnMgr_stop() is invoked from a CMD_DISCONNECT path. */
+void BleConnMgr_stopWithReason(uint8_t reason);
+
 /* Depth chosen so RSP_DEBUG_TIMING fits in PROTOCOL_MAX_PAYLOAD (255):
  *   frame_payload = 1 + depth * 18  →  depth=14 → 253 bytes. */
 #define BLE_CONN_MGR_DBG_TIMING_DEPTH 14u

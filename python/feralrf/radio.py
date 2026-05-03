@@ -124,6 +124,33 @@ class GattAttribute:
     value: bytes
 
 
+# Map BT Core Spec Vol 1 Part F §1.3 reason bytes to short labels.
+_DISCONNECT_REASON_LABELS = {
+    0x05: "AUTHENTICATION_FAILURE",
+    0x08: "CONNECTION_TIMEOUT",
+    0x13: "REMOTE_USER_TERMINATED",
+    0x14: "REMOTE_LOW_RESOURCES",
+    0x15: "REMOTE_POWER_OFF",
+    0x16: "LOCAL_HOST_TERMINATED",
+    0x22: "LL_RESPONSE_TIMEOUT",
+    0x28: "INSTANT_PASSED",
+    0x3D: "MIC_FAILURE",
+    0x3E: "CONNECTION_FAILED_TO_ESTABLISH",
+}
+
+
+@dataclass
+class DisconnectEvent:
+    """Async disconnect notification surfaced by the firmware."""
+
+    reason: int
+    timestamp: float
+
+    @property
+    def reason_label(self) -> str:
+        return _DISCONNECT_REASON_LABELS.get(self.reason, f"UNKNOWN(0x{self.reason:02X})")
+
+
 @dataclass
 class GattNotification:
     """An ATT notification or indication received on a subscribed CCC.
@@ -222,6 +249,7 @@ class Radio:
         "gatt_exchange_mtu",
         "gatt_read_by_uuid",
         "read_gatt_notifications",
+        "read_disconnect_events",
         "follow_connection",
         "stop_follow_connection",
         "read_ll_packets",
@@ -1044,6 +1072,36 @@ class Radio:
                 value=value,
                 timestamp=time.monotonic(),
             )
+
+    def read_disconnect_events(
+        self,
+        timeout: float = 5.0,
+    ) -> "Iterator[DisconnectEvent]":
+        """Yield DisconnectEvent items as they arrive from the firmware.
+
+        Filters for RSP_DISCONNECTED (0xB2). Other unsolicited frames are
+        discarded silently; only DISCONNECTED frames are yielded. Iterator
+        ends quietly on timeout — caller can loop and call again.
+
+        Args:
+            timeout: Seconds to wait for the next frame. The iterator
+                ends when this elapses without a new RSP_DISCONNECTED.
+
+        Yields:
+            DisconnectEvent per received frame.
+        """
+        while True:
+            try:
+                cmd_id, _seq, payload = self._read_response(
+                    timeout=timeout,
+                    expected={Response.DISCONNECTED},
+                )
+            except TimeoutError:
+                return
+            if cmd_id != Response.DISCONNECTED:
+                return
+            reason = payload[0] if payload else 0xFF
+            yield DisconnectEvent(reason=reason, timestamp=time.monotonic())
 
     def follow_connection(
         self,

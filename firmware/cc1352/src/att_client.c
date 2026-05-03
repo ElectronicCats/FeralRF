@@ -316,9 +316,24 @@ static void handle_read_by_type_rsp(const uint8_t *pdu, uint8_t len) {
         att_dbg(ATT_DBG_TAG_TYPE_RSP, old);
         return;
     }
-    s_request_pending = false;
 
     uint8_t entry_len = pdu[1];
+
+    /* F5 fix: validate entry_len before consuming. Characteristic discovery
+     * entries are [handle:2][properties:1][value_handle:2][uuid:2|16], so
+     * entry_len (excluding the 2-byte header) is >= 5. entry_len == 0
+     * would infinite-loop and < 5 underflows uuidLen below. */
+    if (entry_len < 5u || entry_len > (uint8_t)(len - 2u)) {
+        att_dbg(ATT_DBG_TAG_MALFORMED_RSP, old);
+        s_state = ATT_STATE_IDLE;
+        if (s_cb.onDone) {
+            att_dbg(ATT_DBG_TAG_DONE_CB, s_state);
+            s_cb.onDone(ATT_ERR_MALFORMED_RSP);
+        }
+        return;
+    }
+
+    s_request_pending = false;
     uint8_t offset = 2;
 
     while (offset + entry_len <= len) {

@@ -21,7 +21,7 @@ import time
 from typing import Optional
 
 from feralrf.enums import PHY
-from feralrf.radio import Radio
+from feralrf.radio import Radio, RxStreamError
 
 # ─── Payload Builders ───
 
@@ -313,6 +313,9 @@ def capture_and_replay(
 
     captured = []
     for pkt in radio.read_packets(timeout=capture_seconds):
+        # F8f #7b: read_packets now also yields RxStreamError; skip those.
+        if isinstance(pkt, RxStreamError):
+            continue
         if pkt.crc_ok and len(pkt.data) > 8:
             if target_name is None or target_name.encode() in pkt.data:
                 captured.append(pkt.data)

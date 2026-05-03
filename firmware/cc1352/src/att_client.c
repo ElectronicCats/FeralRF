@@ -256,9 +256,26 @@ static void handle_read_by_group_type_rsp(const uint8_t *pdu, uint8_t len) {
         att_dbg(ATT_DBG_TAG_GROUP_RSP, old);
         return;
     }
-    s_request_pending = false;
 
     uint8_t entry_len = pdu[1]; /* length of each attribute data */
+
+    /* F5 fix: validate entry_len before consuming. Spec: each entry is
+     * [start:2][end:2][uuid:2|16] so minimum is 4 + 2 = 6 bytes; entry_len
+     * (which excludes the 2-byte header) is therefore >= 4. entry_len == 0
+     * would otherwise infinite-loop the consumer below. The upper bound
+     * rejects entries that cannot fit even one full record after the
+     * 2-byte [opcode][entry_len] header. */
+    if (entry_len < 4u || entry_len > (uint8_t)(len - 2u)) {
+        att_dbg(ATT_DBG_TAG_MALFORMED_RSP, old);
+        s_state = ATT_STATE_IDLE;
+        if (s_cb.onDone) {
+            att_dbg(ATT_DBG_TAG_DONE_CB, s_state);
+            s_cb.onDone(ATT_ERR_MALFORMED_RSP);
+        }
+        return;
+    }
+
+    s_request_pending = false;
     uint8_t offset = 2;
 
     while (offset + entry_len <= len) {

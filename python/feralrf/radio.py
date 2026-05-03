@@ -936,14 +936,27 @@ class Radio:
             raise ProtocolError(f"GATT_MTU payload too short: {len(payload)}")
         peer_mtu = int.from_bytes(payload[0:2], "little")
 
-        # Drain trailing GATT_DONE so the next command does not see it.
+        # Drain trailing GATT_DONE so the next command does not see it. If
+        # the terminator never arrives (firmware issue), don't fail — the
+        # MTU value was already received. But if the terminator carries a
+        # non-zero status (peer ATT error after the MTU PDU), raise so the
+        # host learns about it. Symmetric with gatt_read_by_uuid's contract.
         try:
-            self._read_response(
+            cmd_id, _seq, done_payload = self._read_response(
                 timeout=min(timeout, 1.0),
                 expected={Response.GATT_DONE, Response.ERROR},
             )
         except TimeoutError:
-            pass
+            return peer_mtu
+        if cmd_id == Response.ERROR:
+            raise CommandError(
+                "GATT_EXCHANGE_MTU stream error",
+                done_payload[0] if done_payload else 0,
+            )
+        if cmd_id == Response.GATT_DONE:
+            status = done_payload[0] if done_payload else 0xFF
+            if status != 0:
+                raise CommandError("GATT_EXCHANGE_MTU returned ATT error after value", status)
         return peer_mtu
 
     def gatt_read_by_uuid(

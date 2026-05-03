@@ -516,3 +516,29 @@ def test_gatt_read_by_uuid_distinguishes_no_match_from_error():
     fake.queue_response(Response.GATT_DONE, seq=0, payload=b"\x01")
     with pytest.raises(CommandError):
         radio.gatt_read_by_uuid(uuid=0x2A00, timeout=1.0)
+
+
+def test_gatt_exchange_mtu_raises_when_done_carries_error_status():
+    """Symmetric with gatt_read_by_uuid: GATT_DONE(status=1) after MTU value
+    should raise CommandError, not silently return the (possibly stale) MTU."""
+    radio, fake = _radio_with_fake_serial()
+    fake.queue_response(Response.ACK, seq=0)
+    fake.queue_response(Response.GATT_MTU, seq=0, payload=struct.pack("<H", 247))
+    fake.queue_response(Response.GATT_DONE, seq=0, payload=b"\x01")
+
+    with pytest.raises(CommandError):
+        radio.gatt_exchange_mtu(client_mtu=23, timeout=1.0)
+
+
+def test_gatt_exchange_mtu_returns_peer_mtu_even_when_done_is_missing():
+    """If firmware never sends the trailing GATT_DONE (timeout drain), the
+    method MUST still return the MTU it already received — losing the
+    terminator is a firmware bug, not a peer error."""
+    radio, fake = _radio_with_fake_serial()
+    fake.queue_response(Response.ACK, seq=0)
+    fake.queue_response(Response.GATT_MTU, seq=0, payload=struct.pack("<H", 247))
+    # No GATT_DONE queued — drain will time out
+
+    peer_mtu = radio.gatt_exchange_mtu(client_mtu=23, timeout=0.5)
+
+    assert peer_mtu == 247

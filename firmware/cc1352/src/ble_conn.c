@@ -288,6 +288,19 @@ void BleConn_disconnect(void) {
     s_state.eventCounter = 0;
 }
 
+void BleConn_finalizeDisconnect(void) {
+    /* Pure cleanup — no queue, no sleep, no BleConnMgr_stop. The
+     * cooperative disconnect path (BleConnMgr_initiateGracefulDisconnect
+     * + BleConnMgr_poll hook) is responsible for getting the manager
+     * stopped and the disconnect callback fired BEFORE calling this. */
+    if (s_state.initiating) {
+        RadioIF_stopRx();
+    }
+    s_state.connected = false;
+    s_state.initiating = false;
+    s_state.eventCounter = 0;
+}
+
 bool BleConn_isConnected(void) {
     return s_state.connected;
 }

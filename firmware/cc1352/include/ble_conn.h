@@ -58,6 +58,18 @@ void BleConn_init(void);
 BleConn_Result BleConn_initiate(const uint8_t *peerAddr, uint8_t peerAddrType,
                                 uint16_t connIntervalUnits, uint16_t supervTimeoutUnits);
 void BleConn_disconnect(void);
+
+/* Pure radio-state cleanup, idempotent. Used by the cooperative
+ * disconnect flow (see BleConnMgr_initiateGracefulDisconnect) AFTER
+ * LL_TERMINATE_IND has been transmitted (or after the grace window
+ * expires). Does NOT queue any LL PDU and does NOT sleep — safe to
+ * call from BleConnMgr_poll context.
+ *
+ * Sets s_state.connected=false, s_state.initiating=false,
+ * s_state.eventCounter=0, and stops any active scan/initiate via
+ * RadioIF_stopRx() if applicable. Does NOT call BleConnMgr_stop()
+ * — caller is responsible for that ordering. */
+void BleConn_finalizeDisconnect(void);
 bool BleConn_isConnected(void);
 bool BleConn_isInitiating(void);
 const BleConn_State *BleConn_getState(void);

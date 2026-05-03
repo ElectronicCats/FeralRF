@@ -215,7 +215,7 @@ PROP_PRESETS = {
         mod_type=0,  # FSK
         symbol_rate=250000,
         deviation=200,  # escalada vs 50k variant
-        rx_bw=0x56,  # bandwidth más ancho para 250k
+        rx_bw=0x5A,  # ancho aumentado vs 0x56 — 250k FSK puro requiere más BW
         sync_word=0x930B51DE,
     ),
     "wisun_915_fsk_50k": dict(

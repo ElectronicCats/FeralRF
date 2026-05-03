@@ -910,6 +910,11 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
             send_error(seq, ERR_INVALID_STATE);
             return;
         }
+        /* F8f #3: install disconnect callback BEFORE initiating so that a
+         * peer-immediate-DC after BleConn_initiate() but before any GATT
+         * command still emits RSP_DISCONNECTED to the host. Idempotent
+         * (ensure_gatt_callbacks() gates on gatt_callbacks_installed). */
+        ensure_gatt_callbacks();
         /* Default: interval=24 (30ms), timeout=100 (1000ms) */
         BleConn_Result res = BleConn_initiate(payload, payload[6], 24u, 100u);
         uint8_t rsp[1] = {(uint8_t)res};

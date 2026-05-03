@@ -38,7 +38,7 @@
  * 2 s earlier so the host always receives a clean RSP_CONN_RESULT
  * (with BLE_CONN_ERR_TIMEOUT) instead of a host-side TimeoutError.
  * 8 s × 4 MHz RAT = 32_000_000 ticks. */
-#define BLE_CONNECT_TIMEOUT_RAT_TICKS (8u * 4000000u)
+#define BLE_CONNECT_TIMEOUT_RAT_TICKS ((uint32_t)(8u * 4000000u))
 
 /* ── Static state (single connection) ── */
 static BleConn_State s_state;
@@ -194,7 +194,10 @@ BleConn_Result BleConn_initiate(const uint8_t *peerAddr, uint8_t peerAddrType,
      * The earlier note about a 5-second TRIG_ABSTIME conflicting with
      * bDynamicWinOffset's calibration window referred to ABSTIME
      * specifically; TRIG_REL_START is relative to the command's own
-     * start tick and does not race with WinOffset calibration.
+     * start tick and does not race with WinOffset calibration. See
+     * docs/investigations/2026-04-24-f8a-session-1/tx-mechanism-decision.md
+     * (Option A) for the original discussion of why TRIG_NEVER was
+     * chosen at the time.
      *
      * BLE_DONE_ENDED is the status returned by RF_runCmd when this
      * trigger fires, and RadioIF_bleInitiate already maps it to return

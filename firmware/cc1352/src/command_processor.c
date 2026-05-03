@@ -327,10 +327,14 @@ static void send_stats(uint8_t seq) {
 static void follower_on_packet(const uint8_t *ll_pdu, uint8_t pdu_len, uint8_t channel,
                                int8_t rssi_dbm, uint16_t event_counter, uint8_t direction) {
     /* Wire format: [direction:1][channel:1][rssi:1][event:2LE][ll_pdu:N] */
-    uint8_t buf[5 + 257];
-    if (pdu_len > sizeof(buf) - 5u) {
+    /* F8f #1: cap to PROTOCOL_MAX_PAYLOAD - 5 (== 250) so the resulting
+     * frame fits PROTOCOL_MAX_PAYLOAD. Legitimate BLE LL data PDUs without
+     * DLE max at 37 bytes; with DLE max at 257 — but we never enable DLE
+     * on the follower path. Anything larger here is malformed; drop it. */
+    if (pdu_len > (uint8_t)(PROTOCOL_MAX_PAYLOAD - 5u)) {
         return;
     }
+    uint8_t buf[5u + (PROTOCOL_MAX_PAYLOAD - 5u)];
     buf[0] = direction;
     buf[1] = channel;
     buf[2] = (uint8_t)rssi_dbm;

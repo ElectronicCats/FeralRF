@@ -18,6 +18,14 @@ void OutputIF_sendResponse(uint8_t rsp_cmd, uint8_t seq, const uint8_t *payload,
     uint8_t encoded[COBS_MAX_ENCODED];
     uint8_t tx_frame[PACKET_QUEUE_MAX_FRAME_SIZE];
 
+    /* F8f #1: defensive — protocol_build_frame writes payload bytes into
+     * raw_frame without bounds-checking. PROTOCOL_MAX_FRAME == PROTOCOL_MAX_PAYLOAD
+     * + 6 (cmd+seq+len+crc), so payload_len > PROTOCOL_MAX_PAYLOAD overflows
+     * raw_frame on the stack. Drop the frame here rather than corrupt memory. */
+    if (payload_len > PROTOCOL_MAX_PAYLOAD) {
+        return;
+    }
+
     size_t raw_len = protocol_build_frame(rsp_cmd, seq, payload, payload_len, raw_frame);
     size_t encoded_len = cobs_encode(raw_frame, raw_len, encoded);
 

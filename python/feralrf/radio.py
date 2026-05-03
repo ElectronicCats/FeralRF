@@ -937,8 +937,16 @@ class Radio:
             timeout: Seconds to wait for ACK + entries + GATT_DONE.
 
         Returns:
-            List of GattAttribute (may be empty if peer replied with
-            ATTRIBUTE_NOT_FOUND).
+            List of GattAttribute. Empty list if the peer replied with
+            ATTRIBUTE_NOT_FOUND — that is a valid "no matches" answer,
+            not an error.
+
+        Note:
+            Single-shot. The firmware does not page through ATT_READ_BY_TYPE
+            continuations — if the peer has more matches than fit in one
+            response (~MTU/entry_size), the rest are silently dropped. To
+            scan a wide range comprehensively, call repeatedly with a
+            shrinking range based on the highest handle returned.
 
         Raises:
             CommandError: firmware refused or peer returned a non-spec error.
@@ -973,7 +981,16 @@ class Radio:
                     payload[0] if payload else 0,
                 )
             if cmd_id == Response.GATT_DONE:
-                # status byte: 0=ok (entries present), 1=ATTRIBUTE_NOT_FOUND (empty)
+                # Firmware status byte (per Task 3 fixup):
+                #   0 → peer replied successfully (with entries OR ATTRIBUTE_NOT_FOUND).
+                #       Empty result is a valid answer, not an error.
+                #   1 → real ATT error from peer (e.g. INSUFFICIENT_AUTHENTICATION 0x05,
+                #       READ_NOT_PERMITTED 0x02, INVALID_HANDLE 0x01) OR malformed
+                #       response. Raise so the host can distinguish "no matches"
+                #       from "permission denied".
+                status = payload[0] if payload else 0xFF
+                if status != 0:
+                    raise CommandError("GATT_READ_BY_UUID returned ATT error", status)
                 return attributes
             if len(payload) < 2:
                 raise ProtocolError(f"GATT_ATTRIBUTE payload too short: {len(payload)}")

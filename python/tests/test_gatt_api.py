@@ -488,3 +488,31 @@ def test_gatt_read_by_uuid_raises_on_initial_error():
 
     with pytest.raises(CommandError):
         radio.gatt_read_by_uuid(uuid=0x2A00, timeout=1.0)
+
+
+def test_gatt_read_by_uuid_raises_on_done_with_error_status():
+    """GATT_DONE(status=1) means real ATT error from peer (e.g. INSUFFICIENT_AUTHENTICATION).
+    Must raise CommandError so the host can distinguish from "no matches"."""
+    radio, fake = _radio_with_fake_serial()
+    fake.queue_response(Response.ACK, seq=0)
+    fake.queue_response(Response.GATT_DONE, seq=0, payload=b"\x01")
+
+    with pytest.raises(CommandError):
+        radio.gatt_read_by_uuid(uuid=0x2A00, timeout=1.0)
+
+
+def test_gatt_read_by_uuid_distinguishes_no_match_from_error():
+    """GATT_DONE(status=0) returns empty list; GATT_DONE(status=1) raises.
+    This is the whole point of Task 3's firmware fixup."""
+    # status=0 → empty list, no exception
+    radio, fake = _radio_with_fake_serial()
+    fake.queue_response(Response.ACK, seq=0)
+    fake.queue_response(Response.GATT_DONE, seq=0, payload=b"\x00")
+    assert radio.gatt_read_by_uuid(uuid=0x2A00, timeout=1.0) == []
+
+    # status=1 → CommandError
+    radio, fake = _radio_with_fake_serial()
+    fake.queue_response(Response.ACK, seq=0)
+    fake.queue_response(Response.GATT_DONE, seq=0, payload=b"\x01")
+    with pytest.raises(CommandError):
+        radio.gatt_read_by_uuid(uuid=0x2A00, timeout=1.0)

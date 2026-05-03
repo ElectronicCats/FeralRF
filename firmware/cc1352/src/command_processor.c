@@ -998,11 +998,14 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
             return;
         }
         ensure_gatt_callbacks();
-        s_gatt_seq = seq;
         if (!AttClient_startDiscover()) {
+            /* F8f #4: do NOT touch s_gatt_seq before the start guard; if the
+             * AttClient is busy with a prior transaction, overwriting seq
+             * here corrupts the in-flight completion's reported seq. */
             send_error(seq, ERR_INVALID_STATE);
             return;
         }
+        s_gatt_seq = seq;
         send_ack(seq);
         return;
     }
@@ -1018,12 +1021,13 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
             return;
         }
         ensure_gatt_callbacks();
-        s_gatt_seq = seq;
         uint16_t handle = read_u16_le(payload);
         if (!AttClient_startRead(handle)) {
+            /* F8f #4 — see CMD_GATT_DISCOVER comment */
             send_error(seq, ERR_INVALID_STATE);
             return;
         }
+        s_gatt_seq = seq;
         send_ack(seq);
         return;
     }
@@ -1039,12 +1043,13 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
             return;
         }
         ensure_gatt_callbacks();
-        s_gatt_seq = seq;
         uint16_t handle = read_u16_le(payload);
         if (!AttClient_startWrite(handle, &payload[2], (uint8_t)(payload_len - 2u))) {
+            /* F8f #4 — see CMD_GATT_DISCOVER comment */
             send_error(seq, ERR_INVALID_STATE);
             return;
         }
+        s_gatt_seq = seq;
         send_ack(seq);
         return;
     }
@@ -1071,7 +1076,6 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
             return;
         }
         ensure_gatt_callbacks();
-        s_gatt_seq = seq;
         uint16_t handle = read_u16_le(payload);
         bool enable = (payload[2] != 0u);
         bool indicate = (payload[3] != 0u);
@@ -1081,9 +1085,11 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
          * If a peripheral lays out descriptors differently, the host must call
          * gatt_write directly to the correct CCC handle. */
         if (!AttClient_startWrite((uint16_t)(handle + 1u), ccc_bytes, 2u)) {
+            /* F8f #4 — see CMD_GATT_DISCOVER comment */
             send_error(seq, ERR_INVALID_STATE);
             return;
         }
+        s_gatt_seq = seq;
         /* ACK is deferred to gatt_on_done(): once ATT WRITE_RSP arrives and
          * AttClient is back to IDLE, the host can issue the next subscribe
          * without racing the state machine. */
@@ -1102,12 +1108,13 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
             return;
         }
         ensure_gatt_callbacks();
-        s_gatt_seq = seq;
         uint16_t client_mtu = read_u16_le(payload);
         if (!AttClient_startMtuExchange(client_mtu)) {
+            /* F8f #4 — see CMD_GATT_DISCOVER comment */
             send_error(seq, ERR_INVALID_STATE);
             return;
         }
+        s_gatt_seq = seq;
         send_ack(seq);
         return;
     }
@@ -1123,14 +1130,15 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
             return;
         }
         ensure_gatt_callbacks();
-        s_gatt_seq = seq;
         uint16_t start = read_u16_le(&payload[0]);
         uint16_t end = read_u16_le(&payload[2]);
         uint16_t uuid = read_u16_le(&payload[4]);
         if (!AttClient_startReadByUuid(start, end, uuid)) {
+            /* F8f #4 — see CMD_GATT_DISCOVER comment */
             send_error(seq, ERR_INVALID_STATE);
             return;
         }
+        s_gatt_seq = seq;
         send_ack(seq);
         return;
     }

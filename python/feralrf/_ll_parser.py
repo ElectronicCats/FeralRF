@@ -157,8 +157,10 @@ def parse_att_pdu(raw: bytes) -> Optional[AttPdu]:
     name = ATT_OPCODE_NAMES.get(opcode, f"ATT_RFU_{opcode:#04x}")
     pdu = AttPdu(opcode=opcode, opcode_name=name)
 
-    # Opcodes that carry [handle:2LE] right after the opcode byte
-    has_handle = opcode in {0x0A, 0x0B, 0x0C, 0x0D, 0x12, 0x16, 0x1B, 0x1D, 0x52, 0xD2}
+    # ATT opcodes carrying [handle:2LE] right after the opcode byte. Excludes
+    # READ_RSP (0x0B) and READ_BLOB_RSP (0x0D) — those carry only value bytes
+    # per BT Core Spec Vol 3 Part F §3.4.4.4–5 (F8f #8).
+    has_handle = opcode in {0x0A, 0x0C, 0x12, 0x16, 0x1B, 0x1D, 0x52, 0xD2}
     if has_handle and len(raw) >= 3:
         pdu.handle = int.from_bytes(raw[1:3], "little")
         pdu.value = raw[3:] if len(raw) > 3 else b""

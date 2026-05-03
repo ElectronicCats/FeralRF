@@ -112,6 +112,30 @@ class TestParseATT:
         assert att.opcode_name == "ATT_WRITE_REQ"
         assert att.handle == 0x00D5
 
+    def test_att_read_rsp_has_no_handle_field(self):
+        """F8f #8 — READ_RSP carries only value bytes, no handle prefix."""
+        from feralrf._ll_parser import parse_att_pdu
+
+        # opcode=0x0B (ATT_READ_RSP) + 4 value bytes
+        pdu = parse_att_pdu(bytes([0x0B, 0xDE, 0xAD, 0xBE, 0xEF]))
+        assert pdu is not None
+        assert pdu.opcode == 0x0B
+        assert pdu.handle is None, "READ_RSP must not parse value bytes as a handle"
+        assert pdu.value is None, (
+            "value field is reserved for has_handle PDUs; read responses are not "
+            "decoded into the AttPdu.value attribute by parse_att_pdu"
+        )
+
+    def test_att_read_blob_rsp_has_no_handle_field(self):
+        """F8f #8 — READ_BLOB_RSP carries only value bytes, no handle prefix."""
+        from feralrf._ll_parser import parse_att_pdu
+
+        pdu = parse_att_pdu(bytes([0x0D, 0x12, 0x34, 0x56]))
+        assert pdu is not None
+        assert pdu.opcode == 0x0D
+        assert pdu.handle is None
+        assert pdu.value is None
+
 
 class TestExportPcap:
     def test_export_creates_valid_pcapng(self, tmp_path):

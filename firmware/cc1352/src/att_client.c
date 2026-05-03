@@ -48,7 +48,6 @@
 
 /* L2CAP */
 #define L2CAP_CID_ATT 0x0004u
-#define ATT_DEFAULT_MTU 23u
 
 /* Max services/characteristics we can track for auto-discovery */
 #define MAX_SERVICES 16u

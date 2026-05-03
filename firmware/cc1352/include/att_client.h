@@ -144,6 +144,11 @@ typedef enum {
     ATT_DBG_TAG_POLL_TX_READ_UUID = 34,
 } AttClient_DbgTag;
 
+/* Default ATT MTU — wire-cap for both directions. The firmware does not
+ * negotiate up; AttClient_startMtuExchange surfaces the peer's advertised
+ * value to the host but the actual TX/RX buffers stay capped at this. */
+#define ATT_DEFAULT_MTU 23u
+
 /* 8 bytes per entry. Keep packed-ish (struct alignment puts u16 first). */
 typedef struct {
     uint16_t seq;       /* monotonic counter, never reset */

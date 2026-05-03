@@ -252,12 +252,15 @@ static void gatt_on_mtu(uint16_t peerServerMtu) {
 }
 
 static void gatt_on_attribute(uint16_t handle, const uint8_t *value, uint8_t valueLen) {
-    /* Wire format: [handle:2LE][value:N], capped at MTU-2 = 21 bytes. */
-    uint8_t rsp[2 + 21];
+    /* Wire format: [handle:2LE][value:N], capped by ATT_DEFAULT_MTU - 2
+     * (the 2 is the [handle:2] prefix; ATT_DEFAULT_MTU is the firmware
+     * TX/RX cap, currently 23, so the value field can hold up to 21 bytes).
+     * Bumps to ATT_DEFAULT_MTU automatically widen this. */
+    uint8_t rsp[2 + (ATT_DEFAULT_MTU - 2u)];
     rsp[0] = (uint8_t)(handle & 0xFF);
     rsp[1] = (uint8_t)(handle >> 8);
-    if (valueLen > 21u) {
-        valueLen = 21u;
+    if (valueLen > (uint8_t)(ATT_DEFAULT_MTU - 2u)) {
+        valueLen = (uint8_t)(ATT_DEFAULT_MTU - 2u);
     }
     for (uint8_t i = 0; i < valueLen; i++) {
         rsp[2 + i] = value[i];
@@ -271,6 +274,10 @@ static void gatt_on_disconnected(uint8_t reason) {
     OutputIF_sendResponse(RSP_DISCONNECTED, 0u, rsp, sizeof(rsp));
 }
 
+/* Set once on the first GATT-touching command. Both the AttClient
+ * callbacks (.onService/.onChar/.onRead/.onDone/.onMtu/.onAttribute) and
+ * the BleConnMgr disconnect callback are sticky once installed — no need
+ * to re-register on subsequent connections. */
 static bool gatt_callbacks_installed = false;
 
 static void ensure_gatt_callbacks(void) {
@@ -915,7 +922,7 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
         /* Mark host-initiated reason BEFORE BleConn_disconnect so the
          * subsequent BleConnMgr_stop callback sees 0x16, not whatever
          * sticks around from the previous session. */
-        BleConnMgr_stopWithReason(0x16u);
+        BleConnMgr_stopWithReason(0x16u); /* LOCAL_HOST_TERMINATED per BT Core Spec */
         BleConn_disconnect();
         send_ack(seq);
         return;

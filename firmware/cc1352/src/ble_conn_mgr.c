@@ -64,9 +64,21 @@ static BleConnMgr_DisconnectCb s_disconnect_cb;
 static uint8_t s_pending_dc_reason;
 static bool s_dc_reason_pending;
 
-/* F8d — cooperative graceful disconnect state. Only mutated from the
- * BleConnMgr_poll task context (same as the F8c sticky reason fields
- * above; see their doc comment for the concurrency invariant). */
+/* F8d — cooperative graceful disconnect state.
+ *
+ * Concurrency: written by both UartTask (via
+ * BleConnMgr_initiateGracefulDisconnect from command_processor's
+ * CMD_DISCONNECT path) AND RfTask (the BleConnMgr_poll hook decrements
+ * s_disconnect_events_remaining and clears both fields on teardown).
+ * F8c's sibling sticky-reason fields (s_pending_dc_reason,
+ * s_dc_reason_pending) have the same dual-writer pattern and have been
+ * validated wire-level. Single-word ARM stores are atomic on the
+ * Cortex-M4, and the state machine tolerates one stale-read iteration
+ * (the worst case extends the grace window by one or two events; no
+ * crash or stuck state). The write-ordering inside
+ * BleConnMgr_initiateGracefulDisconnect (counter BEFORE flag) closes
+ * the most-likely race. If a future change adds a non-atomic field
+ * here, switch to Hwi_disable/restore around the writes. */
 static bool s_pending_disconnect;
 static uint8_t s_disconnect_events_remaining;
 #define DISCONNECT_TX_GRACE_EVENTS 5u /* ~150 ms at 30 ms interval */
@@ -206,7 +218,13 @@ void BleConnMgr_initiateGracefulDisconnect(uint8_t reason) {
 
     /* Queue LL_TERMINATE_IND on the connection's TX queue. The next
      * BleConnMgr_poll event will TX it. Note: opcode 0x02 + reason
-     * byte per BT Core Spec Vol 6 Part B §2.4.2.6. */
+     * byte per BT Core Spec Vol 6 Part B §2.4.2.6.
+     *
+     * Return value of TXQueue_insert intentionally ignored: if the
+     * queue is full the PDU is dropped, but the cooperative path
+     * still tears down cleanly via the 5-event grace expiry — peer
+     * falls back to supervision timeout instead of receiving the
+     * graceful LL_TERMINATE. Acceptable degraded behavior. */
     uint8_t pdu[2];
     pdu[0] = 0x02u; /* LL_TERMINATE_IND */
     pdu[1] = reason;
@@ -221,8 +239,15 @@ void BleConnMgr_initiateGracefulDisconnect(uint8_t reason) {
         s_dc_reason_pending = true;
     }
 
-    s_pending_disconnect = true;
+    /* Publish the events-remaining counter BEFORE flipping the flag
+     * that triggers the poll-loop hook. RfTask reads s_pending_disconnect
+     * to decide whether to enter the hook; if it sees true while the
+     * counter is still 0 (stale from BleConnMgr_start), the
+     * --counter == 0u decrement underflows and the grace becomes 256
+     * events instead of 5. Reverse-order writes ensure either the
+     * counter is already valid OR s_pending_disconnect is still false. */
     s_disconnect_events_remaining = DISCONNECT_TX_GRACE_EVENTS;
+    s_pending_disconnect = true;
 }
 
 uint16_t BleConnMgr_getL2capRxCount(void) {
@@ -427,11 +452,20 @@ bool BleConnMgr_poll(void) {
 
     /* F8d — cooperative graceful disconnect: if the host queued
      * LL_TERMINATE_IND via BleConnMgr_initiateGracefulDisconnect,
-     * tear the connection down once TX is confirmed (numSent >= 1
-     * means our queue was actually transmitted this event) OR once
-     * the 5-event grace window expires (peer is unresponsive — we
-     * give up on the clean LL_TERMINATE and let our side cleanup
-     * regardless; peer will fall back to supervision timeout). */
+     * tear the connection down once at least one PDU was TX'd this
+     * event (numSent >= 1) OR once the 5-event grace window expires.
+     *
+     * NOTE: numSent counts ALL PDUs TX'd this event (including the
+     * empty LL_DATA keepalive that BleConnMgr always queues). It does
+     * NOT prove our specific LL_TERMINATE made it on-air. In the rare
+     * case where the radio op stops after only the keepalive slot,
+     * we tear down without delivering LL_TERMINATE — peer falls back
+     * to supervision timeout (~1 s), same as the give_up branch.
+     * Acceptable: imprecise but never stuck.
+     *
+     * If TXQueue_insert in initiateGracefulDisconnect dropped the PDU
+     * (queue full), the give_up branch handles teardown after grace
+     * expiry — no special path needed. */
     if (s_pending_disconnect) {
         bool tx_confirmed = (numSent >= 1u);
         bool give_up = (--s_disconnect_events_remaining == 0u);

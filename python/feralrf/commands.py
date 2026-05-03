@@ -213,9 +213,17 @@ class CommandBuilder:
         Args:
             client_mtu: MTU we advertise to the peer. Per BT Core Spec
                 Vol 3 Part F §3.2.8, ATT MTU MUST be >= 23.
+
+        Note (F8f #2): firmware ATT stack has no L2CAP reassembly and caps
+        outgoing PDUs at ATT_DEFAULT_MTU. Advertising a larger value invites
+        the peer to send fragmented or oversized responses that the stack
+        drops. Until L2CAP reassembly lands, only 23 is accepted.
         """
-        if client_mtu < 23 or client_mtu > 0xFFFF:
-            raise ValueError(f"client_mtu must be in [23, 65535], got {client_mtu}")
+        if client_mtu != 23:
+            raise ValueError(
+                f"client_mtu must be 23 until firmware supports L2CAP reassembly "
+                f"(got {client_mtu}). See F8f #2 in code review investigation."
+            )
         return struct.pack("<H", client_mtu)
 
     @staticmethod

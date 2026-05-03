@@ -350,13 +350,33 @@ def test_f8c_response_ids_are_assigned():
 
 
 def test_gatt_exchange_mtu_payload_is_u16_le_client_mtu():
+    # F8f #2: only client_mtu=23 is accepted until L2CAP reassembly lands.
     assert CommandBuilder.gatt_exchange_mtu(client_mtu=23) == b"\x17\x00"
-    assert CommandBuilder.gatt_exchange_mtu(client_mtu=247) == b"\xF7\x00"
 
 
 def test_gatt_exchange_mtu_rejects_too_small():
     with pytest.raises(ValueError):
-        CommandBuilder.gatt_exchange_mtu(client_mtu=22)  # MTU must be >= 23 per spec
+        CommandBuilder.gatt_exchange_mtu(client_mtu=22)  # MTU must be 23 (F8f #2)
+
+
+def test_gatt_exchange_mtu_rejects_above_default_mtu():
+    """F8f #2 — firmware ATT stack has no L2CAP reassembly; reject MTU > 23.
+
+    Until firmware can actually receive fragmented or large ATT responses,
+    advertising a larger MTU only invites timeouts. This guard lives at the
+    Python boundary as defensive UX.
+    """
+    with pytest.raises(ValueError, match="client_mtu must be 23"):
+        CommandBuilder.gatt_exchange_mtu(client_mtu=247)
+
+    with pytest.raises(ValueError, match="client_mtu must be 23"):
+        CommandBuilder.gatt_exchange_mtu(client_mtu=24)
+
+
+def test_gatt_exchange_mtu_accepts_default_mtu():
+    """F8f #2 — exactly 23 is allowed (the spec minimum)."""
+    payload = CommandBuilder.gatt_exchange_mtu(client_mtu=23)
+    assert payload == bytes([0x17, 0x00])  # 23 LE
 
 
 def test_gatt_read_by_uuid_uuid16_payload_is_start_end_uuid_le():

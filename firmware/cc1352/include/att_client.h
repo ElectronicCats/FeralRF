@@ -99,6 +99,12 @@ void AttClient_reset(void);
 
 AttClient_State AttClient_getState(void);
 
+/* F5 fix: vendor-specific status code surfaced via onDone(status) when an
+ * ATT response from the peer fails our bounds checks (entry_len out of
+ * range). 0xE0–0xFF is the application-specific range per BT Core Spec
+ * Vol 3 Part F §3.4.1.1. */
+#define ATT_ERR_MALFORMED_RSP 0xFEu
+
 /* ── Debug instrumentation (Task 0.2 of F8b Track A) ──
  *
  * Captures every public-API entry/exit and every state-machine transition
@@ -142,6 +148,7 @@ typedef enum {
     ATT_DBG_TAG_START_READ_UUID_EXIT_FAIL = 32,
     ATT_DBG_TAG_READ_UUID_RSP = 33,
     ATT_DBG_TAG_POLL_TX_READ_UUID = 34,
+    ATT_DBG_TAG_MALFORMED_RSP = 35,
 } AttClient_DbgTag;
 
 /* Default ATT MTU — wire-cap for both directions. The firmware does not

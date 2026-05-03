@@ -62,6 +62,9 @@ static bool s_request_pending;
 /* Discovery state */
 static uint16_t s_disc_next_handle;
 
+/* Client MTU advertised in the most recent explicit exchange request. */
+static uint16_t s_requested_mtu;
+
 /* Service table for char discovery */
 static struct {
     uint16_t startHandle;
@@ -141,11 +144,11 @@ static void AttClient_sendCfm(void) {
 
 /* ── ATT Request builders ── */
 
-static bool send_exchange_mtu_req(void) {
+static bool send_exchange_mtu_req(uint16_t clientMtu) {
     uint8_t pdu[3];
     pdu[0] = ATT_EXCHANGE_MTU_REQ;
-    pdu[1] = (uint8_t)(ATT_DEFAULT_MTU & 0xFF);
-    pdu[2] = (uint8_t)(ATT_DEFAULT_MTU >> 8);
+    pdu[1] = (uint8_t)(clientMtu & 0xFF);
+    pdu[2] = (uint8_t)(clientMtu >> 8);
     return att_send(pdu, 3);
 }
 
@@ -203,15 +206,40 @@ static uint16_t le16(const uint8_t *p) {
 
 static void handle_mtu_rsp(const uint8_t *pdu, uint8_t len) {
     AttClient_State old = s_state;
-    if (len < 3 || s_state != ATT_STATE_WAIT_MTU_RSP) {
+    if (len < 3) {
+        att_dbg(ATT_DBG_TAG_MTU_RSP, old);
+        return;
+    }
+    if (s_state != ATT_STATE_WAIT_MTU_RSP && s_state != ATT_STATE_WAIT_MTU_EXCHANGE) {
         att_dbg(ATT_DBG_TAG_MTU_RSP, old);
         return;
     }
     uint16_t server_mtu = le16(&pdu[1]);
-    s_mtu = (server_mtu < ATT_DEFAULT_MTU) ? server_mtu : ATT_DEFAULT_MTU;
+    /* Negotiated MTU = min(client, server). For the legacy auto-flow
+     * (WAIT_MTU_RSP) the cap is ATT_DEFAULT_MTU because att_send still
+     * uses the static buffer; the explicit-exchange flow records the
+     * peer's value verbatim so the host can see it. */
+    uint16_t negotiated = (server_mtu < ATT_DEFAULT_MTU) ? server_mtu : ATT_DEFAULT_MTU;
+    s_mtu = negotiated;
     s_request_pending = false;
 
-    /* Start service discovery */
+    if (s_state == ATT_STATE_WAIT_MTU_EXCHANGE) {
+        if (s_cb.onMtu) {
+            /* Surface the *peer-reported* server MTU to the host even
+             * though our own buffers are still capped at ATT_DEFAULT_MTU.
+             * Lets the host record what the peer would support. */
+            s_cb.onMtu(server_mtu);
+        }
+        s_state = ATT_STATE_IDLE;
+        att_dbg(ATT_DBG_TAG_MTU_RSP, old);
+        if (s_cb.onDone) {
+            att_dbg(ATT_DBG_TAG_DONE_CB, s_state);
+            s_cb.onDone(0);
+        }
+        return;
+    }
+
+    /* Legacy auto-flow (currently unreachable, kept for compat) */
     s_disc_next_handle = 0x0001;
     s_service_count = 0;
     s_state = ATT_STATE_WAIT_DISCOVER_RSP;
@@ -447,6 +475,23 @@ bool AttClient_startWrite(uint16_t handle, const uint8_t *data, uint8_t len) {
     return true;
 }
 
+bool AttClient_startMtuExchange(uint16_t clientMtu) {
+    AttClient_State old = s_state;
+    att_dbg(ATT_DBG_TAG_START_MTU_ENTER, old);
+    if (s_state != ATT_STATE_IDLE) {
+        att_dbg(ATT_DBG_TAG_START_MTU_EXIT_FAIL, old);
+        return false;
+    }
+    if (clientMtu < ATT_DEFAULT_MTU) {
+        clientMtu = ATT_DEFAULT_MTU;
+    }
+    s_requested_mtu = clientMtu;
+    s_request_pending = false;
+    s_state = ATT_STATE_WAIT_MTU_EXCHANGE;
+    att_dbg(ATT_DBG_TAG_START_MTU_EXIT_OK, old);
+    return true;
+}
+
 void AttClient_onL2capRx(const uint8_t *l2capPayload, uint8_t len) {
     AttClient_State old = s_state;
     att_dbg(ATT_DBG_TAG_L2CAP_RX, old);
@@ -525,10 +570,17 @@ void AttClient_poll(void) {
     switch (s_state) {
     case ATT_STATE_WAIT_MTU_RSP:
         if (!s_request_pending) {
-            if (send_exchange_mtu_req()) {
+            if (send_exchange_mtu_req(ATT_DEFAULT_MTU)) {
                 s_request_pending = true;
                 att_dbg(ATT_DBG_TAG_POLL_TX_MTU, old);
             }
+        }
+        break;
+
+    case ATT_STATE_WAIT_MTU_EXCHANGE:
+        if (send_exchange_mtu_req(s_requested_mtu)) {
+            s_request_pending = true;
+            att_dbg(ATT_DBG_TAG_POLL_TX_MTU, old);
         }
         break;
 

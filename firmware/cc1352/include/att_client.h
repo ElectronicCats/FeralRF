@@ -20,6 +20,7 @@ typedef enum {
     ATT_STATE_WAIT_CHAR_RSP,
     ATT_STATE_WAIT_READ_RSP,
     ATT_STATE_WAIT_WRITE_RSP,
+    ATT_STATE_WAIT_MTU_EXCHANGE,
     ATT_STATE_DONE,
     ATT_STATE_ERROR,
 } AttClient_State;
@@ -31,12 +32,14 @@ typedef void (*AttClient_CharCb)(uint16_t handle, uint8_t properties, uint16_t v
                                  const uint8_t *uuid, uint8_t uuidLen);
 typedef void (*AttClient_ReadCb)(uint16_t handle, const uint8_t *data, uint8_t len);
 typedef void (*AttClient_DoneCb)(uint8_t status); /* 0=ok, 1=error, 2=timeout */
+typedef void (*AttClient_MtuCb)(uint16_t negotiatedMtu);
 
 typedef struct {
     AttClient_ServiceCb onService;
     AttClient_CharCb onChar;
     AttClient_ReadCb onRead;
     AttClient_DoneCb onDone;
+    AttClient_MtuCb onMtu;
 } AttClient_Callbacks;
 
 void AttClient_init(void);
@@ -50,6 +53,11 @@ bool AttClient_startRead(uint16_t handle);
 
 /* Write a characteristic value by handle */
 bool AttClient_startWrite(uint16_t handle, const uint8_t *data, uint8_t len);
+
+/* Trigger an explicit ATT MTU exchange. clientMtu is what we advertise to
+ * the peer (must be >= 23). The peer's reply is min(clientMtu, peerMtu);
+ * delivered via onMtu(...) and then onDone(0). Returns false if not IDLE. */
+bool AttClient_startMtuExchange(uint16_t clientMtu);
 
 /* Called by BleConnMgr when L2CAP data arrives (LLID=1 or 2) */
 void AttClient_onL2capRx(const uint8_t *l2capPayload, uint8_t len);
@@ -97,6 +105,9 @@ typedef enum {
     ATT_DBG_TAG_DONE_CB = 24,
     ATT_DBG_TAG_NOTIFY_RX = 25,
     ATT_DBG_TAG_INDICATE_RX = 26,
+    ATT_DBG_TAG_START_MTU_ENTER = 27,
+    ATT_DBG_TAG_START_MTU_EXIT_OK = 28,
+    ATT_DBG_TAG_START_MTU_EXIT_FAIL = 29,
 } AttClient_DbgTag;
 
 /* 8 bytes per entry. Keep packed-ish (struct alignment puts u16 first). */

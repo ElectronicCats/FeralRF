@@ -50,51 +50,51 @@ def main() -> int:
 
     results = {}
 
-    print(f"Cycle 1: connect to {mac} (type={addr_type}) ...")
-    res1 = r.ble_connect(addr_le, addr_type=addr_type, timeout=10.0)
-    print(f"  result={res1}")
-    results["first_connect"] = res1.is_ok
-    if not res1.is_ok:
-        print("Cannot proceed without a successful first connect.")
+    try:
+        print(f"Cycle 1: connect to {mac} (type={addr_type}) ...")
+        res1 = r.ble_connect(addr_le, addr_type=addr_type, timeout=10.0)
+        print(f"  result={res1}")
+        results["first_connect"] = res1.is_ok
+        if not res1.is_ok:
+            print("Cannot proceed without a successful first connect.")
+            return 1
+
+        time.sleep(0.3)
+
+        print("Disconnect (host-initiated, graceful) ...")
+        try:
+            r.ble_disconnect(timeout=3.0)
+        except Exception as e:
+            print(f"  ble_disconnect raised: {e}")
+
+        got_event = next(iter(r.read_disconnect_events(timeout=3.0)), None)
+        if got_event is None:
+            print("  Disconnect event NOT received")
+            results["dc_event"] = False
+        else:
+            print(f"  Disconnect event: reason=0x{got_event.reason:02X} ({got_event.reason_label})")
+            results["dc_event"] = got_event.reason == 0x16
+
+        print(f"Cycle 2: immediate reconnect to {mac} ...")
+        t0 = time.monotonic()
+        try:
+            res2 = r.ble_connect(addr_le, addr_type=addr_type, timeout=2.0)
+            elapsed = time.monotonic() - t0
+            print(f"  result={res2} elapsed={elapsed:.2f}s")
+            results["reconnect_ok"] = res2.is_ok
+            results["reconnect_fast"] = res2.is_ok and elapsed < 0.5
+        except Exception as e:
+            elapsed = time.monotonic() - t0
+            print(f"  reconnect raised after {elapsed:.2f}s: {e}")
+            results["reconnect_ok"] = False
+            results["reconnect_fast"] = False
+
+        try:
+            r.ble_disconnect(timeout=3.0)
+        except Exception:
+            pass
+    finally:
         r.disconnect()
-        return 1
-
-    time.sleep(0.3)
-
-    print("Disconnect (host-initiated, graceful) ...")
-    try:
-        r.ble_disconnect(timeout=3.0)
-    except Exception as e:
-        print(f"  ble_disconnect raised: {e}")
-
-    got_event = next(iter(r.read_disconnect_events(timeout=3.0)), None)
-    if got_event is None:
-        print("  Disconnect event NOT received")
-        results["dc_event"] = False
-    else:
-        print(f"  Disconnect event: reason=0x{got_event.reason:02X} ({got_event.reason_label})")
-        results["dc_event"] = got_event.reason == 0x16
-
-    print(f"Cycle 2: immediate reconnect to {mac} ...")
-    t0 = time.monotonic()
-    try:
-        res2 = r.ble_connect(addr_le, addr_type=addr_type, timeout=2.0)
-        elapsed = time.monotonic() - t0
-        print(f"  result={res2} elapsed={elapsed:.2f}s")
-        results["reconnect_ok"] = res2.is_ok
-        results["reconnect_fast"] = res2.is_ok and elapsed < 0.5
-    except Exception as e:
-        elapsed = time.monotonic() - t0
-        print(f"  reconnect raised after {elapsed:.2f}s: {e}")
-        results["reconnect_ok"] = False
-        results["reconnect_fast"] = False
-
-    try:
-        r.ble_disconnect(timeout=3.0)
-    except Exception:
-        pass
-
-    r.disconnect()
 
     print()
     for n, ok in results.items():

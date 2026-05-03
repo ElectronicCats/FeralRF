@@ -84,7 +84,11 @@ def run_preset(
             if isinstance(pkt, RxStreamError):
                 continue
             total += 1
-            if marker in pkt.data:
+            # F29 vuelta 1: rigorous validation — require CRC pass AND marker
+            # bytes match. Without crc_ok, a corrupted packet whose bytes
+            # happen to contain the 4-byte marker would count (vanishingly
+            # unlikely at ~1/4.3B but explicit is safer than implicit).
+            if pkt.crc_ok and marker in pkt.data:
                 matched += 1
 
         try:

@@ -37,9 +37,13 @@ typedef struct {
 void RadioIF_init(void);
 
 /* 433 MHz boot handle — opened once at boot, never closed */
-#include <ti/drivers/rf/RF.h>
 #include <ti/devices/DeviceFamily.h>
+#include <ti/drivers/rf/RF.h>
+/* The macro path below uses '/' as a path separator, not division.
+ * clang-format mangles it without the directives. */
+/* clang-format off */
 #include DeviceFamily_constructPath(driverlib/rf_mailbox.h)
+/* clang-format on */
 RF_Object *RadioIF_get433Object(void);
 void RadioIF_set433Handle(RF_Handle h);
 RF_Handle RadioIF_get433Handle(void);
@@ -95,18 +99,17 @@ int RadioIF_bleInitiate(void);
  *   - Master TX'd, slave RX'd:               nTx>=1, nRxOk>=1 (or nRxNok>=1
  *                                            for CRC errors). */
 typedef struct {
-    uint8_t nTx;         /* pOutput->nTx — total TX incl. auto-empty + retrans */
-    uint8_t nRxOk;       /* pOutput->nRxOk */
-    uint8_t nRxNok;      /* pOutput->nRxNok */
-    uint8_t nRxIgnored;  /* pOutput->nRxIgnored */
-    uint8_t pktStatus;   /* packed pktStatus bitfield byte (see ble_conn_mgr.h) */
+    uint8_t nTx;        /* pOutput->nTx — total TX incl. auto-empty + retrans */
+    uint8_t nRxOk;      /* pOutput->nRxOk */
+    uint8_t nRxNok;     /* pOutput->nRxNok */
+    uint8_t nRxIgnored; /* pOutput->nRxIgnored */
+    uint8_t pktStatus;  /* packed pktStatus bitfield byte (see ble_conn_mgr.h) */
 } RadioIF_BleCentralStats;
 
 /* BLE central mode — run CMD_BLE5_MASTER for one connection event.
  * pStats may be NULL if the caller doesn't need per-event RF stats. */
-int RadioIF_bleCentral(uint8_t chan, uint32_t accessAddr, uint32_t crcInit,
-                       dataQueue_t *pTxQueue, uint32_t startTime,
-                       uint32_t endTime, uint32_t *pNumSent,
+int RadioIF_bleCentral(uint8_t chan, uint32_t accessAddr, uint32_t crcInit, dataQueue_t *pTxQueue,
+                       uint32_t startTime, uint32_t endTime, uint32_t *pNumSent,
                        RadioIF_BleCentralStats *pStats);
 
 /* Reset seqStat for initiator→central transition */
@@ -147,20 +150,19 @@ void *RadioIF_getRfHandle(void);
  *
  * Returns 0 on RX_OK / TIMEOUT / END (normal terminations), non-zero on
  * RF stack error. */
-typedef void (*RadioIF_FollowPacketCb)(const uint8_t *ll_pdu, uint8_t pdu_len,
-                                       uint8_t channel, int8_t rssi_dbm, void *user);
+typedef void (*RadioIF_FollowPacketCb)(const uint8_t *ll_pdu, uint8_t pdu_len, uint8_t channel,
+                                       int8_t rssi_dbm, void *user);
 
 /* Listen on an advertising channel (37/38/39) with AA=0x8E89BED6,
  * CRC init=0x555555. end_time_rat is absolute RAT tick (4 MHz); 0 means
  * listen forever. */
-int RadioIF_followAdvOnce(uint8_t adv_channel, uint32_t end_time_rat,
-                          RadioIF_FollowPacketCb cb, void *user);
+int RadioIF_followAdvOnce(uint8_t adv_channel, uint32_t end_time_rat, RadioIF_FollowPacketCb cb,
+                          void *user);
 
 /* Listen on a data channel (0..36) with caller-supplied accessAddr and
  * crcInit. end_time_rat is absolute RAT tick; 0 means listen forever. */
-int RadioIF_followDataOnce(uint8_t data_channel, uint32_t accessAddr,
-                           uint32_t crcInit, uint32_t end_time_rat,
-                           RadioIF_FollowPacketCb cb, void *user);
+int RadioIF_followDataOnce(uint8_t data_channel, uint32_t accessAddr, uint32_t crcInit,
+                           uint32_t end_time_rat, RadioIF_FollowPacketCb cb, void *user);
 
 /* Jamming functions - optimized continuous transmission */
 bool RadioIF_startJamSession(uint8_t phy, uint8_t channel, int8_t power_dbm);

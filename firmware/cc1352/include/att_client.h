@@ -76,9 +76,16 @@ bool AttClient_startMtuExchange(uint16_t clientMtu);
 
 /* Issue ATT_READ_BY_TYPE_REQ for an arbitrary 16-bit UUID. Each matching
  * attribute is delivered via onAttribute(handle, value, len); the flow
- * terminates with onDone(status) — status 0 means at least one entry was
- * returned, non-zero means the peer replied with ATT_ERROR (typically
- * ATTRIBUTE_NOT_FOUND). Returns false if not IDLE. */
+ * terminates with onDone(status):
+ *   - status 0: peer replied (with 1+ entries OR ATTRIBUTE_NOT_FOUND).
+ *               Empty result is a valid answer, not an error.
+ *   - status 1: real ATT error (e.g. INSUFFICIENT_AUTHENTICATION 0x05,
+ *               READ_NOT_PERMITTED 0x02, INVALID_HANDLE 0x01) or a
+ *               malformed response. Host should not retry without
+ *               addressing the underlying cause.
+ * Returns false if not IDLE. Single-shot — if the peer has more matches
+ * than fit in one response, the rest are silently dropped (multi-shot
+ * continuation is a future enhancement). */
 bool AttClient_startReadByUuid(uint16_t startHandle, uint16_t endHandle, uint16_t uuid16);
 
 /* Called by BleConnMgr when L2CAP data arrives (LLID=1 or 2) */

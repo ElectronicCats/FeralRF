@@ -68,7 +68,7 @@ static uint16_t s_requested_mtu;
 /* State for AttClient_startReadByUuid */
 static uint16_t s_read_uuid_start;
 static uint16_t s_read_uuid_end;
-static uint16_t s_read_uuid_uuid;
+static uint16_t s_read_uuid_type;
 
 /* Service table for char discovery */
 static struct {
@@ -323,6 +323,9 @@ static void handle_read_by_type_rsp(const uint8_t *pdu, uint8_t len) {
 }
 
 static void handle_read_by_uuid_rsp(const uint8_t *pdu, uint8_t len) {
+    /* Response layout per BT Core Spec v5.4 Vol 3 Part F §3.4.4.2 (Read By
+     * Type Response): [opcode:1][length:1][handle:2][value:length-2] * N.
+     * `length` is the per-entry size — same for every entry in this PDU. */
     AttClient_State old = s_state;
     if (len < 4 || s_state != ATT_STATE_WAIT_READ_BY_UUID_RSP) {
         att_dbg(ATT_DBG_TAG_READ_UUID_RSP, old);
@@ -341,8 +344,6 @@ static void handle_read_by_uuid_rsp(const uint8_t *pdu, uint8_t len) {
         return;
     }
     uint8_t offset = 2;
-    uint16_t last_handle = 0;
-    bool got_any = false;
 
     while (offset + entry_len <= len) {
         uint16_t handle = le16(&pdu[offset]);
@@ -351,12 +352,8 @@ static void handle_read_by_uuid_rsp(const uint8_t *pdu, uint8_t len) {
         if (s_cb.onAttribute) {
             s_cb.onAttribute(handle, value, value_len);
         }
-        last_handle = handle;
-        got_any = true;
         offset += entry_len;
     }
-    (void)last_handle;
-    (void)got_any;
 
     /* Per ATT spec: ReadByType returns up to MTU-2 bytes worth of entries.
      * If the peer has more matches, the host can re-issue with an updated
@@ -443,18 +440,20 @@ static void handle_error_rsp(const uint8_t *pdu, uint8_t len) {
             att_dbg(ATT_DBG_TAG_ERROR_RSP, old);
             return;
         }
-    }
-
-    if (s_state == ATT_STATE_WAIT_READ_BY_UUID_RSP) {
-        s_state = ATT_STATE_IDLE;
-        att_dbg(ATT_DBG_TAG_ERROR_RSP, old);
-        if (s_cb.onDone) {
-            /* status 1 marks "no entries found" so the host can
-             * distinguish this from "peer didn't reply at all".
-             * Same convention as gatt_discover. */
-            s_cb.onDone(1);
+        if (s_state == ATT_STATE_WAIT_READ_BY_UUID_RSP) {
+            /* Empty result for an explicit Read-by-UUID. Convention matches
+             * the discovery paths: status=0 means "the peer answered, here
+             * is the (possibly empty) result", status=1 is reserved for
+             * real ATT errors which fall through to the bottom of this
+             * function. Lets the host distinguish "no matches" from
+             * "permission denied" / "attribute not readable" / etc. */
+            s_state = ATT_STATE_IDLE;
+            att_dbg(ATT_DBG_TAG_ERROR_RSP, old);
+            if (s_cb.onDone) {
+                s_cb.onDone(0);
+            }
+            return;
         }
-        return;
     }
 
     /* Actual error */
@@ -570,7 +569,7 @@ bool AttClient_startReadByUuid(uint16_t startHandle, uint16_t endHandle, uint16_
     }
     s_read_uuid_start = startHandle;
     s_read_uuid_end = endHandle;
-    s_read_uuid_uuid = uuid16;
+    s_read_uuid_type = uuid16;
     s_request_pending = false;
     s_state = ATT_STATE_WAIT_READ_BY_UUID_RSP;
     att_dbg(ATT_DBG_TAG_START_READ_UUID_EXIT_OK, old);
@@ -674,7 +673,7 @@ void AttClient_poll(void) {
         break;
 
     case ATT_STATE_WAIT_READ_BY_UUID_RSP:
-        if (send_read_by_type_req(s_read_uuid_start, s_read_uuid_end, s_read_uuid_uuid)) {
+        if (send_read_by_type_req(s_read_uuid_start, s_read_uuid_end, s_read_uuid_type)) {
             s_request_pending = true;
             att_dbg(ATT_DBG_TAG_POLL_TX_READ_UUID, old);
         }

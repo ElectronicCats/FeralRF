@@ -58,19 +58,15 @@ void BleConn_init(void);
 BleConn_Result BleConn_initiate(const uint8_t *peerAddr, uint8_t peerAddrType,
                                 uint16_t connIntervalUnits, uint16_t supervTimeoutUnits);
 
-/* DEPRECATED since F8d: legacy queue-LL_TERMINATE-then-Task_sleep
- * disconnect path. Has zero callers in src/ outside this module's own
- * definition. Sleeps in the calling task — UNSAFE if invoked from a
- * code path that owns the connection (the same task is needed to TX
- * the queued PDU). New code MUST use one of:
+/* BleConn_disconnect was DEPRECATED in F8d and removed from the public
+ * header in F8f #11 — see ble_conn.c for the file-static implementation
+ * (kept as a fallback safety net). New code MUST use:
  *   - BleConnMgr_initiateGracefulDisconnect(reason): host-initiated
  *     graceful disconnect. Cooperative TX of LL_TERMINATE_IND via
  *     BleConnMgr_poll, then teardown. NO sleep, safe from any task.
  *   - BleConn_finalizeDisconnect(): pure radio cleanup for paths
  *     where LL_TERMINATE was already sent or peer is unreachable.
- * Kept for now as a safety net; remove in a future cleanup once we
- * are confident no out-of-tree caller depends on it. */
-void BleConn_disconnect(void);
+ */
 
 /* Pure radio-state cleanup, idempotent. Used by the cooperative
  * disconnect flow (see BleConnMgr_initiateGracefulDisconnect) AFTER

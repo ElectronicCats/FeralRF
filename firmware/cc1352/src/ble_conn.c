@@ -259,34 +259,9 @@ BleConn_Result BleConn_initiate(const uint8_t *peerAddr, uint8_t peerAddrType,
     return BLE_CONN_ERR_RF;
 }
 
-void BleConn_disconnect(void) {
-    /* If we have an active connection, send LL_TERMINATE_IND so the peer
-     * tears down its side immediately instead of waiting for
-     * supervisionTimeout (~1 s for default config). Without this, CH573 and
-     * similar peripherals hold ghost connection state long enough to make
-     * back-to-back demo runs flaky. Block ~3 connection intervals after
-     * queuing so BleConnMgr_poll has time to TX it and receive the slave's
-     * empty-PDU ACK before we tear down our own side. */
-    if (s_state.connected && BleConnMgr_isRunning()) {
-        uint8_t pdu[2] = {LL_TERMINATE_IND_OPCODE, LL_TERMINATE_REASON_REMOTE_USER};
-        TXQueue_insert(2, TX_QUEUE_LLID_CTRL, pdu);
-
-        uint32_t interval_ms = (uint32_t)s_state.connInterval * 5u / 4u; /* 1.25 ms units */
-        if (interval_ms == 0u) {
-            interval_ms = 30u;
-        }
-        Task_sleep(MS_TO_TASK_TICKS(interval_ms * 3u));
-    }
-
-    BleConnMgr_stop();
-    if (s_state.initiating) {
-        RadioIF_stopRx();
-    }
-
-    s_state.connected = false;
-    s_state.initiating = false;
-    s_state.eventCounter = 0;
-}
+/* BleConn_disconnect (DEPRECATED in F8d, F8f #11) removed entirely — no
+ * in-tree callers, per audit. New code uses BleConnMgr_initiateGracefulDisconnect
+ * (cooperative) or BleConn_finalizeDisconnect (pure radio cleanup). */
 
 void BleConn_finalizeDisconnect(void) {
     /* Pure cleanup — no queue, no sleep, no BleConnMgr_stop. The

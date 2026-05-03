@@ -201,4 +201,29 @@ PROP_PRESETS = {
         rx_bw=0x52,
         sync_word=0x930B51DE,
     ),
+    # === 902-928 MHz ISM Band (US / Sidewalk / Wi-SUN FAN 1.0) ===
+    "sidewalk_915_fsk_50k": dict(
+        frequency_hz=915000000,
+        mod_type=0,  # FSK
+        symbol_rate=50000,
+        deviation=100,  # template GFSK 868 ya validado
+        rx_bw=0x52,
+        sync_word=0x930B51DE,
+    ),
+    "sidewalk_915_fsk_250k": dict(
+        frequency_hz=915000000,
+        mod_type=0,  # FSK
+        symbol_rate=250000,
+        deviation=200,  # escalada vs 50k variant
+        rx_bw=0x56,  # bandwidth más ancho para 250k
+        sync_word=0x930B51DE,
+    ),
+    "wisun_915_fsk_50k": dict(
+        frequency_hz=902200000,  # Wi-SUN FAN 1.0 NA-1 plan canal 0
+        mod_type=0,  # FSK
+        symbol_rate=50000,
+        deviation=100,
+        rx_bw=0x52,
+        sync_word=0x930B51DE,
+    ),
 }

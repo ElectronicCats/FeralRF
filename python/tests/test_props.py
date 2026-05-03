@@ -165,3 +165,34 @@ class TestPresetCoverage:
     def test_msk_uses_mod_type_4(self):
         assert PROP_PRESETS["msk_868_50k"]["mod_type"] == 4
         assert PROP_PRESETS["msk_433_50k"]["mod_type"] == 4
+
+
+# F29 vuelta 1 — Sub-G 915 MHz presets
+
+
+F29_PRESET_NAMES = ("sidewalk_915_fsk_50k", "sidewalk_915_fsk_250k", "wisun_915_fsk_50k")
+
+
+@pytest.mark.parametrize("name", F29_PRESET_NAMES)
+def test_f29_preset_present(name):
+    """F29 vuelta 1 — los 3 presets nuevos están en PROP_PRESETS."""
+    assert name in PROP_PRESETS, f"Preset {name} ausente"
+
+
+@pytest.mark.parametrize("name", F29_PRESET_NAMES)
+def test_f29_preset_in_915_band(name):
+    """F29 vuelta 1 — frecuencia debe estar en banda 902-928 MHz US ISM."""
+    f = PROP_PRESETS[name]["frequency_hz"]
+    assert 902_000_000 <= f <= 928_000_000, f"{name}: freq {f} fuera de banda 902-928 MHz"
+
+
+@pytest.mark.parametrize("name", F29_PRESET_NAMES)
+def test_f29_preset_uses_fsk(name):
+    """F29 vuelta 1 — usa FSK puro (mod_type=0). GFSK fallback queda para F29.b."""
+    assert PROP_PRESETS[name]["mod_type"] == 0, f"{name}: mod_type debe ser 0 (FSK)"
+
+
+def test_f29_preset_count():
+    """F29 vuelta 1 — exactamente 3 presets nuevos en banda 915."""
+    f29 = [n for n in PROP_PRESETS if n in F29_PRESET_NAMES]
+    assert len(f29) == 3, f"Esperaba 3 F29 presets, encontré {len(f29)}: {f29}"

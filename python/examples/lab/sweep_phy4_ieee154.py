@@ -9,7 +9,7 @@ import time
 from dataclasses import dataclass
 from typing import Optional
 
-from feralrf import PHY, Radio
+from feralrf import PHY, Radio, RxStreamError
 from feralrf.exceptions import ConnectionError, FeralRFError, TimeoutError
 
 
@@ -90,7 +90,11 @@ def main() -> int:
                     time.sleep(args.settle)
 
                 radio.start_rx()
-                packets = list(radio.read_packets(timeout=args.duration))
+                packets = [
+                    p
+                    for p in radio.read_packets(timeout=args.duration)
+                    if not isinstance(p, RxStreamError)
+                ]
                 radio.stop_rx()
 
                 end = radio.get_stats(timeout=2.0)

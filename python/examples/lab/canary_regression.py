@@ -9,7 +9,7 @@ import sys
 import time
 from typing import Optional
 
-from feralrf import PHY, Radio
+from feralrf import PHY, Radio, RxStreamError
 from feralrf.exceptions import ConnectionError, FeralRFError, TimeoutError
 from feralrf.radio import DeviceStats
 
@@ -129,7 +129,9 @@ def run_soak(
             break
 
         window = min(float(report_every), end - now)
-        packets = list(radio.read_packets(timeout=window))
+        packets = [
+            p for p in radio.read_packets(timeout=window) if not isinstance(p, RxStreamError)
+        ]
         total_packets += len(packets)
         report_idx += 1
 

@@ -9,7 +9,7 @@ import argparse
 import sys
 import time
 
-from feralrf import PHY, Radio
+from feralrf import PHY, Radio, RxStreamError
 from feralrf.exceptions import ConnectionError, FeralRFError, TimeoutError
 
 
@@ -128,7 +128,9 @@ def main() -> int:
                 break
 
             window = min(float(args.report_every), end - now)
-            pkts = list(radio.read_packets(timeout=window))
+            pkts = [
+                p for p in radio.read_packets(timeout=window) if not isinstance(p, RxStreamError)
+            ]
             total_packets += len(pkts)
             elapsed = int(time.monotonic() - start)
             report_idx += 1

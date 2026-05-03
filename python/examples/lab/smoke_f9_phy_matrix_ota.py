@@ -22,7 +22,7 @@ import warnings
 
 import serial
 
-from feralrf import PHY, Radio
+from feralrf import PHY, Radio, RxStreamError
 
 warnings.simplefilter("ignore")
 
@@ -78,6 +78,9 @@ def step_run(tx, rx, phy, channel, label, count, listen_extra, tx_power):
     matched = 0
     total = 0
     for pkt in rx.read_packets(timeout=1.5):
+        # F8f #7b: read_packets now also yields RxStreamError; skip those.
+        if isinstance(pkt, RxStreamError):
+            continue
         total += 1
         if MARKER in pkt.data:
             if mac_filter is None or mac_filter in pkt.data:

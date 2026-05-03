@@ -54,7 +54,7 @@ def main():
         print("[FAIL] Must specify --phy or --preset", file=sys.stderr)
         return 2
 
-    from feralrf import PHY, PROP_PRESETS, Radio
+    from feralrf import PHY, PROP_PRESETS, Radio, RxStreamError
 
     marker = b"\xDE\xAD\xBE\xEF"
 
@@ -96,6 +96,9 @@ def main():
         matched = 0
         total = 0
         for pkt in rx.read_packets(timeout=2.0):
+            # F8f #7b: read_packets now also yields RxStreamError; skip those.
+            if isinstance(pkt, RxStreamError):
+                continue
             total += 1
             if marker in pkt.data:
                 matched += 1

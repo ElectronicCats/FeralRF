@@ -6,7 +6,7 @@ FeralRF - IEEE 802.15.4 RX smoke test (PHY 4)
 import argparse
 import sys
 
-from feralrf import PHY, Radio
+from feralrf import PHY, Radio, RxStreamError
 from feralrf.exceptions import ConnectionError, FeralRFError, TimeoutError
 
 
@@ -73,7 +73,9 @@ def main() -> int:
         ok("RX_START ACK")
 
         step("Read packets")
-        packets = list(radio.read_packets(timeout=args.duration))
+        packets = [
+            p for p in radio.read_packets(timeout=args.duration) if not isinstance(p, RxStreamError)
+        ]
         ok(f"packets={len(packets)}")
         if packets:
             p = packets[0]

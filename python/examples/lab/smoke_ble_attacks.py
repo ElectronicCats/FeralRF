@@ -43,7 +43,7 @@ def reset_one(port):
 
 def rx_collect(port, duration, results):
     """Run on a thread: scan BLE 1M ch 37 for `duration` seconds, append packets."""
-    from feralrf import PHY, Radio
+    from feralrf import PHY, Radio, RxStreamError
 
     rx = Radio(port=port)
     try:
@@ -56,6 +56,9 @@ def rx_collect(port, duration, results):
         deadline = time.time() + duration
         while time.time() < deadline:
             for pkt in rx.read_packets(timeout=0.5):
+                # F8f #7b: read_packets now also yields RxStreamError; skip those.
+                if isinstance(pkt, RxStreamError):
+                    continue
                 results.append(pkt)
         rx.stop_rx()
     finally:

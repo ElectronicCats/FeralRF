@@ -15,7 +15,7 @@ import time
 import warnings
 from typing import Dict
 
-from feralrf import PHY, Radio
+from feralrf import PHY, Radio, RxStreamError
 from feralrf._ble_scan import BleScanResult, extract_pdu_header
 
 warnings.simplefilter("ignore")
@@ -30,6 +30,9 @@ def passive_scan(radio: Radio, duration: float) -> Dict[str, BleScanResult]:
     results: Dict[str, BleScanResult] = {}
     try:
         for pkt in radio.read_packets(timeout=duration):
+            # F8f #7b: read_packets now also yields RxStreamError; skip those.
+            if isinstance(pkt, RxStreamError):
+                continue
             if not pkt.crc_ok or len(pkt.data) < 8 or pkt.ll_pdu_type is None:
                 continue
             if pkt.ll_pdu_type not in (0x00, 0x01, 0x02, 0x06, 0x07):

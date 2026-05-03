@@ -82,7 +82,7 @@ def main() -> int:
         fail(f"Invalid packet hex: {exc}")
         return 2
 
-    from feralrf import PHY, PROP_PRESETS, Radio
+    from feralrf import PHY, PROP_PRESETS, Radio, RxStreamError
     from feralrf.exceptions import ConnectionError, FeralRFError, TimeoutError
 
     if args.preset not in PROP_PRESETS:
@@ -131,7 +131,9 @@ def main() -> int:
         ok("RX_START ACK")
 
         step("Read packets")
-        packets = list(radio.read_packets(timeout=args.duration))
+        packets = [
+            p for p in radio.read_packets(timeout=args.duration) if not isinstance(p, RxStreamError)
+        ]
         ok(f"packets={len(packets)}")
 
         step("RX_STOP")

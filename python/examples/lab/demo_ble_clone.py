@@ -14,7 +14,7 @@ import time
 from collections import defaultdict
 from typing import List, Optional, Tuple
 
-from feralrf import PHY, Radio
+from feralrf import PHY, Radio, RxStreamError
 
 PORT = sys.argv[1] if len(sys.argv) > 1 else "/dev/ttyACM0"
 
@@ -39,6 +39,9 @@ def scan(radio, duration=15):
     radio.start_rx()
     devs = defaultdict(lambda: {"count": 0, "rssi_max": -128, "payloads": {}})
     for pkt in radio.read_packets(timeout=duration):
+        # F8f #7b: read_packets now also yields RxStreamError; skip those.
+        if isinstance(pkt, RxStreamError):
+            continue
         if pkt.crc_ok and len(pkt.data) > 8:
             mac = pkt.data[2:8].hex()
             d = devs[mac]

@@ -22,7 +22,7 @@ import warnings
 
 import serial
 
-from feralrf import PHY, Radio
+from feralrf import PHY, Radio, RxStreamError
 
 warnings.simplefilter("ignore")
 
@@ -73,14 +73,14 @@ def cw_interference_check(tx, rx):
     rx.set_phy(PHY.BLE_1M, channel=37)
     rx.start_rx()
     time.sleep(2.0)
-    n_idle = sum(1 for _ in rx.read_packets(timeout=0.5))
+    n_idle = sum(1 for p in rx.read_packets(timeout=0.5) if not isinstance(p, RxStreamError))
     rx.stop_rx()
 
     tx.set_phy(PHY.BLE_1M, channel=37)
     tx.tx_cw(power_dbm=5)
     rx.start_rx()
     time.sleep(2.0)
-    n_cw_active = sum(1 for _ in rx.read_packets(timeout=0.5))
+    n_cw_active = sum(1 for p in rx.read_packets(timeout=0.5) if not isinstance(p, RxStreamError))
     rx.stop_rx()
     tx.tx_test_stop()
 

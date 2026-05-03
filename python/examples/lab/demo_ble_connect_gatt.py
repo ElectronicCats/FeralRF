@@ -13,7 +13,7 @@ import sys
 import time
 from typing import Optional
 
-from feralrf import Radio
+from feralrf import Radio, RxStreamError
 from feralrf.enums import PHY
 
 KNOWN_UUIDS = {
@@ -88,6 +88,9 @@ def scan_and_pick(radio: Radio, duration: float = 5.0) -> Optional[tuple]:
     deadline = time.monotonic() + duration
 
     for pkt in radio.read_packets(timeout=duration):
+        # F8f #7b: read_packets now also yields RxStreamError; skip those.
+        if isinstance(pkt, RxStreamError):
+            continue
         if time.monotonic() > deadline:
             break
         if not pkt.crc_ok or not pkt.data or len(pkt.data) < 8:

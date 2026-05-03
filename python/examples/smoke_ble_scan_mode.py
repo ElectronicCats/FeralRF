@@ -70,7 +70,7 @@ def main() -> int:
     )
     print()
 
-    from feralrf import PHY, Radio
+    from feralrf import PHY, Radio, RxStreamError
     from feralrf.exceptions import ConnectionError, FeralRFError, TimeoutError
 
     radio = Radio(port=args.port, baudrate=args.baudrate)
@@ -98,7 +98,9 @@ def main() -> int:
         ok("RX_START ACK")
 
         step("Read packets")
-        packets = list(radio.read_packets(timeout=args.duration))
+        packets = [
+            p for p in radio.read_packets(timeout=args.duration) if not isinstance(p, RxStreamError)
+        ]
         total = len(packets)
         scan_like = sum(1 for pkt in packets if pkt.ll_pdu_kind == 2)
         adv_like = sum(1 for pkt in packets if pkt.ll_pdu_kind == 1)

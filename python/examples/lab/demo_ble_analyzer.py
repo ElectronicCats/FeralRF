@@ -34,7 +34,7 @@ import time
 from collections import defaultdict
 from typing import Any, Dict
 
-from feralrf import PHY, Radio
+from feralrf import PHY, Radio, RxStreamError
 
 PORT = sys.argv[1] if len(sys.argv) > 1 else "/dev/ttyACM0"
 OUTPUT = sys.argv[2] if len(sys.argv) > 2 else "ble_analysis.json"
@@ -433,6 +433,9 @@ radio.set_adv_hop(True)
 radio.start_rx()
 baseline = set()
 for pkt in radio.read_packets(timeout=15.0):
+    # F8f #7b: read_packets now also yields RxStreamError; skip those.
+    if isinstance(pkt, RxStreamError):
+        continue
     if pkt.crc_ok and len(pkt.data) > 8:
         baseline.add(pkt.data[2:8].hex())
 radio.stop_rx()
@@ -459,6 +462,9 @@ devices: Dict[str, Dict[str, Any]] = defaultdict(
 )
 start_time = time.time()
 for pkt in radio.read_packets(timeout=30.0):
+    # F8f #7b: read_packets now also yields RxStreamError; skip those.
+    if isinstance(pkt, RxStreamError):
+        continue
     if pkt.crc_ok and len(pkt.data) > 8:
         mac = pkt.data[2:8].hex()
         now = time.time() - start_time

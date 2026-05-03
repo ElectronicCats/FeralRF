@@ -12,7 +12,7 @@ from typing import List
 
 from feralrf import PHY, Radio
 from feralrf.exceptions import ConnectionError, FeralRFError, TimeoutError
-from feralrf.radio import Packet
+from feralrf.radio import Packet, RxStreamError
 
 
 def step(title: str) -> None:
@@ -154,7 +154,9 @@ def main() -> int:
         ok("RX_START ACK")
 
         step("Read packets")
-        packets: List[Packet] = list(radio.read_packets(timeout=args.duration))
+        packets: List[Packet] = [
+            p for p in radio.read_packets(timeout=args.duration) if not isinstance(p, RxStreamError)
+        ]
         crc_ok_packets = sum(1 for p in packets if p.crc_ok)
         ok(f"packets_total={len(packets)} crc_ok={crc_ok_packets}")
 

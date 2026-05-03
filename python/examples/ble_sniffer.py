@@ -11,7 +11,7 @@ Usage:
 import argparse
 from typing import Optional
 
-from feralrf import PHY, Radio
+from feralrf import PHY, Radio, RxStreamError
 
 
 def ll_kind_label(kind: Optional[int]) -> str:
@@ -87,6 +87,9 @@ def main():
         packet_count = 0
         try:
             for packet in radio.read_packets(timeout=None):
+                # F8f #7b: read_packets now also yields RxStreamError; skip those.
+                if isinstance(packet, RxStreamError):
+                    continue
                 packet_count += 1
                 print(
                     f"[{packet_count:5d}] "

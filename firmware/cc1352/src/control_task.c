@@ -20,6 +20,7 @@
 #include "ll_follower.h"
 #include "ll_manager.h"
 #include "phy_manager.h"
+#include "protocol.h"
 #include "radio_if.h"
 #include "task_event.h"
 
@@ -345,14 +346,19 @@ void ControlTask_processTxRaw(void) {
     s_tx_raw_pending = false;
     s_tx_raw_len = 0u;
 
-    /* Report TX failure to host — ACK was already sent at enqueue time,
-     * so send an async error if the actual RF transmission failed.
-     * seq=0xFF signals async (not correlated to a specific command). */
+    /* F8f #7a: report TX failure to host as async error.
+     *
+     * ACK was already sent at enqueue time, so send RSP_ERROR with seq=0
+     * to signal an async event (consistent with RX-side data_task.c). The
+     * earlier seq=0xFF sentinel collided with _read_response()'s
+     * "command echo skipped" path on the host and was silently discarded —
+     * see feedback_async_event_drop_bug. Python compat (Bundle 1 #7b)
+     * permanently accepts both seq=0 and seq=0xFF for forward-compat. */
     if (!tx_ok) {
-        uint8_t err_payload[1] = {0x05u}; /* ERR_INVALID_STATE */
+        uint8_t err_payload[1] = {ERR_INVALID_STATE};
         extern void OutputIF_sendResponse(uint8_t cmd_id, uint8_t seq, const uint8_t *payload,
                                           uint16_t payload_len);
-        OutputIF_sendResponse(0x81u, 0xFFu, err_payload, 1u);
+        OutputIF_sendResponse(RSP_ERROR, 0u, err_payload, 1u);
     }
 }
 

@@ -372,3 +372,18 @@ def test_gatt_read_by_uuid_rejects_inverted_range():
 def test_gatt_read_by_uuid_rejects_uuid_above_16_bits():
     with pytest.raises(ValueError):
         CommandBuilder.gatt_read_by_uuid(start=0x0001, end=0xFFFF, uuid=0x12A00)
+
+
+# --- Radio.gatt_exchange_mtu ---
+
+
+def test_radio_has_gatt_exchange_mtu_method():
+    from feralrf.radio import Radio
+
+    assert hasattr(Radio, "gatt_exchange_mtu")
+
+
+def test_radio_stable_methods_includes_gatt_exchange_mtu():
+    from feralrf.radio import Radio
+
+    assert "gatt_exchange_mtu" in Radio.STABLE_METHODS

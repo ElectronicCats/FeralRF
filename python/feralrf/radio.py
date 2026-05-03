@@ -211,6 +211,7 @@ class Radio:
         "gatt_read",
         "gatt_write",
         "gatt_subscribe",
+        "gatt_exchange_mtu",
         "read_gatt_notifications",
         "follow_connection",
         "stop_follow_connection",
@@ -851,6 +852,62 @@ class Radio:
             raise CommandError("GATT_SUBSCRIBE failed", payload[0] if payload else 0)
         if cmd_id != Response.ACK:
             raise ProtocolError(f"Unexpected response to GATT_SUBSCRIBE: 0x{cmd_id:02X}")
+
+    def gatt_exchange_mtu(self, client_mtu: int = 23, timeout: float = 5.0) -> int:
+        """Exchange ATT MTU with the connected peer.
+
+        Note: the firmware's RX/TX buffers are still capped at MTU 23 — this
+        method surfaces what the *peer* reports as its server MTU so the host
+        can record it for diagnostics. Larger MTUs cannot actually be used
+        until firmware buffers are widened (out of scope for F8c).
+
+        Args:
+            client_mtu: MTU we advertise. Must be >= 23 per BT spec.
+            timeout: Seconds to wait for the negotiated MTU + GATT_DONE.
+
+        Returns:
+            Peer-reported server MTU (uint16).
+
+        Raises:
+            CommandError: firmware refused the request, peer replied with
+                ATT_ERROR, or returned GATT_DONE before GATT_MTU.
+            ProtocolError: unexpected response opcode received.
+        """
+        self._send_command(
+            Command.GATT_EXCHANGE_MTU,
+            CommandBuilder.gatt_exchange_mtu(client_mtu),
+        )
+        cmd_id, _seq, payload = self._read_response(
+            timeout=min(timeout, 3.0),
+            expected={Response.ACK, Response.ERROR},
+        )
+        if cmd_id == Response.ERROR:
+            raise CommandError("GATT_EXCHANGE_MTU failed", payload[0] if payload else 0)
+        if cmd_id != Response.ACK:
+            raise ProtocolError(f"Unexpected response to GATT_EXCHANGE_MTU: 0x{cmd_id:02X}")
+
+        cmd_id, _seq, payload = self._read_response(
+            timeout=timeout,
+            expected={Response.GATT_MTU, Response.GATT_DONE, Response.ERROR},
+        )
+        if cmd_id == Response.ERROR:
+            raise CommandError("GATT_EXCHANGE_MTU value error", payload[0] if payload else 0)
+        if cmd_id == Response.GATT_DONE:
+            status = payload[0] if payload else 0xFF
+            raise CommandError("GATT_EXCHANGE_MTU done without value", status)
+        if len(payload) < 2:
+            raise ProtocolError(f"GATT_MTU payload too short: {len(payload)}")
+        peer_mtu = int.from_bytes(payload[0:2], "little")
+
+        # Drain trailing GATT_DONE so the next command does not see it.
+        try:
+            self._read_response(
+                timeout=min(timeout, 1.0),
+                expected={Response.GATT_DONE, Response.ERROR},
+            )
+        except TimeoutError:
+            pass
+        return peer_mtu
 
     def read_gatt_notifications(
         self,

@@ -215,19 +215,17 @@ static void handle_mtu_rsp(const uint8_t *pdu, uint8_t len) {
         return;
     }
     uint16_t server_mtu = le16(&pdu[1]);
-    /* Negotiated MTU = min(client, server). For the legacy auto-flow
-     * (WAIT_MTU_RSP) the cap is ATT_DEFAULT_MTU because att_send still
-     * uses the static buffer; the explicit-exchange flow records the
-     * peer's value verbatim so the host can see it. */
-    uint16_t negotiated = (server_mtu < ATT_DEFAULT_MTU) ? server_mtu : ATT_DEFAULT_MTU;
-    s_mtu = negotiated;
+    /* `s_mtu` is the firmware's TX/RX buffer cap — it is always
+     * min(server_mtu, ATT_DEFAULT_MTU) regardless of which path we are on.
+     * The explicit-exchange path additionally surfaces the peer's raw
+     * advertised value through onMtu so the host can record it. */
+    s_mtu = (server_mtu < ATT_DEFAULT_MTU) ? server_mtu : ATT_DEFAULT_MTU;
     s_request_pending = false;
 
     if (s_state == ATT_STATE_WAIT_MTU_EXCHANGE) {
         if (s_cb.onMtu) {
-            /* Surface the *peer-reported* server MTU to the host even
-             * though our own buffers are still capped at ATT_DEFAULT_MTU.
-             * Lets the host record what the peer would support. */
+            /* Pass the peer's raw advertised MTU. The firmware's own buffer
+             * cap (s_mtu) is unchanged. */
             s_cb.onMtu(server_mtu);
         }
         s_state = ATT_STATE_IDLE;
@@ -239,7 +237,9 @@ static void handle_mtu_rsp(const uint8_t *pdu, uint8_t len) {
         return;
     }
 
-    /* Legacy auto-flow (currently unreachable, kept for compat) */
+    /* Legacy auto-flow: this path runs only if a future caller re-enables
+     * MTU exchange in AttClient_startDiscover (currently skipped — see
+     * AttClient_startDiscover comment). Keep behavior unchanged. */
     s_disc_next_handle = 0x0001;
     s_service_count = 0;
     s_state = ATT_STATE_WAIT_DISCOVER_RSP;

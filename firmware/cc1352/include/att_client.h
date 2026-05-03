@@ -32,7 +32,11 @@ typedef void (*AttClient_CharCb)(uint16_t handle, uint8_t properties, uint16_t v
                                  const uint8_t *uuid, uint8_t uuidLen);
 typedef void (*AttClient_ReadCb)(uint16_t handle, const uint8_t *data, uint8_t len);
 typedef void (*AttClient_DoneCb)(uint8_t status); /* 0=ok, 1=error, 2=timeout */
-typedef void (*AttClient_MtuCb)(uint16_t negotiatedMtu);
+/* Delivers the peer's advertised server MTU verbatim. NOT the negotiated
+ * min(client, server) — the firmware's TX/RX buffers remain capped at
+ * ATT_DEFAULT_MTU regardless. The host can record peerServerMtu for
+ * diagnostics or re-issue the exchange after firmware buffer changes. */
+typedef void (*AttClient_MtuCb)(uint16_t peerServerMtu);
 
 typedef struct {
     AttClient_ServiceCb onService;
@@ -55,8 +59,16 @@ bool AttClient_startRead(uint16_t handle);
 bool AttClient_startWrite(uint16_t handle, const uint8_t *data, uint8_t len);
 
 /* Trigger an explicit ATT MTU exchange. clientMtu is what we advertise to
- * the peer (must be >= 23). The peer's reply is min(clientMtu, peerMtu);
- * delivered via onMtu(...) and then onDone(0). Returns false if not IDLE. */
+ * the peer (must be >= 23; smaller values are floored to ATT_DEFAULT_MTU).
+ *
+ * The exchange completes asynchronously via two callbacks in order:
+ *   1. onMtu(peerServerMtu) — the peer's advertised server MTU, verbatim.
+ *      The firmware does NOT widen its buffers based on this; ATT_DEFAULT_MTU
+ *      remains the wire cap until firmware buffers are widened.
+ *   2. onDone(0) — flow finished, AttClient is back in IDLE.
+ *
+ * Returns false if not currently IDLE (caller can retry after onDone).
+ */
 bool AttClient_startMtuExchange(uint16_t clientMtu);
 
 /* Called by BleConnMgr when L2CAP data arrives (LLID=1 or 2) */

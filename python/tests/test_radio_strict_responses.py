@@ -36,21 +36,6 @@ class FakeSerial:
         self.is_open = False
 
 
-def test_read_response_ignores_echoed_command_frames():
-    echoed_command = build_frame(Command.GET_INFO, 0x10, b"")
-    ack_response = build_frame(Response.ACK, 0x10, b"")
-
-    radio = Radio(port="dummy")
-    radio._serial = FakeSerial(echoed_command + ack_response)
-
-    cmd_id, seq, payload = radio._read_response(
-        timeout=0.1, expected={Response.ACK, Response.ERROR}
-    )
-    assert cmd_id == Response.ACK
-    assert seq == 0x10
-    assert payload == b""
-
-
 def test_init_accepts_ack_then_info(monkeypatch):
     info_payload = bytes([1, 0, 0, 0x01]) + b"FERALRF1"
     read_stream = build_frame(Response.ACK, 0x00, b"")

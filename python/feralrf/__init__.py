@@ -37,6 +37,7 @@ from feralrf.radio import (
     GattService,
     Packet,
     Radio,
+    RxStreamError,
 )
 
 __version__ = "0.2.0"
@@ -52,6 +53,7 @@ __all__ = [
     "GattService",
     "GattCharacteristic",
     "GattDiscoveryResult",
+    "RxStreamError",
     "PHY",
     "Command",
     "Response",

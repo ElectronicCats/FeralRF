@@ -4,7 +4,7 @@ FeralRF - Radio interface
 
 import time
 from dataclasses import dataclass
-from typing import Iterator, Optional, Set
+from typing import Iterator, Optional, Set, Union
 
 import serial
 import serial.tools.list_ports
@@ -194,6 +194,19 @@ class GattDiscoveryResult:
     services: list
     characteristics: list
     status: int
+
+
+@dataclass(frozen=True)
+class RxStreamError:
+    """Async error event yielded by Radio.read_packets().
+
+    Surfaces firmware-emitted RSP_ERROR frames with seq=0 (post-F8f #7a) or
+    seq=0xFF (pre-F8f #7a — kept permanently for forward-compat with old
+    firmware). The caller decides whether to abort the stream or continue.
+    """
+
+    error_code: int
+    context: int = 0
 
 
 class Radio:
@@ -500,13 +513,23 @@ class Radio:
                         ignored_command_frames += 1
                         continue
 
-                    # Skip async errors (seq=0xFF) — log but don't consume as response.
-                    if seq == 0xFF:
-                        import warnings
-
-                        err_code = payload[0] if payload else 0
-                        warnings.warn(f"Async RF error: code=0x{err_code:02X}", stacklevel=2)
-                        continue
+                    # F8f #7 — async RF errors arrive as RSP_ERROR with seq=0
+                    # (post-F8f #7a firmware) or seq=0xFF (pre-#7a — kept
+                    # permanently for forward-compat with old firmware).
+                    # When the caller is waiting for a specific response set
+                    # that does NOT include ERROR, buffer the async error so
+                    # the next read_packets()/_read_response with matching
+                    # expected can drain it (mirrors RSP_DISCONNECTED handling
+                    # below). When expected is None (streaming) or ERROR is in
+                    # expected, fall through and return the frame to the
+                    # caller — read_packets() converts to RxStreamError.
+                    if cmd_id == Response.ERROR.value and seq in (0, 0xFF):
+                        if expected is not None and Response.ERROR.value not in expected:
+                            self._pending_async[cmd_id].append((cmd_id, seq, payload))
+                            ignored_unexpected_responses += 1
+                            last_unexpected_response = cmd_id
+                            continue
+                        # else fall through and return to the caller below
 
                     # Skip stale responses with mismatched seq — only when
                     # expecting a command response (not during RX stream).
@@ -1281,6 +1304,10 @@ class Radio:
             self.start_rx()
 
             for pkt in self.read_packets(timeout=duration):
+                # F8f #7b: read_packets now also yields RxStreamError; the
+                # scanner skips those (a downstream caller could surface them).
+                if isinstance(pkt, RxStreamError):
+                    continue
                 if not pkt.crc_ok:
                     continue
                 if len(pkt.data) < 8:
@@ -1470,9 +1497,16 @@ class Radio:
             raise last_timeout
         raise TimeoutError("Response timeout")
 
-    def read_packets(self, timeout: Optional[float] = 1.0) -> Iterator[Packet]:
+    def read_packets(
+        self, timeout: Optional[float] = 1.0
+    ) -> Iterator[Union[Packet, RxStreamError]]:
         """
-        Read received packets.
+        Read received packets and async RF errors.
+
+        Yields ``Packet`` instances for RX frames, and ``RxStreamError``
+        instances for async errors emitted by firmware (RSP_ERROR with seq=0
+        or seq=0xFF — see F8f #7b). The caller decides whether to abort the
+        stream on error or continue reading.
 
         If timeout is a float, it is treated as a total read window in seconds.
         If timeout is None, packets are streamed indefinitely until caller stops iteration.
@@ -1490,6 +1524,15 @@ class Radio:
 
             try:
                 cmd_id, seq, payload = self._read_response(read_timeout)
+
+                # F8f #7b — surface async RF errors. Both seq=0 (post-#7a) and
+                # seq=0xFF (pre-#7a) treated as async; compat is permanent for
+                # forward-compat with old firmware.
+                if cmd_id == Response.ERROR.value and seq in (0, 0xFF):
+                    err_code = payload[0] if len(payload) >= 1 else 0
+                    context = payload[1] if len(payload) >= 2 else 0
+                    yield RxStreamError(error_code=err_code, context=context)
+                    continue
 
                 if cmd_id == Response.RX_PACKET:
                     # Parse packet

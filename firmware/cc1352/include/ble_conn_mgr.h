@@ -35,6 +35,24 @@ void BleConnMgr_setDisconnectCb(BleConnMgr_DisconnectCb cb);
  * BleConnMgr_stop() is invoked from a CMD_DISCONNECT path. */
 void BleConnMgr_stopWithReason(uint8_t reason);
 
+/* F8d — cooperative graceful disconnect. Queues LL_TERMINATE_IND on
+ * the connection's TX queue and lets BleConnMgr_poll() complete the
+ * teardown after TX confirmation, OR after a 5-event grace window
+ * (~150 ms at 30 ms interval) as a safety bound for the case where
+ * the peer has dropped off-air mid-disconnect.
+ *
+ * If no connection is active (s_running==false), falls through to
+ * immediate stop with the given reason — caller does not need to
+ * check connection state. The disconnect callback fires exactly once
+ * (sticky-first-caller from F8c is respected: if a peer
+ * LL_TERMINATE_IND arrives during the grace window, the original
+ * host-supplied reason still wins).
+ *
+ * This is the function CMD_DISCONNECT should call. The legacy
+ * BleConn_disconnect() (sleeps in RF task) MUST NOT be called from
+ * a code path that owns a connection; use this instead. */
+void BleConnMgr_initiateGracefulDisconnect(uint8_t reason);
+
 /* Depth chosen so RSP_DEBUG_TIMING fits in PROTOCOL_MAX_PAYLOAD (255):
  *   frame_payload = 1 + depth * 18  →  depth=14 → 253 bytes. */
 #define BLE_CONN_MGR_DBG_TIMING_DEPTH 14u

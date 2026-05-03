@@ -64,6 +64,13 @@ static BleConnMgr_DisconnectCb s_disconnect_cb;
 static uint8_t s_pending_dc_reason;
 static bool s_dc_reason_pending;
 
+/* F8d — cooperative graceful disconnect state. Only mutated from the
+ * BleConnMgr_poll task context (same as the F8c sticky reason fields
+ * above; see their doc comment for the concurrency invariant). */
+static bool s_pending_disconnect;
+static uint8_t s_disconnect_events_remaining;
+#define DISCONNECT_TX_GRACE_EVENTS 5u /* ~150 ms at 30 ms interval */
+
 /* Debug timing ring buffer — populated each call to BleConnMgr_poll().
  * Cleared on BleConnMgr_start so each connect attempt sees a fresh log. */
 static BleConnMgr_DbgTimingEntry s_dbg_timing[BLE_CONN_MGR_DBG_TIMING_DEPTH];
@@ -186,6 +193,38 @@ void BleConnMgr_stopWithReason(uint8_t reason) {
     BleConnMgr_stop();
 }
 
+void BleConnMgr_initiateGracefulDisconnect(uint8_t reason) {
+    if (!s_running) {
+        /* No active connection — degenerate case. Apply sticky reason
+         * and tear down immediately. BleConnMgr_stopWithReason fires
+         * the disconnect callback with the reason; finalizeDisconnect
+         * does the radio-state cleanup. */
+        BleConnMgr_stopWithReason(reason);
+        BleConn_finalizeDisconnect();
+        return;
+    }
+
+    /* Queue LL_TERMINATE_IND on the connection's TX queue. The next
+     * BleConnMgr_poll event will TX it. Note: opcode 0x02 + reason
+     * byte per BT Core Spec Vol 6 Part B §2.4.2.6. */
+    uint8_t pdu[2];
+    pdu[0] = 0x02u; /* LL_TERMINATE_IND */
+    pdu[1] = reason;
+    (void)TXQueue_insert(2, TX_QUEUE_LLID_CTRL, pdu);
+
+    /* Set sticky reason now so when BleConnMgr_stop fires from the
+     * poll-hook teardown, the callback sees the host-initiated reason.
+     * Sticky-first-caller from F8c handles a racing peer LL_TERMINATE
+     * within the grace window. */
+    if (!s_dc_reason_pending) {
+        s_pending_dc_reason = reason;
+        s_dc_reason_pending = true;
+    }
+
+    s_pending_disconnect = true;
+    s_disconnect_events_remaining = DISCONNECT_TX_GRACE_EVENTS;
+}
+
 uint16_t BleConnMgr_getL2capRxCount(void) {
     return s_dbg_l2cap_rx_count;
 }
@@ -208,6 +247,8 @@ void BleConnMgr_start(void) {
     s_event_counter = 0;
     s_dc_reason_pending = false;
     s_pending_dc_reason = 0;
+    s_pending_disconnect = false;
+    s_disconnect_events_remaining = 0u;
     s_dbg_l2cap_rx_count = 0;
     s_dbg_total_rx_count = 0;
     s_dbg_total_tx_done = 0;
@@ -382,6 +423,25 @@ bool BleConnMgr_poll(void) {
     if (status == 0x1400 || status == 0x1403 || status == 0x1404) {
         s_last_rx_time = RF_getCurrentTime();
         process_rx_packets();
+    }
+
+    /* F8d — cooperative graceful disconnect: if the host queued
+     * LL_TERMINATE_IND via BleConnMgr_initiateGracefulDisconnect,
+     * tear the connection down once TX is confirmed (numSent >= 1
+     * means our queue was actually transmitted this event) OR once
+     * the 5-event grace window expires (peer is unresponsive — we
+     * give up on the clean LL_TERMINATE and let our side cleanup
+     * regardless; peer will fall back to supervision timeout). */
+    if (s_pending_disconnect) {
+        bool tx_confirmed = (numSent >= 1u);
+        bool give_up = (--s_disconnect_events_remaining == 0u);
+        if (tx_confirmed || give_up) {
+            s_pending_disconnect = false;
+            s_disconnect_events_remaining = 0u;
+            BleConnMgr_stop();            /* fires DC callback w/ sticky reason */
+            BleConn_finalizeDisconnect(); /* pure radio cleanup */
+            return false;                 /* signal poll loop: connection ended */
+        }
     }
 
     /* Advance to next anchor */

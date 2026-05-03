@@ -241,4 +241,39 @@ PROP_PRESETS = {
         rx_bw=0x4A,
         sync_word=0x930B51DE,
     ),
+    # === Wi-SUN FAN 1.0 NA-1 ch 0 — data rates restantes (F29.b) ===
+    # Mod index implícito ~0.5; deviation pragmática heredada de templates.
+    # F29 vuelta 1 lección: FSK puro >=150k requiere rx_bw=0x5A; 300k probablemente 0x5E.
+    "wisun_915_fsk_100k": dict(
+        frequency_hz=902200000,
+        mod_type=0,
+        symbol_rate=100000,
+        deviation=150,
+        rx_bw=0x56,  # match gfsk_868_100k validado
+        sync_word=0x930B51DE,
+    ),
+    "wisun_915_fsk_150k": dict(
+        frequency_hz=902200000,
+        mod_type=0,
+        symbol_rate=150000,
+        deviation=200,
+        rx_bw=0x5A,  # FSK puro >= 150k → más BW
+        sync_word=0x930B51DE,
+    ),
+    "wisun_915_fsk_200k": dict(
+        frequency_hz=902200000,
+        mod_type=0,
+        symbol_rate=200000,
+        deviation=200,
+        rx_bw=0x5A,  # F29 vuelta 1 lección
+        sync_word=0x930B51DE,
+    ),
+    "wisun_915_fsk_300k": dict(
+        frequency_hz=902200000,
+        mod_type=0,
+        symbol_rate=300000,
+        deviation=200,
+        rx_bw=0x5E,  # rate más alto requiere BW más amplio
+        sync_word=0x930B51DE,
+    ),
 }

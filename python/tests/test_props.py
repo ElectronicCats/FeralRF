@@ -225,3 +225,34 @@ def test_f29b_mioty_in_868_band():
 def test_f29b_mioty_symbol_rate_396():
     """F29.b — MIOTY symbol rate per ETSI TS 103 357 (396 baud)."""
     assert PROP_PRESETS[F29B_MIOTY_NAME]["symbol_rate"] == 396
+
+
+@pytest.mark.parametrize("name", F29B_WISUN_NAMES)
+def test_f29b_wisun_present(name):
+    """F29.b — los 4 Wi-SUN nuevos están en PROP_PRESETS."""
+    assert name in PROP_PRESETS, f"Preset {name} ausente"
+
+
+@pytest.mark.parametrize("name", F29B_WISUN_NAMES)
+def test_f29b_wisun_in_915_band(name):
+    """F29.b — Wi-SUN nuevos en banda 902-928 MHz."""
+    f = PROP_PRESETS[name]["frequency_hz"]
+    assert 902_000_000 <= f <= 928_000_000
+
+
+@pytest.mark.parametrize("name", F29B_WISUN_NAMES)
+def test_f29b_wisun_uses_fsk(name):
+    """F29.b — Wi-SUN usa FSK puro (mod_type=0)."""
+    assert PROP_PRESETS[name]["mod_type"] == 0
+
+
+def test_f29b_wisun_count():
+    """F29.b — exactamente 4 Wi-SUN nuevos."""
+    wisun_new = [n for n in PROP_PRESETS if n in F29B_WISUN_NAMES]
+    assert len(wisun_new) == 4
+
+
+def test_f29b_preset_count():
+    """F29.b — exactamente 5 presets nuevos (1 MIOTY + 4 Wi-SUN)."""
+    f29b = [n for n in PROP_PRESETS if n in F29B_PRESET_NAMES]
+    assert len(f29b) == 5

@@ -101,8 +101,11 @@ static void handle_ll_ctrl(const uint8_t *payload, uint8_t len) {
     case LL_TERMINATE_IND: {
         /* payload = [opcode:1][reason:1] per BT Core Spec Vol 6 Part B §2.4.2.6 */
         uint8_t reason = (len >= 2) ? payload[1] : 0x13u; /* default REMOTE_USER_TERMINATED */
+        /* F8d: peer already TX'd LL_TERMINATE, no point retransmitting.
+         * Apply sticky reason (fires DC callback) then pure cleanup —
+         * skip the queue+sleep path entirely. */
         BleConnMgr_stopWithReason(reason);
-        BleConn_disconnect();
+        BleConn_finalizeDisconnect();
         break;
     }
 
@@ -380,9 +383,11 @@ bool BleConnMgr_poll(void) {
     /* Check supervision timeout */
     now = RF_getCurrentTime();
     if (now - s_last_rx_time > s_superv_timeout_ticks) {
-        /* 0x22 = LL_RESPONSE_TIMEOUT per BT Core Spec Vol 1 Part F §1.3.2 */
+        /* 0x22 = LL_RESPONSE_TIMEOUT per BT Core Spec Vol 1 Part F §1.3.2.
+         * F8d: peer is unresponsive (no RX in supervision window), so
+         * skip the queue+sleep path — just clean up. */
         BleConnMgr_stopWithReason(0x22u);
-        BleConn_disconnect();
+        BleConn_finalizeDisconnect();
         return false;
     }
 

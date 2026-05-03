@@ -919,20 +919,21 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
             return;
         }
         ensure_gatt_callbacks();
-        /* Send the ACK FIRST. The synchronous BleConnMgr_stopWithReason call
-         * below fires the disconnect callback, which emits an async
-         * RSP_DISCONNECTED frame on the wire. Python's ble_disconnect waits
-         * for ACK with _read_response, which silently drops any unexpected
-         * frame seen while waiting — so if RSP_DISCONNECTED arrives first,
-         * the host loses the disconnect event. Emitting ACK first preserves
-         * cause-and-effect ordering on the wire (host sees ACK to its
-         * command, then the async event in a clean reader state). */
+        /* Send the ACK FIRST. The cooperative disconnect flow below
+         * (BleConnMgr_initiateGracefulDisconnect + BleConnMgr_poll
+         * teardown) eventually fires the async RSP_DISCONNECTED frame
+         * on the wire. Python's ble_disconnect waits for ACK with
+         * _read_response and would discard an out-of-order async event;
+         * emitting ACK first preserves cause-and-effect ordering. */
         send_ack(seq);
-        /* Mark host-initiated reason BEFORE BleConn_disconnect so the
-         * subsequent BleConnMgr_stop callback sees 0x16, not whatever
-         * sticks around from the previous session. */
-        BleConnMgr_stopWithReason(0x16u); /* LOCAL_HOST_TERMINATED per BT Core Spec */
-        BleConn_disconnect();
+        /* F8d: queue LL_TERMINATE_IND with reason 0x16
+         * (LOCAL_HOST_TERMINATED) and let BleConnMgr_poll complete the
+         * teardown cooperatively. Replaces the earlier
+         * BleConnMgr_stopWithReason(0x16u) + BleConn_disconnect() pair,
+         * which (a) immediately stopped the manager so the LL_TERMINATE
+         * was never TX'd to the peer, and (b) called Task_sleep() inside
+         * BleConn_disconnect from the same RF task that would TX it. */
+        BleConnMgr_initiateGracefulDisconnect(0x16u);
         return;
 
     case CMD_CONN_STATUS: {

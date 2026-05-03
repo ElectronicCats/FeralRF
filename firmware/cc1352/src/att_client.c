@@ -65,6 +65,11 @@ static uint16_t s_disc_next_handle;
 /* Client MTU advertised in the most recent explicit exchange request. */
 static uint16_t s_requested_mtu;
 
+/* State for AttClient_startReadByUuid */
+static uint16_t s_read_uuid_start;
+static uint16_t s_read_uuid_end;
+static uint16_t s_read_uuid_uuid;
+
 /* Service table for char discovery */
 static struct {
     uint16_t startHandle;
@@ -317,6 +322,54 @@ static void handle_read_by_type_rsp(const uint8_t *pdu, uint8_t len) {
     att_dbg(ATT_DBG_TAG_TYPE_RSP, old);
 }
 
+static void handle_read_by_uuid_rsp(const uint8_t *pdu, uint8_t len) {
+    AttClient_State old = s_state;
+    if (len < 4 || s_state != ATT_STATE_WAIT_READ_BY_UUID_RSP) {
+        att_dbg(ATT_DBG_TAG_READ_UUID_RSP, old);
+        return;
+    }
+    s_request_pending = false;
+
+    uint8_t entry_len = pdu[1];
+    if (entry_len < 3u) {
+        /* Malformed — at minimum [handle:2][value:1] */
+        s_state = ATT_STATE_IDLE;
+        att_dbg(ATT_DBG_TAG_READ_UUID_RSP, old);
+        if (s_cb.onDone) {
+            s_cb.onDone(1);
+        }
+        return;
+    }
+    uint8_t offset = 2;
+    uint16_t last_handle = 0;
+    bool got_any = false;
+
+    while (offset + entry_len <= len) {
+        uint16_t handle = le16(&pdu[offset]);
+        uint8_t value_len = entry_len - 2u;
+        const uint8_t *value = &pdu[offset + 2];
+        if (s_cb.onAttribute) {
+            s_cb.onAttribute(handle, value, value_len);
+        }
+        last_handle = handle;
+        got_any = true;
+        offset += entry_len;
+    }
+    (void)last_handle;
+    (void)got_any;
+
+    /* Per ATT spec: ReadByType returns up to MTU-2 bytes worth of entries.
+     * If the peer has more matches, the host can re-issue with an updated
+     * start handle. For F8c we do single-shot — the host gets one batch
+     * and onDone(0). Multi-shot continuation is a future enhancement. */
+    s_state = ATT_STATE_IDLE;
+    att_dbg(ATT_DBG_TAG_READ_UUID_RSP, old);
+    if (s_cb.onDone) {
+        att_dbg(ATT_DBG_TAG_DONE_CB, s_state);
+        s_cb.onDone(0);
+    }
+}
+
 static void handle_read_rsp(const uint8_t *pdu, uint8_t len) {
     AttClient_State old = s_state;
     if (s_state != ATT_STATE_WAIT_READ_RSP) {
@@ -390,6 +443,18 @@ static void handle_error_rsp(const uint8_t *pdu, uint8_t len) {
             att_dbg(ATT_DBG_TAG_ERROR_RSP, old);
             return;
         }
+    }
+
+    if (s_state == ATT_STATE_WAIT_READ_BY_UUID_RSP) {
+        s_state = ATT_STATE_IDLE;
+        att_dbg(ATT_DBG_TAG_ERROR_RSP, old);
+        if (s_cb.onDone) {
+            /* status 1 marks "no entries found" so the host can
+             * distinguish this from "peer didn't reply at all".
+             * Same convention as gatt_discover. */
+            s_cb.onDone(1);
+        }
+        return;
     }
 
     /* Actual error */
@@ -492,6 +557,26 @@ bool AttClient_startMtuExchange(uint16_t clientMtu) {
     return true;
 }
 
+bool AttClient_startReadByUuid(uint16_t startHandle, uint16_t endHandle, uint16_t uuid16) {
+    AttClient_State old = s_state;
+    att_dbg(ATT_DBG_TAG_START_READ_UUID_ENTER, old);
+    if (s_state != ATT_STATE_IDLE) {
+        att_dbg(ATT_DBG_TAG_START_READ_UUID_EXIT_FAIL, old);
+        return false;
+    }
+    if (startHandle == 0 || endHandle < startHandle) {
+        att_dbg(ATT_DBG_TAG_START_READ_UUID_EXIT_FAIL, old);
+        return false;
+    }
+    s_read_uuid_start = startHandle;
+    s_read_uuid_end = endHandle;
+    s_read_uuid_uuid = uuid16;
+    s_request_pending = false;
+    s_state = ATT_STATE_WAIT_READ_BY_UUID_RSP;
+    att_dbg(ATT_DBG_TAG_START_READ_UUID_EXIT_OK, old);
+    return true;
+}
+
 void AttClient_onL2capRx(const uint8_t *l2capPayload, uint8_t len) {
     AttClient_State old = s_state;
     att_dbg(ATT_DBG_TAG_L2CAP_RX, old);
@@ -520,7 +605,11 @@ void AttClient_onL2capRx(const uint8_t *l2capPayload, uint8_t len) {
         handle_read_by_group_type_rsp(att_pdu, att_len);
         break;
     case ATT_READ_BY_TYPE_RSP:
-        handle_read_by_type_rsp(att_pdu, att_len);
+        if (s_state == ATT_STATE_WAIT_READ_BY_UUID_RSP) {
+            handle_read_by_uuid_rsp(att_pdu, att_len);
+        } else {
+            handle_read_by_type_rsp(att_pdu, att_len);
+        }
         break;
     case ATT_READ_RSP:
         handle_read_rsp(att_pdu, att_len);
@@ -581,6 +670,13 @@ void AttClient_poll(void) {
         if (send_exchange_mtu_req(s_requested_mtu)) {
             s_request_pending = true;
             att_dbg(ATT_DBG_TAG_POLL_TX_MTU, old);
+        }
+        break;
+
+    case ATT_STATE_WAIT_READ_BY_UUID_RSP:
+        if (send_read_by_type_req(s_read_uuid_start, s_read_uuid_end, s_read_uuid_uuid)) {
+            s_request_pending = true;
+            att_dbg(ATT_DBG_TAG_POLL_TX_READ_UUID, old);
         }
         break;
 

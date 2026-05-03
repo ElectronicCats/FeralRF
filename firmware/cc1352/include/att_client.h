@@ -21,6 +21,7 @@ typedef enum {
     ATT_STATE_WAIT_READ_RSP,
     ATT_STATE_WAIT_WRITE_RSP,
     ATT_STATE_WAIT_MTU_EXCHANGE,
+    ATT_STATE_WAIT_READ_BY_UUID_RSP,
     ATT_STATE_DONE,
     ATT_STATE_ERROR,
 } AttClient_State;
@@ -37,6 +38,7 @@ typedef void (*AttClient_DoneCb)(uint8_t status); /* 0=ok, 1=error, 2=timeout */
  * ATT_DEFAULT_MTU regardless. The host can record peerServerMtu for
  * diagnostics or re-issue the exchange after firmware buffer changes. */
 typedef void (*AttClient_MtuCb)(uint16_t peerServerMtu);
+typedef void (*AttClient_AttributeCb)(uint16_t handle, const uint8_t *value, uint8_t valueLen);
 
 typedef struct {
     AttClient_ServiceCb onService;
@@ -44,6 +46,7 @@ typedef struct {
     AttClient_ReadCb onRead;
     AttClient_DoneCb onDone;
     AttClient_MtuCb onMtu;
+    AttClient_AttributeCb onAttribute;
 } AttClient_Callbacks;
 
 void AttClient_init(void);
@@ -70,6 +73,13 @@ bool AttClient_startWrite(uint16_t handle, const uint8_t *data, uint8_t len);
  * Returns false if not currently IDLE (caller can retry after onDone).
  */
 bool AttClient_startMtuExchange(uint16_t clientMtu);
+
+/* Issue ATT_READ_BY_TYPE_REQ for an arbitrary 16-bit UUID. Each matching
+ * attribute is delivered via onAttribute(handle, value, len); the flow
+ * terminates with onDone(status) — status 0 means at least one entry was
+ * returned, non-zero means the peer replied with ATT_ERROR (typically
+ * ATTRIBUTE_NOT_FOUND). Returns false if not IDLE. */
+bool AttClient_startReadByUuid(uint16_t startHandle, uint16_t endHandle, uint16_t uuid16);
 
 /* Called by BleConnMgr when L2CAP data arrives (LLID=1 or 2) */
 void AttClient_onL2capRx(const uint8_t *l2capPayload, uint8_t len);
@@ -120,6 +130,11 @@ typedef enum {
     ATT_DBG_TAG_START_MTU_ENTER = 27,
     ATT_DBG_TAG_START_MTU_EXIT_OK = 28,
     ATT_DBG_TAG_START_MTU_EXIT_FAIL = 29,
+    ATT_DBG_TAG_START_READ_UUID_ENTER = 30,
+    ATT_DBG_TAG_START_READ_UUID_EXIT_OK = 31,
+    ATT_DBG_TAG_START_READ_UUID_EXIT_FAIL = 32,
+    ATT_DBG_TAG_READ_UUID_RSP = 33,
+    ATT_DBG_TAG_POLL_TX_READ_UUID = 34,
 } AttClient_DbgTag;
 
 /* 8 bytes per entry. Keep packed-ish (struct alignment puts u16 first). */

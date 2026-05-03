@@ -355,8 +355,6 @@ def test_gatt_exchange_mtu_payload_is_u16_le_client_mtu():
 
 
 def test_gatt_exchange_mtu_rejects_too_small():
-    import pytest
-
     with pytest.raises(ValueError):
         CommandBuilder.gatt_exchange_mtu(client_mtu=22)  # MTU must be >= 23 per spec
 
@@ -367,7 +365,10 @@ def test_gatt_read_by_uuid_uuid16_payload_is_start_end_uuid_le():
 
 
 def test_gatt_read_by_uuid_rejects_inverted_range():
-    import pytest
-
     with pytest.raises(ValueError):
         CommandBuilder.gatt_read_by_uuid(start=0x0010, end=0x0001, uuid=0x2A00)
+
+
+def test_gatt_read_by_uuid_rejects_uuid_above_16_bits():
+    with pytest.raises(ValueError):
+        CommandBuilder.gatt_read_by_uuid(start=0x0001, end=0xFFFF, uuid=0x12A00)

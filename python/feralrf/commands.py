@@ -216,7 +216,7 @@ class CommandBuilder:
         """
         if client_mtu < 23 or client_mtu > 0xFFFF:
             raise ValueError(f"client_mtu must be in [23, 65535], got {client_mtu}")
-        return struct.pack("<H", client_mtu & 0xFFFF)
+        return struct.pack("<H", client_mtu)
 
     @staticmethod
     def gatt_read_by_uuid(start: int, end: int, uuid: int) -> bytes:
@@ -226,10 +226,12 @@ class CommandBuilder:
         send_read_by_type_req). 128-bit UUID support deferred.
         """
         if start < 1 or start > 0xFFFF:
-            raise ValueError(f"start handle out of range: {start}")
+            raise ValueError(f"start handle must be in [1, 65535], got {start}")
         if end < start or end > 0xFFFF:
             raise ValueError(f"end ({end}) must be >= start ({start}) and <= 0xFFFF")
-        return struct.pack("<HHH", start & 0xFFFF, end & 0xFFFF, uuid & 0xFFFF)
+        if uuid < 0 or uuid > 0xFFFF:
+            raise ValueError(f"uuid must be a 16-bit value in [0, 65535], got {uuid}")
+        return struct.pack("<HHH", start, end, uuid)
 
     @staticmethod
     def follow_start(target_mac_le: "bytes | None" = None) -> bytes:

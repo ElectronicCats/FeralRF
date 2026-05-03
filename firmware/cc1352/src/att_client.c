@@ -12,14 +12,12 @@
 #include "att_client.h"
 #include "ble_conn.h"
 #include "output_if.h"
+#include "protocol.h"
 #include "tx_queue.h"
 
 #include <string.h>
 
-/* Response code for GATT notifications/indications streamed to the host.
- * The canonical definition lives in command_processor.c; duplicated here
- * because that file's response codes are file-local #defines. Keep in sync. */
-#define RSP_GATT_NOTIFY 0xA6u
+/* RSP_GATT_NOTIFY now consolidated in protocol.h (F8f #10). */
 
 /* ── ATT Opcodes (Core Spec Vol 3, Part F, 3.4) ── */
 #define ATT_ERROR_RSP 0x01u

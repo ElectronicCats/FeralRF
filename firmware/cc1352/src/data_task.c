@@ -19,9 +19,7 @@
 static bool s_rx_active = false;
 static uint8_t s_rx_rsp_seq = 0;
 
-#define RSP_RX_PACKET 0x90u
-#define RSP_ERROR 0x81u
-#define ERR_RF_INIT_FAILED 0x06u
+/* RSP_RX_PACKET, RSP_ERROR, ERR_RF_INIT_FAILED moved to protocol.h (F8f #10). */
 #define RX_PACKET_BASE_META_LEN 13u
 #define RX_PACKET_LL_META_LEN 3u
 #define RX_PACKET_MAX_EMIT_DATA_LEN \

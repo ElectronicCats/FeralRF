@@ -33,6 +33,13 @@
 /* TI-RTOS Clock tick = 10 µs. Convert milliseconds to ticks. */
 #define MS_TO_TASK_TICKS(ms) ((uint32_t)(ms) * 100u)
 
+/* F1 fix: bounded timeout for CMD_BLE5_INITIATOR. The host's default
+ * Python-side timeout for ble_connect is 10 s; firmware terminates
+ * 2 s earlier so the host always receives a clean RSP_CONN_RESULT
+ * (with BLE_CONN_ERR_TIMEOUT) instead of a host-side TimeoutError.
+ * 8 s × 4 MHz RAT = 32_000_000 ticks. */
+#define BLE_CONNECT_TIMEOUT_RAT_TICKS (8u * 4000000u)
+
 /* ── Static state (single connection) ── */
 static BleConn_State s_state;
 static uint8_t s_ll_data[BLE_CONN_LLDATA_LEN];
@@ -177,13 +184,23 @@ BleConn_Result BleConn_initiate(const uint8_t *peerAddr, uint8_t peerAddrType,
     /* connectTime set by RadioIF_bleInitiate() just before RF_runCmd to avoid
      * stale timestamp after mode-switch delays. */
 
-    /* Sniffle parity: forever-listen, no host-imposed end. The previous
-     * 5-second TRIG_ABSTIME endTime imposed a deadline that conflicted
-     * with bDynamicWinOffset's calibration window. See
-     * docs/investigations/2026-04-24-f8a-session-1/tx-mechanism-decision.md
-     * (Option A). Re-introduce a host-side timeout in Session 2 if needed. */
-    Ble5_0_cmdBle5Initiator.pParams->endTrigger.triggerType = TRIG_NEVER;
-    Ble5_0_cmdBle5Initiator.pParams->endTime = 0;
+    /* F1 fix (was: TRIG_NEVER + endTime=0 + TRIG_NEVER): bounded timeout
+     * via TRIG_REL_START so RF_runCmd terminates deterministically when
+     * the peer never responds. Without this the RF task hangs forever and
+     * subsequent commands fail with async ERR_INVALID_STATE — a full
+     * reflash is the only recovery (observed against Sony WH-CH720N
+     * during F8c live smoke 2026-05-02).
+     *
+     * The earlier note about a 5-second TRIG_ABSTIME conflicting with
+     * bDynamicWinOffset's calibration window referred to ABSTIME
+     * specifically; TRIG_REL_START is relative to the command's own
+     * start tick and does not race with WinOffset calibration.
+     *
+     * BLE_DONE_ENDED is the status returned by RF_runCmd when this
+     * trigger fires, and RadioIF_bleInitiate already maps it to return
+     * value -1, which BleConn_initiate maps to BLE_CONN_ERR_TIMEOUT. */
+    Ble5_0_cmdBle5Initiator.pParams->endTrigger.triggerType = TRIG_REL_START;
+    Ble5_0_cmdBle5Initiator.pParams->endTime = BLE_CONNECT_TIMEOUT_RAT_TICKS;
     Ble5_0_cmdBle5Initiator.pParams->timeoutTrigger.triggerType = TRIG_NEVER;
     Ble5_0_cmdBle5Initiator.pParams->timeoutTime = 0;
 

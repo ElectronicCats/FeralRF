@@ -270,6 +270,17 @@ class Radio:
         self._channel: int = 0
         self._capabilities: int = 0
         self._rx_buffer = bytearray()
+        # Buffer for async events (seq=0 frames like RSP_DISCONNECTED,
+        # RSP_GATT_NOTIFY) that arrive while _read_response is waiting for
+        # something else. Without this, async events are silently dropped
+        # because their seq doesn't match _last_seq and their cmd_id doesn't
+        # match `expected`. Iterators (read_disconnect_events,
+        # read_gatt_notifications) drain this buffer first via _read_response,
+        # then read from serial. Keyed by cmd_id; each value is a deque of
+        # (cmd_id, seq, payload) tuples in arrival order.
+        from collections import defaultdict, deque
+
+        self._pending_async: dict[int, deque] = defaultdict(deque)
 
     @staticmethod
     def list_devices() -> list:
@@ -381,6 +392,7 @@ class Radio:
             self._serial.reset_output_buffer()
             self._seq = 0
             self._rx_buffer = bytearray()
+            self._pending_async.clear()
             self.init()
 
     def disconnect(self) -> None:
@@ -419,6 +431,17 @@ class Radio:
         """Read and parse a response"""
         if not self._serial:
             raise ConnectionError("Not connected")
+
+        # Drain pending async events that match `expected` first. These were
+        # buffered during a previous _read_response that was waiting for a
+        # different opcode (e.g., ble_disconnect waiting for ACK while
+        # RSP_DISCONNECTED async arrived). Without this drain, async events
+        # would be lost between the call that saw them and the iterator that
+        # wants them.
+        if expected:
+            for cmd_id_pending in list(self._pending_async):
+                if cmd_id_pending in expected and self._pending_async[cmd_id_pending]:
+                    return self._pending_async[cmd_id_pending].popleft()
 
         deadline = None if timeout is None else (time.monotonic() + max(timeout, 0.0))
         ignored_command_frames = 0
@@ -487,13 +510,24 @@ class Radio:
 
                     # Skip stale responses with mismatched seq — only when
                     # expecting a command response (not during RX stream).
-                    if expected is not None and seq != self._last_seq:
+                    # Async events use seq=0 (no command to match against),
+                    # so they bypass the seq check and are dispositioned
+                    # below by cmd_id alone.
+                    if expected is not None and seq != 0 and seq != self._last_seq:
                         ignored_unexpected_responses += 1
                         last_unexpected_response = cmd_id
                         continue
 
                     # If caller expects specific response types, keep reading until match.
                     if expected is not None and cmd_id not in expected:
+                        # If this is an async event (seq=0) for a different
+                        # consumer, buffer it instead of dropping. The next
+                        # _read_response with matching `expected` will drain
+                        # it from the pending buffer above. This preserves
+                        # RSP_DISCONNECTED and similar frames that race with
+                        # synchronous command/response cycles.
+                        if seq == 0:
+                            self._pending_async[cmd_id].append((cmd_id, seq, payload))
                         ignored_unexpected_responses += 1
                         last_unexpected_response = cmd_id
                         continue

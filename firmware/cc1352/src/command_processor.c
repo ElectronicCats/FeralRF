@@ -919,12 +919,20 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
             return;
         }
         ensure_gatt_callbacks();
+        /* Send the ACK FIRST. The synchronous BleConnMgr_stopWithReason call
+         * below fires the disconnect callback, which emits an async
+         * RSP_DISCONNECTED frame on the wire. Python's ble_disconnect waits
+         * for ACK with _read_response, which silently drops any unexpected
+         * frame seen while waiting — so if RSP_DISCONNECTED arrives first,
+         * the host loses the disconnect event. Emitting ACK first preserves
+         * cause-and-effect ordering on the wire (host sees ACK to its
+         * command, then the async event in a clean reader state). */
+        send_ack(seq);
         /* Mark host-initiated reason BEFORE BleConn_disconnect so the
          * subsequent BleConnMgr_stop callback sees 0x16, not whatever
          * sticks around from the previous session. */
         BleConnMgr_stopWithReason(0x16u); /* LOCAL_HOST_TERMINATED per BT Core Spec */
         BleConn_disconnect();
-        send_ack(seq);
         return;
 
     case CMD_CONN_STATUS: {

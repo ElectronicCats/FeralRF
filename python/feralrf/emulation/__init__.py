@@ -14,6 +14,13 @@ from feralrf.emulation.ble_peripheral import (
     BlePersonality,
 )
 from feralrf.emulation.ble_peripheral import emulate as emulate_ble
+from feralrf.emulation.ieee154_device import (
+    BEACON_COORDINATOR,
+    DATA_POLL_END_DEVICE,
+    IEEE154_PERSONALITIES,
+    Ieee154Personality,
+)
+from feralrf.emulation.ieee154_device import emulate as emulate_ieee154
 
 __all__ = [
     "BlePersonality",
@@ -22,4 +29,9 @@ __all__ = [
     "GOOGLE_FASTPAIR_GENERIC",
     "BLE_PERSONALITIES",
     "emulate_ble",
+    "Ieee154Personality",
+    "BEACON_COORDINATOR",
+    "DATA_POLL_END_DEVICE",
+    "IEEE154_PERSONALITIES",
+    "emulate_ieee154",
 ]

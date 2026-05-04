@@ -98,4 +98,42 @@ class TestBlePersonalities:
             assert len(p.target_mac.split(":")) == 6
 
 
+class TestIeee154Personalities:
+    """F17 — IEEE 802.15.4 device personalities (I1-I2)."""
+
+    def test_beacon_coordinator_present(self):
+        from feralrf.emulation import BEACON_COORDINATOR
+
+        assert BEACON_COORDINATOR.name == "Beacon-enabled coordinator"
+
+    def test_beacon_coordinator_uses_channel_15(self):
+        from feralrf.emulation import BEACON_COORDINATOR
+
+        assert BEACON_COORDINATOR.channel == 15
+
+    def test_beacon_coordinator_pan_id(self):
+        from feralrf.emulation import BEACON_COORDINATOR
+
+        assert BEACON_COORDINATOR.pan_id == 0x1234
+        assert BEACON_COORDINATOR.short_addr == 0x0001
+
+    def test_data_poll_end_device(self):
+        from feralrf.emulation import DATA_POLL_END_DEVICE
+
+        assert DATA_POLL_END_DEVICE.name == "Data-poll end device"
+        assert DATA_POLL_END_DEVICE.short_addr == 0x0042
+
+    def test_ieee154_personalities_count(self):
+        from feralrf.emulation import IEEE154_PERSONALITIES
+
+        assert len(IEEE154_PERSONALITIES) == 2
+
+    def test_ieee154_personalities_have_payload(self):
+        from feralrf.emulation import IEEE154_PERSONALITIES
+
+        for p in IEEE154_PERSONALITIES:
+            assert isinstance(p.payload, bytes)
+            assert len(p.payload) >= 3  # at least FCF (2) + seq (1)
+
+
 # F17 implementations replace the placeholder skip stubs that lived here pre-F17.

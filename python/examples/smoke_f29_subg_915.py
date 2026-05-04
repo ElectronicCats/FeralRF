@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
-"""F29 vuelta 1 — Sub-G 915 MHz preset smoke (Sidewalk + Wi-SUN baseline).
+"""F29 cierre completo — Sub-G 915 + 868 MHz preset smoke.
 
-Recorre los 3 presets F29 (sidewalk_915_fsk_50k, sidewalk_915_fsk_250k,
-wisun_915_fsk_50k) y para cada uno: TX board envía N markers OTA, RX board
-cuenta. Pass total = (count × 3) markers; per-preset pass = >= count markers.
+Cubre F29 vuelta 1 (3 presets) + F29.b Wi-SUN restantes (4 presets) = 7 presets.
+MIOTY (mioty_868_tsunb) excluido del loop por escape M3 (CC1352 no soporta
+nativamente TS-UNB 396 baud — preset retenido en PROP_PRESETS para preservar
+API ID, validación deferred a F29.c con SmartRF Studio access).
+
+Pass total = (count × 7) markers; per-preset pass = >= count markers.
 
 Usage:
-    python smoke_f29_subg_915.py --tx-port /dev/ttyACM5 --rx-port /dev/ttyACM2
-    python smoke_f29_subg_915.py --tx-port /dev/ttyACM5 --rx-port /dev/ttyACM2 --count 10
+    python smoke_f29_subg_915.py --tx-port /dev/ttyACM1 --rx-port /dev/ttyACM2
+    python smoke_f29_subg_915.py --tx-port /dev/ttyACM1 --rx-port /dev/ttyACM2 --count 10
 """
 
 import argparse
@@ -17,7 +20,18 @@ import time
 
 import serial
 
-F29_PRESETS = ("sidewalk_915_fsk_50k", "sidewalk_915_fsk_250k", "wisun_915_fsk_50k")
+F29_PRESETS = (
+    # F29 vuelta 1
+    "sidewalk_915_fsk_50k",
+    "sidewalk_915_fsk_250k",
+    "wisun_915_fsk_50k",
+    # F29.b Wi-SUN restantes
+    "wisun_915_fsk_100k",
+    "wisun_915_fsk_150k",
+    "wisun_915_fsk_200k",
+    "wisun_915_fsk_300k",
+    # mioty_868_tsunb excluido — escape M3 activado, ver presets.py
+)
 
 
 def reset_cc1352(port: str) -> None:
@@ -120,18 +134,29 @@ def main() -> int:
     results = []
     for name in F29_PRESETS:
         print(f"\n[ -- ] {name}")
-        try:
-            matched, total = run_preset(
-                args.tx_port,
-                args.rx_port,
-                args.baudrate,
-                name,
-                args.count,
-                args.power,
-                args.rx_window,
-            )
-        except Exception as exc:
-            print(f"[FAIL] {name}: exception {exc!r}")
+        # Retry once on TimeoutError — reset/init secuencial entre presets
+        # ocasionalmente race con el bootloader; primer retry suele resolverlo.
+        last_exc = None
+        matched = total = 0
+        for attempt in range(2):
+            try:
+                matched, total = run_preset(
+                    args.tx_port,
+                    args.rx_port,
+                    args.baudrate,
+                    name,
+                    args.count,
+                    args.power,
+                    args.rx_window,
+                )
+                last_exc = None
+                break
+            except Exception as exc:
+                last_exc = exc
+                if attempt == 0:
+                    print(f"[WARN] {name}: {exc!r} — retry 1/2")
+        if last_exc is not None:
+            print(f"[FAIL] {name}: exception {last_exc!r}")
             results.append((name, 0, 0, False))
             continue
 

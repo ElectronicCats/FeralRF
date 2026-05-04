@@ -174,4 +174,42 @@ class TestSub1GhzPersonalities:
             assert len(p.payload) >= 4
 
 
+class TestOokPersonalities:
+    """F17 — OOK device personalities (O1-O3)."""
+
+    def test_pt2262_garage_uses_ook_preset(self):
+        from feralrf.emulation import PT2262_GARAGE_433
+        from feralrf.presets import PROP_PRESETS
+
+        assert PT2262_GARAGE_433.preset_name == "ook_433_4k8"
+        assert PT2262_GARAGE_433.preset_name in PROP_PRESETS
+
+    def test_ev1527_sensor_uses_lower_rate_preset(self):
+        from feralrf.emulation import EV1527_SENSOR_433
+        from feralrf.presets import PROP_PRESETS
+
+        assert EV1527_SENSOR_433.preset_name == "ook_433_2k4"
+        assert EV1527_SENSOR_433.preset_name in PROP_PRESETS
+
+    def test_hormann_garage_uses_868_preset(self):
+        from feralrf.emulation import HORMANN_GARAGE_868
+        from feralrf.presets import PROP_PRESETS
+
+        assert HORMANN_GARAGE_868.preset_name == "ook_868_4k8"
+        assert HORMANN_GARAGE_868.preset_name in PROP_PRESETS
+
+    def test_ook_personalities_count(self):
+        from feralrf.emulation import OOK_PERSONALITIES
+
+        assert len(OOK_PERSONALITIES) == 3
+
+    def test_ook_payloads_have_expected_lengths(self):
+        """PT2262/EV1527 = 24-bit codes (3 bytes); Hörmann = 64-bit (8 bytes)."""
+        from feralrf.emulation import EV1527_SENSOR_433, HORMANN_GARAGE_868, PT2262_GARAGE_433
+
+        assert len(PT2262_GARAGE_433.payload) >= 3
+        assert len(EV1527_SENSOR_433.payload) >= 3
+        assert len(HORMANN_GARAGE_868.payload) >= 8
+
+
 # F17 implementations replace the placeholder skip stubs that lived here pre-F17.

@@ -21,6 +21,14 @@ from feralrf.emulation.ieee154_device import (
     Ieee154Personality,
 )
 from feralrf.emulation.ieee154_device import emulate as emulate_ieee154
+from feralrf.emulation.ook_device import (
+    EV1527_SENSOR_433,
+    HORMANN_GARAGE_868,
+    OOK_PERSONALITIES,
+    PT2262_GARAGE_433,
+    OokPersonality,
+)
+from feralrf.emulation.ook_device import emulate as emulate_ook
 from feralrf.emulation.sub1ghz_device import (
     GFSK_433_SENSOR,
     GFSK_868_SENSOR,
@@ -48,4 +56,10 @@ __all__ = [
     "WMBUS_T1_METER",
     "SUB1GHZ_PERSONALITIES",
     "emulate_sub1ghz",
+    "OokPersonality",
+    "PT2262_GARAGE_433",
+    "EV1527_SENSOR_433",
+    "HORMANN_GARAGE_868",
+    "OOK_PERSONALITIES",
+    "emulate_ook",
 ]

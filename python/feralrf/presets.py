@@ -276,4 +276,9 @@ PROP_PRESETS = {
         rx_bw=0x5E,  # rate más alto requiere BW más amplio
         sync_word=0x930B51DE,
     ),
+    # === NOTE: Sidewalk LR (LoRa-like) NO soportado por CC1352 ===
+    # Sidewalk LR usa LoRa modulation que requiere chipset Semtech (SX1262 o
+    # similar). Los presets sidewalk_* arriba cubren SOLO el FSK layer de
+    # Sidewalk Sub-G (banda 915 MHz). Para LR, ver hardware Cat-LoRa /
+    # Sidewalk LR via SX1262 fuera de este preset dict.
 }

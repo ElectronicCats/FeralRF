@@ -21,6 +21,14 @@ from feralrf.emulation.ieee154_device import (
     Ieee154Personality,
 )
 from feralrf.emulation.ieee154_device import emulate as emulate_ieee154
+from feralrf.emulation.sub1ghz_device import (
+    GFSK_433_SENSOR,
+    GFSK_868_SENSOR,
+    SUB1GHZ_PERSONALITIES,
+    WMBUS_T1_METER,
+    Sub1GhzPersonality,
+)
+from feralrf.emulation.sub1ghz_device import emulate as emulate_sub1ghz
 
 __all__ = [
     "BlePersonality",
@@ -34,4 +42,10 @@ __all__ = [
     "DATA_POLL_END_DEVICE",
     "IEEE154_PERSONALITIES",
     "emulate_ieee154",
+    "Sub1GhzPersonality",
+    "GFSK_868_SENSOR",
+    "GFSK_433_SENSOR",
+    "WMBUS_T1_METER",
+    "SUB1GHZ_PERSONALITIES",
+    "emulate_sub1ghz",
 ]

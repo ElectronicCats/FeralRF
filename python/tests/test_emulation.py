@@ -136,4 +136,42 @@ class TestIeee154Personalities:
             assert len(p.payload) >= 3  # at least FCF (2) + seq (1)
 
 
+class TestSub1GhzPersonalities:
+    """F17 — Sub-1GHz device personalities (S1-S3)."""
+
+    def test_gfsk_868_sensor_uses_existing_preset(self):
+        from feralrf.emulation import GFSK_868_SENSOR
+        from feralrf.presets import PROP_PRESETS
+
+        assert GFSK_868_SENSOR.preset_name in PROP_PRESETS
+        assert GFSK_868_SENSOR.preset_name == "gfsk_868_50k"
+
+    def test_gfsk_433_sensor_uses_existing_preset(self):
+        from feralrf.emulation import GFSK_433_SENSOR
+        from feralrf.presets import PROP_PRESETS
+
+        assert GFSK_433_SENSOR.preset_name == "gfsk_433_50k"
+        assert GFSK_433_SENSOR.preset_name in PROP_PRESETS
+
+    def test_wmbus_uses_msk_868_fallback(self):
+        """W-MBus T1 specific preset doesn't exist; fallback to msk_868_50k."""
+        from feralrf.emulation import WMBUS_T1_METER
+        from feralrf.presets import PROP_PRESETS
+
+        assert WMBUS_T1_METER.preset_name == "msk_868_50k"
+        assert WMBUS_T1_METER.preset_name in PROP_PRESETS
+
+    def test_sub1ghz_personalities_count(self):
+        from feralrf.emulation import SUB1GHZ_PERSONALITIES
+
+        assert len(SUB1GHZ_PERSONALITIES) == 3
+
+    def test_sub1ghz_personalities_payloads_well_formed(self):
+        from feralrf.emulation import SUB1GHZ_PERSONALITIES
+
+        for p in SUB1GHZ_PERSONALITIES:
+            assert isinstance(p.payload, bytes)
+            assert len(p.payload) >= 4
+
+
 # F17 implementations replace the placeholder skip stubs that lived here pre-F17.

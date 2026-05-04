@@ -27,27 +27,36 @@ class BlePersonality:
 
 # Soundcore Boom 2 — pinned in test_emulation.py (F13 retro-fill).
 # Fast Pair Model ID 0x8F95F8.
+# NOTE: real Soundcore alternates ANKER_PAYLOAD (25B) and FASTPAIR (10B) in
+# separate advertising rounds. Concatenating them exceeds 31-byte legacy ADV
+# limit and firmware rejects with "Transmit failed". Use ANKER block only
+# (25B) — already contains the device identity (Soundcore MAC + Anker mfg ID).
+# To advertise as Fast Pair too, use a separate emulate() call with
+# FASTPAIR_DISCOVERABLE payload.
 _SOUNDCORE_ANKER_BLOCK = bytes.fromhex("02010a0505daf57b010ffff42b7d355a0e0000000000000000")
 _SOUNDCORE_FASTPAIR = bytes.fromhex("020af606162cfe8f95f8")
 
 SOUNDCORE_BOOM_2 = BlePersonality(
     name="Soundcore Boom 2",
     target_mac="CB:2B:7D:35:5A:0E",
-    advertising_payload=_SOUNDCORE_ANKER_BLOCK + _SOUNDCORE_FASTPAIR,
+    advertising_payload=_SOUNDCORE_ANKER_BLOCK,
 )
 
 
 # Apple AirPods Pro — Apple Manufacturer Specific (Mfg ID 0x004C) +
 # Continuity protocol Proximity Pairing message (sub-type 0x07 for AirPods).
+# Total payload trimmed to 29 bytes (3 Flags + 1 AD len + 25 AD content) to
+# fit the 31-byte legacy ADV limit.
 APPLE_AIRPODS_PRO = BlePersonality(
     name="Apple AirPods Pro",
     target_mac="DE:AD:BE:EF:CA:FE",
     advertising_payload=bytes.fromhex(
-        "02010a"  # Flags AD: LE General Discoverable + BR/EDR Not Supported
-        "1bff4c00"  # Mfg Specific Data: len=0x1B, type=0xFF, Mfg ID=0x004C LE
-        "0719"  # Sub-type=0x07 (Proximity Pairing) + len=0x19
+        "02010a"  # Flags AD: LE General Discoverable + BR/EDR Not Supported (3B)
+        "19ff4c00"  # Mfg Specific Data: len=0x19, type=0xFF, Mfg ID=0x004C LE
+        "0714"  # Sub-type=0x07 (Proximity Pairing) + sub-len=0x14 (20B)
         "0220"  # AirPods Pro model bytes
-        "75aa30010000000000000000000000000000000000"  # padding+status (canonical)
+        "75aa3001"  # status
+        "0000000000000000000000000000"  # padding (14B) → total sub-data = 20B
     ),
 )
 

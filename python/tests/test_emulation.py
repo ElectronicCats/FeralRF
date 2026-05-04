@@ -1,12 +1,10 @@
-"""F13: Unit tests for device emulation payloads.
+"""F17: Unit tests for device emulation payloads + personalities.
 
-Emulation as a module (`feralrf.emulation`) is an F17 deliverable. For now
-this file validates the byte structure of the captured payloads used in
-the lab demos (demo_emulate_soundcore.py) so that future emulation work
-inherits a regression gate.
+F13 retro-fill seeded ANKER_PAYLOAD + FASTPAIR_DISCOVERABLE fixtures here.
+F17 vuelta 1 (this commit family) implemented `feralrf.emulation` and added
+TestBlePersonalities / TestIeee154Personalities / TestSub1GhzPersonalities /
+TestOokPersonalities classes below.
 """
-
-import pytest
 
 # Captured from real Soundcore Boom 2 — see demo_emulate_soundcore.py
 ANKER_PAYLOAD = bytes.fromhex("02010a0505daf57b010ffff42b7d355a0e0000000000000000")
@@ -61,11 +59,26 @@ class TestBlePersonalities:
 
         assert SOUNDCORE_BOOM_2.name == "Soundcore Boom 2"
 
-    def test_soundcore_boom_2_uses_pinned_payload(self):
-        """Soundcore identity = ANKER_PAYLOAD + FASTPAIR_DISCOVERABLE."""
+    def test_soundcore_boom_2_uses_pinned_anker_payload(self):
+        """Soundcore identity = ANKER_PAYLOAD only.
+
+        Legacy BLE ADV is capped at 31 bytes. Real Soundcore alternates
+        ANKER (25B) and FASTPAIR (10B) in separate rounds; emulator picks
+        the Anker block (carries device MAC + Anker Mfg ID).
+        """
         from feralrf.emulation import SOUNDCORE_BOOM_2
 
-        assert SOUNDCORE_BOOM_2.advertising_payload == (ANKER_PAYLOAD + FASTPAIR_DISCOVERABLE)
+        assert SOUNDCORE_BOOM_2.advertising_payload == ANKER_PAYLOAD
+        assert len(SOUNDCORE_BOOM_2.advertising_payload) <= 31
+
+    def test_ble_personalities_fit_legacy_adv_31_bytes(self):
+        """All BLE advertising payloads must fit the 31-byte legacy ADV limit."""
+        from feralrf.emulation import BLE_PERSONALITIES
+
+        for p in BLE_PERSONALITIES:
+            assert len(p.advertising_payload) <= 31, (
+                f"{p.name}: payload {len(p.advertising_payload)} bytes > 31 " f"(legacy ADV limit)"
+            )
 
     def test_apple_airpods_pro_uses_apple_mfg(self):
         """AirPods identity = Apple Mfg ID 0x004C + Proximity payload."""

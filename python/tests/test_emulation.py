@@ -50,21 +50,52 @@ class TestSoundcorePayloads:
         assert FASTPAIR_DISCOVERABLE[9] == 0xF8
 
 
-class TestEmulationModuleNotYetImplemented:
-    """When F17 lands, replace these skips with real tests."""
+# F17 vuelta 1 — Device emulation
 
-    @pytest.mark.skip(reason="feralrf.emulation is an F17 deliverable")
-    def test_ble_peripheral_advertising_starts(self):
-        pass
 
-    @pytest.mark.skip(reason="feralrf.emulation is an F17 deliverable")
-    def test_ieee154_device_beacon(self):
-        pass
+class TestBlePersonalities:
+    """F17 — BLE peripheral personalities (P1-P3)."""
 
-    @pytest.mark.skip(reason="feralrf.emulation is an F17 deliverable")
-    def test_sub1ghz_device_payload(self):
-        pass
+    def test_soundcore_boom_2_present(self):
+        from feralrf.emulation import SOUNDCORE_BOOM_2
 
-    @pytest.mark.skip(reason="feralrf.emulation is an F17 deliverable")
-    def test_ook_device_codeword(self):
-        pass
+        assert SOUNDCORE_BOOM_2.name == "Soundcore Boom 2"
+
+    def test_soundcore_boom_2_uses_pinned_payload(self):
+        """Soundcore identity = ANKER_PAYLOAD + FASTPAIR_DISCOVERABLE."""
+        from feralrf.emulation import SOUNDCORE_BOOM_2
+
+        assert SOUNDCORE_BOOM_2.advertising_payload == (ANKER_PAYLOAD + FASTPAIR_DISCOVERABLE)
+
+    def test_apple_airpods_pro_uses_apple_mfg(self):
+        """AirPods identity = Apple Mfg ID 0x004C + Proximity payload."""
+        from feralrf.emulation import APPLE_AIRPODS_PRO
+
+        payload = APPLE_AIRPODS_PRO.advertising_payload
+        idx = payload.find(b"\xff")
+        assert idx > 0, "No 0xFF (Mfg Specific Data) AD type in payload"
+        assert payload[idx + 1 : idx + 3] == b"\x4c\x00", "Apple Mfg ID 0x004C mismatch"
+
+    def test_google_fastpair_uses_uuid_fe2c(self):
+        """Google Fast Pair identity = Service Data UUID 0xFE2C."""
+        from feralrf.emulation import GOOGLE_FASTPAIR_GENERIC
+
+        payload = GOOGLE_FASTPAIR_GENERIC.advertising_payload
+        idx = payload.find(b"\x16\x2c\xfe")
+        assert idx > 0, "No Service Data 0xFE2C AD in payload"
+
+    def test_ble_personalities_count(self):
+        from feralrf.emulation import BLE_PERSONALITIES
+
+        assert len(BLE_PERSONALITIES) == 3
+
+    def test_ble_personalities_have_str_target_mac(self):
+        """target_mac es string AA:BB:... porque adv_spoof lo recibe así."""
+        from feralrf.emulation import BLE_PERSONALITIES
+
+        for p in BLE_PERSONALITIES:
+            assert isinstance(p.target_mac, str)
+            assert len(p.target_mac.split(":")) == 6
+
+
+# F17 implementations replace the placeholder skip stubs that lived here pre-F17.

@@ -310,3 +310,9 @@ class CommandBuilder:
         return (
             head + bytes([len(adv_data)]) + adv_data + bytes([len(scan_rsp_data)]) + scan_rsp_data
         )
+
+    @staticmethod
+    def gatt_serve_table() -> bytes:
+        """Build CMD_GATT_SERVE_TABLE (F20.a.1) payload — empty (flag toggle).
+        F20.a.b will accept a dynamic GATT table here."""
+        return b""

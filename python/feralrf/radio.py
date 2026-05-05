@@ -775,6 +775,26 @@ class Radio:
         self._send_command(Command.BLE_ADV_LEGACY, cmd_payload)
         self._read_response(timeout=5.0, expected={Response.ACK, Response.ERROR})
 
+    def serve_gatt(self, table: Optional[object] = None) -> None:
+        """F20.a.1 — toggle peripheral mode on. Subsequent advertise_ind()
+        will auto-handoff to GATT server slave on CONNECT_IND.
+
+        A3.1: ``table`` arg ignored (warns) — firmware uses hardcoded T2 table
+        (GAP service "FERAL_GATT" + custom service "HELLO_FERAL"). Dynamic
+        table arrives in F20.b.
+        """
+        if table is not None:
+            import warnings
+
+            warnings.warn(
+                "table arg ignored in F20.a.1 — firmware uses hardcoded T2 table; "
+                "dynamic table coming in F20.b",
+                stacklevel=2,
+            )
+        cmd_payload = CommandBuilder.gatt_serve_table()
+        self._send_command(Command.GATT_SERVE_TABLE, cmd_payload)
+        self._read_response(timeout=2.0, expected={Response.ACK, Response.ERROR})
+
     def ble_connect(
         self, addr_le: bytes, addr_type: int, timeout: float = 8.0
     ) -> "ConnectionResult":

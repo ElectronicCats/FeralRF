@@ -43,7 +43,8 @@ void Ble20_drainAndDispatch(uint8_t *reason_out);
 #define CONN_INTERVAL_TO_TICKS(x) ((uint32_t)(x) * 5000u) /* 1.25ms * 4MHz */
 #define SUPERV_TO_TICKS(x) ((uint32_t)(x) * 40000u)       /* 10ms * 4MHz */
 #define TRANSMIT_WINDOW_DELAY 5000u                       /* 1.25ms in RAT ticks */
-#define AO_TARG 2000u /* 500us anchor offset (matches Sniffle) */
+#define AO_TARG 2000u        /* 500us anchor offset (matches Sniffle) */
+#define SLAVE_AO_TARG 10000u /* F20.a.1 — 2.5ms slave look-back (host handoff latency) */
 
 /* ── Static state ── */
 static bool s_running;
@@ -556,12 +557,13 @@ void BleConnMgr_startSlave(const BleConnMgr_SlaveParams *params) {
     s_slave_event_counter = 0u;
 
     /* I3 — first-event anchor: end_of_CONNECT_IND + transmitWindowDelay + winOffset*1.25ms.
-     * If Bundle 4 hasn't populated connectIndEndRat yet (= 0), fall back to
+     * AO_TARG (500us) look-back gives the radio setup margin before master TX.
+     * If connectIndEndRat is 0 (extractConnectIndParams skipped), fall back to
      * RF_getCurrentTime() + 1 interval — preserves Bundle 3 testability. */
     uint32_t hop_ticks = CONN_INTERVAL_TO_TICKS(params->hopInterval_125us);
     if (params->connectIndEndRat != 0u) {
         s_slave_anchor_rat = params->connectIndEndRat + TRANSMIT_WINDOW_DELAY +
-                             (uint32_t)params->winOffset_125us * 5000u;
+                             (uint32_t)params->winOffset_125us * 5000u - SLAVE_AO_TARG;
     } else {
         s_slave_anchor_rat = RF_getCurrentTime() + hop_ticks;
     }
@@ -591,7 +593,17 @@ bool BleConnMgr_pollSlave(void) {
         return false;
     }
 
-    /* Wait until anchor point (sleep until ~500us before) */
+    /* Catch-up: if anchor is in the past (host-side handoff latency), skip
+     * forward to next future anchor. event_counter advances in lockstep so
+     * channel calc tracks where master actually is. */
+    int32_t late = (int32_t)(now - s_slave_anchor_rat);
+    if (late > 0) {
+        uint32_t skipped = (uint32_t)late / hop_ticks + 1u;
+        s_slave_event_counter = (uint16_t)(s_slave_event_counter + skipped);
+        s_slave_anchor_rat += skipped * hop_ticks;
+    }
+
+    /* Wait until anchor point (sleep until ~500us before). */
     uint32_t wait = s_slave_anchor_rat - now;
     if (wait < 0x80000000u && wait > 2000u) {
         Task_sleep(wait / 40u);

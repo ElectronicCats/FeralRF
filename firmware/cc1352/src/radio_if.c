@@ -3034,11 +3034,12 @@ dataQueue_t *RadioIF_getRxQueue(void) {
  * has PDU type 0x5 in the LL header. Body layout (per BLE Core Spec):
  *   InitA(6) + AdvA(6) + AA(4) + CRCInit(3) + WinSize(1) + WinOffset(2) +
  *   Interval(2) + Latency(2) + Timeout(2) + ChannelMap(5) + Hop+SCA(1)
- * Returns true if found and populates accessAddr, crcInit,
- * hopInterval_125us, latency, supervTimeout_10ms, hopIncrement, AND
- * winOffset_125us. The caller sets connectIndEndRat externally from
- * RF_getCurrentTime() since the s_f21_bleAdvPar config does not enable
- * bAppendTimestamp. */
+ *
+ * connectIndEndRat is computed from the HW timestamp appended at
+ * pkt[2 + length] (s_f21_bleAdvPar.rxConfig.bAppendTimestamp = 1). TI's
+ * timestamp marks end of access-address detection; airtime after that =
+ * (header(2) + length + CRC(3)) * 8 us = (5+length)*8 us. At 4MHz RAT,
+ * that's (5+length)*32 ticks. */
 bool RadioIF_extractConnectIndParams(BleConnMgr_SlaveParams *out_params) {
     if (out_params == NULL)
         return false;
@@ -3059,6 +3060,10 @@ bool RadioIF_extractConnectIndParams(BleConnMgr_SlaveParams *out_params) {
             out_params->latency = (uint16_t)body[12] | ((uint16_t)body[13] << 8);
             out_params->supervTimeout_10ms = (uint16_t)body[14] | ((uint16_t)body[15] << 8);
             out_params->hopIncrement = body[21] & 0x1Fu;
+            const uint8_t *ts = &pkt[2 + length];
+            uint32_t timestamp = (uint32_t)ts[0] | ((uint32_t)ts[1] << 8) |
+                                 ((uint32_t)ts[2] << 16) | ((uint32_t)ts[3] << 24);
+            out_params->connectIndEndRat = timestamp + ((uint32_t)length + 5u) * 32u;
             entry->status = DATA_ENTRY_PENDING;
             return true;
         }

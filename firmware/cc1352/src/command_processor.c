@@ -1284,13 +1284,12 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
             adv_data_len, scan_rsp_data, scan_rsp_len, init_addr_type, init_addr);
 
         /* F20.a.1: if peripheral mode is armed AND ADV exited because of
-         * CONNECT_IND, extract params and run the slave event loop. */
+         * CONNECT_IND, extract params and run the slave event loop.
+         * connectIndEndRat is populated by extractConnectIndParams from
+         * the HW-appended timestamp (s_f21_bleAdvPar.bAppendTimestamp=1). */
         if (adv_ok && s_peripheral_active) {
             BleConnMgr_SlaveParams sparams = {0};
             if (RadioIF_extractConnectIndParams(&sparams)) {
-                /* Capture end-of-CONNECT_IND timestamp now (a few µs late but
-                 * well within first-event WinSize of 1.25–2.5ms). */
-                sparams.connectIndEndRat = RF_getCurrentTime();
                 ensure_gatt_callbacks();
                 BleConnMgr_startSlave(&sparams);
                 while (BleConnMgr_pollSlave()) {

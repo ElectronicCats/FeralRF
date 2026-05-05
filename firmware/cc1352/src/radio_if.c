@@ -700,6 +700,16 @@ bool RadioIF_transmitBleAdvLegacy(uint8_t pdu_type, uint8_t addr_type, const uin
     s_f21_bleAdvPar.advConfig.advFilterPolicy = 0u;
     s_f21_bleAdvPar.pDeviceAddress = (uint16_t *)s_f21_device_addr;
 
+    /* F20.a.1.b — capture CONNECT_IND for the F20 handoff path. Without
+     * pRxQ assigned, the radio FSM still terminates ADV on CONNECT_IND
+     * but the PDU contents are discarded — RadioIF_extractConnectIndParams
+     * would find an empty queue. Idempotent: createRfDataQueue rewalks
+     * the buffer and re-links entries; safe to call repeatedly. */
+    (void)RadioIF_createRfDataQueue(&s_rf_data_queue, s_rf_rx_data_buffer,
+                                    (uint16_t)sizeof(s_rf_rx_data_buffer),
+                                    RF_QUEUE_NUM_DATA_ENTRIES, RF_QUEUE_ENTRY_PAYLOAD_LEN);
+    s_f21_bleAdvPar.pRxQ = &s_rf_data_queue;
+
     rfc_radioOp_t *cmd = NULL;
 
     if (pdu_type == 0x1u) {

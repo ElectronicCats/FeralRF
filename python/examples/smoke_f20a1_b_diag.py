@@ -169,6 +169,68 @@ def diff_table(slave, central):
     return all_match, lines
 
 
+def trace_table(slave):
+    """F20.a.1.c — print the 6 internal-state trace fields with interpretive
+    notes. The output of this table is the primary diagnostic signal for
+    Smoke V2: whichever line disagrees with the expected value tells us
+    which firmware layer is failing. Returns the list of printed lines."""
+    lines = ["Field                          Value           Interpretation"]
+    lines.append("-" * 78)
+
+    pa = slave.peripheral_active_at_handoff
+    pa_note = {
+        0xFF: "handoff never reached (CMD_BLE_ADV_LEGACY did not run)",
+        0: "flag was CLEARED before handoff (serve_gatt didn't arm OR cleared mid-flight)",
+        1: "flag survived (handoff entered the inner block)",
+    }.get(pa, "unexpected value")
+    lines.append(f"peripheral_active_at_handoff   0x{pa:02X}            {pa_note}")
+
+    ts = slave.last_tx_status
+    ts_note = {
+        0x0000: "never set (no TX ran since boot/last query)",
+        0x1404: "BLE_DONE_CONNECT (CONNECT_IND received - happy path)",
+        0x140A: "BLE_DONE_CONNECT_CHSEL0 (CONNECT_IND, legacy ch sel)",
+        0x1400: "BLE_DONE_OK (ADV completed, no CONNECT_IND)",
+        0x1FFF: "BLE_ERROR_RXBUF",
+    }.get(ts, "other - check rf_ble_mailbox.h")
+    lines.append(f"last_tx_status                 0x{ts:04X}          {ts_note}")
+
+    ec = slave.extract_call_count
+    ec_note = (
+        "parser was never invoked (handoff bypassed the call)"
+        if ec == 0
+        else f"parser ran {ec} time(s)"
+    )
+    lines.append(f"extract_call_count             {ec:<3}             {ec_note}")
+
+    es = slave.extract_entries_seen
+    es_note = (
+        "queue was empty when parser ran" if es == 0 else f"parser walked {es} FINISHED entry(ies)"
+    )
+    lines.append(f"extract_entries_seen           {es:<3}             {es_note}")
+
+    pt = slave.extract_first_pdu_type
+    pt_note = {
+        0xFF: "no FINISHED entry seen (sentinel)",
+        0x05: "CONNECT_IND (expected)",
+        0x00: "ADV_IND (peer responded with adv, not connect)",
+        0x06: "ADV_SCAN_IND",
+        0x03: "SCAN_REQ",
+        0x04: "SCAN_RSP",
+    }.get(pt, "other - check BT Core Spec PDU types")
+    lines.append(f"extract_first_pdu_type         0x{pt:02X}            {pt_note}")
+
+    ai = slave.advertise_iterations
+    ai_note = (
+        "loop completed full count (no CONNECT_IND break)"
+        if ai >= 5000
+        else "broke early - likely CONNECT_IND"
+    )
+    lines.append(f"advertise_iterations           {ai:<5}           {ai_note}")
+
+    return lines
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="F20.a.1.b smoke V2 NOSYNC diagnostic")
     parser.add_argument("--peripheral-port", required=True)
@@ -224,6 +286,10 @@ def main() -> int:
     print("\n--- Field diff (slave parsed vs central actual) ---")
     all_match, lines = diff_table(slave, central)
     for line in lines:
+        print(line)
+
+    print("\n--- F20.a.1.c internal-state trace ---")
+    for line in trace_table(slave):
         print(line)
 
     print("\n--- Slave RX ring (oldest first) ---")

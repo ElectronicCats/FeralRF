@@ -35,7 +35,7 @@ void Ble20_drainAndDispatch(uint8_t *reason_out) {
             /* L2CAP frame: [len:2 LE][cid:2 LE][payload] */
             uint16_t l2_len = (uint16_t)pkt[2] | ((uint16_t)pkt[3] << 8);
             uint16_t l2_cid = (uint16_t)pkt[4] | ((uint16_t)pkt[5] << 8);
-            if (l2_cid == 0x0004u && l2_len >= 1u && length >= (uint8_t)(l2_len + 4u)) {
+            if (l2_cid == 0x0004u && l2_len >= 1u && (uint16_t)length >= (l2_len + 4u)) {
                 AttServer_handleRequest(&pkt[6], (uint8_t)l2_len);
             }
         }

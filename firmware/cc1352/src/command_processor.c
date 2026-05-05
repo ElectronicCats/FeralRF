@@ -1193,6 +1193,77 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
         return;
     }
 
+    case CMD_BLE_ADV_LEGACY: {
+        /* F21 — BLE Connectable advertiser. Wire format per F21 spec.
+         * Common header (14B): pdu_type(1) + addr_type(1) + adv_addr(6 LE) +
+         * channel(1) + power_dbm(1) + count(2 LE) + interval_units(2 LE).
+         * Body per pdu_type:
+         *   0x0/0x6: adv_data_len(1) + adv_data(N) + scan_rsp_len(1) + scan_rsp(M)
+         *   0x1: init_addr_type(1) + init_addr(6 LE) — total payload 21 bytes */
+        if (payload_len < 14u) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            return;
+        }
+        uint8_t pdu_type = payload[0];
+        uint8_t adv_addr_type = payload[1];
+        const uint8_t *adv_addr = &payload[2];
+        uint8_t channel = payload[8];
+        int8_t power = (int8_t)payload[9];
+        uint16_t count = read_u16_le(&payload[10]);
+        uint16_t interval_units = read_u16_le(&payload[12]);
+
+        if (channel < 37u || channel > 39u || count == 0u) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            return;
+        }
+        if (pdu_type != 0x0u && pdu_type != 0x1u && pdu_type != 0x6u) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            return;
+        }
+
+        uint8_t adv_data_len = 0u;
+        const uint8_t *adv_data = NULL;
+        uint8_t scan_rsp_len = 0u;
+        const uint8_t *scan_rsp_data = NULL;
+        uint8_t init_addr_type = 0u;
+        const uint8_t *init_addr = NULL;
+
+        if (pdu_type == 0x1u) {
+            if (payload_len != 21u) {
+                send_error(seq, ERR_INVALID_PAYLOAD);
+                return;
+            }
+            init_addr_type = payload[14];
+            init_addr = &payload[15];
+        } else {
+            if (payload_len < 16u) {
+                send_error(seq, ERR_INVALID_PAYLOAD);
+                return;
+            }
+            adv_data_len = payload[14];
+            if (adv_data_len > 31u || (uint16_t)(15u + adv_data_len + 1u) > payload_len) {
+                send_error(seq, ERR_INVALID_PAYLOAD);
+                return;
+            }
+            adv_data = &payload[15];
+            scan_rsp_len = payload[15u + adv_data_len];
+            if (scan_rsp_len > 31u ||
+                (uint16_t)(16u + adv_data_len + scan_rsp_len) != payload_len) {
+                send_error(seq, ERR_INVALID_PAYLOAD);
+                return;
+            }
+            scan_rsp_data = &payload[16u + adv_data_len];
+        }
+
+        /* ACK first; the loop in RadioIF_transmitBleAdvLegacy blocks for
+         * count*interval_units*0.625 ms total. Caller times out at 5s + that. */
+        send_ack(seq);
+        (void)RadioIF_transmitBleAdvLegacy(pdu_type, adv_addr_type, adv_addr, channel, power, count,
+                                           interval_units, adv_data, adv_data_len, scan_rsp_data,
+                                           scan_rsp_len, init_addr_type, init_addr);
+        return;
+    }
+
     case CMD_FOLLOW_DEBUG: {
         if (payload_len != 0u) {
             send_error(seq, ERR_INVALID_PAYLOAD);

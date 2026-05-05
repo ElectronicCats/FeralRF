@@ -656,6 +656,131 @@ static bool RadioIF_transmitBleAdvRaw(const uint8_t *payload, uint8_t payload_le
                                     (RF_Op *)&Ble5_0_cmdFs, (RF_Op *)&Ble5_0_cmdBleAdvNc, tx_power);
 }
 
+/* F21 — BLE Connectable advertiser (legacy ADV_IND / DIRECT / SCAN_IND). */
+extern rfc_CMD_BLE_ADV_t Ble5_0_cmdBleAdv;
+extern rfc_CMD_BLE_ADV_DIR_t Ble5_0_cmdBleAdvDir;
+extern rfc_CMD_BLE_ADV_SCAN_t Ble5_0_cmdBleAdvScan;
+extern rfc_bleAdvPar_t s_f21_bleAdvPar;
+
+/* TI-RTOS Task_sleep takes ticks; 1 tick = 10 us → 100 ticks/ms. Same
+ * convention as ble_conn.c MS_TO_TASK_TICKS. */
+#define F21_MS_TO_TASK_TICKS(ms) ((uint32_t)(ms) * 100u)
+
+static uint8_t s_f21_adv_payload[BLE_ADV_TX_MAX_PAYLOAD_LEN] __attribute__((aligned(4)));
+static uint8_t s_f21_scan_rsp_payload[BLE_ADV_TX_MAX_PAYLOAD_LEN] __attribute__((aligned(4)));
+static uint8_t s_f21_device_addr[BLE_ADV_TX_DEVICE_ADDR_LEN] __attribute__((aligned(4)));
+static uint8_t s_f21_init_addr[BLE_ADV_TX_DEVICE_ADDR_LEN] __attribute__((aligned(4)));
+static rfc_bleAdvOutput_t s_f21_adv_output;
+
+bool RadioIF_transmitBleAdvLegacy(uint8_t pdu_type, uint8_t addr_type, const uint8_t *addr,
+                                  uint8_t channel, int8_t power_dbm, uint16_t count,
+                                  uint16_t interval_units, const uint8_t *adv_data,
+                                  uint8_t adv_data_len, const uint8_t *scan_rsp,
+                                  uint8_t scan_rsp_len, uint8_t init_addr_type,
+                                  const uint8_t *init_addr) {
+    if (addr == NULL || count == 0u || channel < 37u || channel > 39u) {
+        return false;
+    }
+    if (pdu_type != 0x0u && pdu_type != 0x1u && pdu_type != 0x6u) {
+        return false;
+    }
+
+    /* Configure RF for BLE legacy adv (always 1M) */
+    s_tx_power_dbm = power_dbm;
+    RadioIF_setPower(power_dbm);
+    RadioIF_applyBleChannelConfig((uint8_t)channel);
+    RadioIF_applyBlePhyMode(PHY_MANAGER_PHY_BLE_1M);
+
+    /* Copy device address (6 bytes LE) */
+    memcpy(s_f21_device_addr, addr, BLE_ADV_TX_DEVICE_ADDR_LEN);
+
+    /* Reset shared params struct fields per call */
+    s_f21_bleAdvPar.advConfig.deviceAddrType = (addr_type & 0x1u);
+    s_f21_bleAdvPar.advConfig.peerAddrType = (init_addr_type & 0x1u);
+    s_f21_bleAdvPar.advConfig.advFilterPolicy = 0u;
+    s_f21_bleAdvPar.pDeviceAddress = (uint16_t *)s_f21_device_addr;
+
+    rfc_radioOp_t *cmd = NULL;
+
+    if (pdu_type == 0x1u) {
+        /* ADV_DIRECT_IND — pPeerAddress field overlays pWhiteList */
+        if (init_addr == NULL) {
+            return false;
+        }
+        memcpy(s_f21_init_addr, init_addr, BLE_ADV_TX_DEVICE_ADDR_LEN);
+        s_f21_bleAdvPar.pWhiteList = (rfc_bleWhiteListEntry_t *)s_f21_init_addr;
+        s_f21_bleAdvPar.advLen = 0u;
+        s_f21_bleAdvPar.scanRspLen = 0u;
+        s_f21_bleAdvPar.pAdvData = NULL;
+        s_f21_bleAdvPar.pScanRspData = NULL;
+
+        Ble5_0_cmdBleAdvDir.channel = (uint8_t)channel;
+        Ble5_0_cmdBleAdvDir.startTrigger.triggerType = TRIG_NOW;
+        Ble5_0_cmdBleAdvDir.condition.rule = COND_NEVER;
+        Ble5_0_cmdBleAdvDir.pParams = &s_f21_bleAdvPar;
+        Ble5_0_cmdBleAdvDir.pOutput = &s_f21_adv_output;
+        cmd = (rfc_radioOp_t *)&Ble5_0_cmdBleAdvDir;
+    } else {
+        /* ADV_IND or ADV_SCAN_IND */
+        if (adv_data_len > BLE_ADV_TX_MAX_PAYLOAD_LEN ||
+            scan_rsp_len > BLE_ADV_TX_MAX_PAYLOAD_LEN) {
+            return false;
+        }
+        if (adv_data != NULL && adv_data_len > 0u) {
+            memcpy(s_f21_adv_payload, adv_data, adv_data_len);
+        }
+        if (scan_rsp != NULL && scan_rsp_len > 0u) {
+            memcpy(s_f21_scan_rsp_payload, scan_rsp, scan_rsp_len);
+        }
+        s_f21_bleAdvPar.advLen = adv_data_len;
+        s_f21_bleAdvPar.scanRspLen = scan_rsp_len;
+        s_f21_bleAdvPar.pAdvData = s_f21_adv_payload;
+        s_f21_bleAdvPar.pScanRspData = s_f21_scan_rsp_payload;
+        s_f21_bleAdvPar.pWhiteList = NULL;
+
+        if (pdu_type == 0x0u) {
+            Ble5_0_cmdBleAdv.channel = (uint8_t)channel;
+            Ble5_0_cmdBleAdv.startTrigger.triggerType = TRIG_NOW;
+            Ble5_0_cmdBleAdv.condition.rule = COND_NEVER;
+            Ble5_0_cmdBleAdv.pParams = &s_f21_bleAdvPar;
+            Ble5_0_cmdBleAdv.pOutput = &s_f21_adv_output;
+            cmd = (rfc_radioOp_t *)&Ble5_0_cmdBleAdv;
+        } else {
+            /* pdu_type == 0x6 ADV_SCAN_IND */
+            Ble5_0_cmdBleAdvScan.channel = (uint8_t)channel;
+            Ble5_0_cmdBleAdvScan.startTrigger.triggerType = TRIG_NOW;
+            Ble5_0_cmdBleAdvScan.condition.rule = COND_NEVER;
+            Ble5_0_cmdBleAdvScan.pParams = &s_f21_bleAdvPar;
+            Ble5_0_cmdBleAdvScan.pOutput = &s_f21_adv_output;
+            cmd = (rfc_radioOp_t *)&Ble5_0_cmdBleAdvScan;
+        }
+    }
+
+    if (cmd == NULL || s_rf_handle == NULL) {
+        return false;
+    }
+
+    /* Per-iteration loop. CONNECT_IND breaks the loop early. */
+    for (uint16_t i = 0u; i < count; i++) {
+        memset(&s_f21_adv_output, 0, sizeof(s_f21_adv_output));
+        cmd->status = 0x0000;
+        (void)RF_runCmd(s_rf_handle, cmd, RF_PriorityNormal, NULL, 0);
+        /* BLE_DONE_CONNECT (0x1FFF) = CONNECT_IND received. F20 not impl
+         * → break loop and return; phone will time out. */
+        if (cmd->status == 0x1FFFu) {
+            break;
+        }
+        if (interval_units > 0u && (uint16_t)(i + 1u) < count) {
+            uint32_t interval_ms = ((uint32_t)interval_units * 625u) / 1000u;
+            if (interval_ms == 0u) {
+                interval_ms = 1u;
+            }
+            Task_sleep(F21_MS_TO_TASK_TICKS(interval_ms));
+        }
+    }
+    return true;
+}
+
 static bool RadioIF_isBleAdvChannel(uint16_t channel) {
     return (channel >= 37u) && (channel <= 39u);
 }

@@ -85,6 +85,18 @@ void RadioIF_setActiveScan(bool enabled);
 void RadioIF_getScannerStats(uint16_t *tx_req, uint16_t *rx_adv_ok, uint16_t *rx_rsp_ok);
 void RadioIF_setBleAdvAddress(const uint8_t *addr);
 
+/* F21 — BLE Connectable advertiser (legacy ADV_IND / DIRECT / SCAN_IND).
+ * pdu_type: 0x0=ADV_IND, 0x1=ADV_DIRECT_IND, 0x6=ADV_SCAN_IND.
+ * For DIRECT, init_addr is the peer address; adv_data and scan_rsp ignored.
+ * For IND/SCAN, init_addr ignored.
+ * count: number of advertising events. interval_units: 0.625ms units. */
+bool RadioIF_transmitBleAdvLegacy(uint8_t pdu_type, uint8_t addr_type, const uint8_t *addr,
+                                  uint8_t channel, int8_t power_dbm, uint16_t count,
+                                  uint16_t interval_units, const uint8_t *adv_data,
+                                  uint8_t adv_data_len, const uint8_t *scan_rsp,
+                                  uint8_t scan_rsp_len, uint8_t init_addr_type,
+                                  const uint8_t *init_addr);
+
 /* BLE connection initiation — runs CMD_BLE5_INITIATOR (blocking) */
 int RadioIF_bleInitiate(void);
 

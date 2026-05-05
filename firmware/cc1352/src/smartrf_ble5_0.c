@@ -344,6 +344,97 @@ rfc_CMD_BLE_ADV_NC_t Ble5_0_cmdBleAdvNc = {
     .pOutput = 0,
 };
 
+/* F21 BLE Connectable Advertiser — separate params struct so the NC path
+ * (s_bleAdvPar / Ble5_0_cmdBleAdvNc) stays untouched. Used by ADV_IND,
+ * ADV_DIRECT_IND, ADV_SCAN_IND. RadioIF_transmitBleAdvLegacy populates
+ * fields per call. */
+rfc_bleAdvPar_t s_f21_bleAdvPar = {
+    .pRxQ = 0,
+    .rxConfig.bAutoFlushIgnored = 0x0,
+    .rxConfig.bAutoFlushCrcErr = 0x0,
+    .rxConfig.bAutoFlushEmpty = 0x0,
+    .rxConfig.bIncludeLenByte = 0x0,
+    .rxConfig.bIncludeCrc = 0x0,
+    .rxConfig.bAppendRssi = 0x0,
+    .rxConfig.bAppendStatus = 0x0,
+    .rxConfig.bAppendTimestamp = 0x0,
+    .advConfig.advFilterPolicy = 0x0, /* allow any scanner/initiator */
+    .advConfig.deviceAddrType = 0x1,
+    .advConfig.peerAddrType = 0x1,
+    .advConfig.bStrictLenFilter = 0x0,
+    .advConfig.chSel = 0x0,
+    .advConfig.privIgnMode = 0x0,
+    .advConfig.rpaMode = 0x0,
+    .advLen = 0x00,
+    .scanRspLen = 0x00,
+    .pAdvData = 0,
+    .pScanRspData = 0,
+    .pDeviceAddress = 0,
+    .pWhiteList = 0,
+    .behConfig.scanRspEndType = 0x0,
+    .__dummy0 = 0x00,
+    .__dummy1 = 0x00,
+    .endTrigger.triggerType = TRIG_NEVER,
+    .endTrigger.bEnaCmd = 0x0,
+    .endTrigger.triggerNo = 0x0,
+    .endTrigger.pastTrig = 0x1,
+    .endTime = 0x00000000,
+};
+
+rfc_CMD_BLE_ADV_t Ble5_0_cmdBleAdv = {
+    .commandNo = CMD_BLE_ADV,
+    .status = 0x0000,
+    .pNextOp = 0,
+    .startTime = 0x00000000,
+    .startTrigger.triggerType = TRIG_NOW,
+    .startTrigger.bEnaCmd = 0x0,
+    .startTrigger.triggerNo = 0x0,
+    .startTrigger.pastTrig = 0x1,
+    .condition.rule = COND_NEVER,
+    .condition.nSkip = 0x0,
+    .channel = 0x25,
+    .whitening.init = 0x0,
+    .whitening.bOverride = 0x0,
+    .pParams = &s_f21_bleAdvPar,
+    .pOutput = 0,
+};
+
+rfc_CMD_BLE_ADV_DIR_t Ble5_0_cmdBleAdvDir = {
+    .commandNo = CMD_BLE_ADV_DIR,
+    .status = 0x0000,
+    .pNextOp = 0,
+    .startTime = 0x00000000,
+    .startTrigger.triggerType = TRIG_NOW,
+    .startTrigger.bEnaCmd = 0x0,
+    .startTrigger.triggerNo = 0x0,
+    .startTrigger.pastTrig = 0x1,
+    .condition.rule = COND_NEVER,
+    .condition.nSkip = 0x0,
+    .channel = 0x25,
+    .whitening.init = 0x0,
+    .whitening.bOverride = 0x0,
+    .pParams = &s_f21_bleAdvPar,
+    .pOutput = 0,
+};
+
+rfc_CMD_BLE_ADV_SCAN_t Ble5_0_cmdBleAdvScan = {
+    .commandNo = CMD_BLE_ADV_SCAN,
+    .status = 0x0000,
+    .pNextOp = 0,
+    .startTime = 0x00000000,
+    .startTrigger.triggerType = TRIG_NOW,
+    .startTrigger.bEnaCmd = 0x0,
+    .startTrigger.triggerNo = 0x0,
+    .startTrigger.pastTrig = 0x1,
+    .condition.rule = COND_NEVER,
+    .condition.nSkip = 0x0,
+    .channel = 0x25,
+    .whitening.init = 0x0,
+    .whitening.bOverride = 0x0,
+    .pParams = &s_f21_bleAdvPar,
+    .pOutput = 0,
+};
+
 rfc_CMD_BLE5_ADV_NC_t Ble5_0_cmdBle5AdvNc = {
     .commandNo = 0x182D,
     .status = 0x0000,

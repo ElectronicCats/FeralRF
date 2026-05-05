@@ -88,6 +88,7 @@ class Command(IntEnum):
     # Diagnostics
     DEBUG_TIMING = 0x47
     DEBUG_CONN_PARAMS = 0x48
+    DEBUG_SLAVE = 0x58
 
     # F21 — BLE Connectable Advertiser
     BLE_ADV_LEGACY = 0x52
@@ -133,6 +134,7 @@ class Response(IntEnum):
     # Diagnostics
     DEBUG_TIMING = 0xA8
     DEBUG_CONN_PARAMS = 0xA9
+    DEBUG_SLAVE = 0xB3
 
     # F8b Track B — passive connection follower
     LL_PACKET = 0xAB
@@ -182,6 +184,7 @@ EXPERIMENTAL_COMMANDS = (
     Command.JAM_CONTINUOUS,
     Command.JAM_STOP,
     Command.GATT_SERVE_TABLE,
+    Command.DEBUG_SLAVE,
 )
 
 PENDING_COMMAND_IDS = {

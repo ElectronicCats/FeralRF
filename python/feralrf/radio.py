@@ -196,6 +196,55 @@ class GattDiscoveryResult:
     status: int
 
 
+@dataclass
+class SlaveDbgEntry:
+    """One slave-event RX snapshot from the firmware ring buffer (F20.a.1.b)."""
+
+    event_counter: int
+    chan: int
+    anchor_rat: int
+    actual_start_rat: int
+    status: int
+    n_rx_ok: int
+    n_rx_nok: int
+    n_rx_ignored: int
+    pkt_status: int
+
+
+@dataclass
+class SlaveDbgResult:
+    """Slave-side diagnostic dump from CMD_DEBUG_SLAVE (F20.a.1.b)."""
+
+    access_addr: int
+    crc_init: int
+    win_offset: int
+    hop_interval: int
+    latency: int
+    superv_timeout: int
+    hop_increment: int
+    connect_ind_end_rat: int
+    first_anchor_rat: int
+    entries: list
+
+
+@dataclass
+class CentralDbgConnParams:
+    """Central-side conn-params dump from CMD_DEBUG_CONN_PARAMS (F8A telemetry)."""
+
+    access_addr: int
+    crc_init: int
+    channel_map: bytes  # 5 bytes
+    hop_increment: int
+    win_offset: int
+    event_counter: int
+    conn_time: int
+    conn_interval: int
+    superv_timeout: int
+    use_csa2: bool
+    connected: bool
+    ll_data: bytes  # raw 22 bytes
+
+
 @dataclass(frozen=True)
 class RxStreamError:
     """Async error event yielded by Radio.read_packets().
@@ -908,6 +957,64 @@ class Radio:
         if cmd_id != Response.DEBUG_CONN_PARAMS:
             raise ProtocolError(f"Unexpected response to DEBUG_CONN_PARAMS: 0x{cmd_id:02X}")
         return DebugConnParamsResponse.parse(payload)
+
+    def debug_slave(self) -> SlaveDbgResult:
+        """F20.a.1.b — query slave-side diagnostic dump.
+
+        Returns the snapshot of CONNECT_IND values parsed by the slave plus
+        a ring of the most recent per-event RX stats. Used by the smoke V2
+        harness to diff slave-parsed values against the central's actuals
+        and to spot-check radio behavior. Debug-only API; not in the stable
+        command set.
+        """
+        self._send_command(Command.DEBUG_SLAVE, b"")
+        cmd_id, _seq, payload = self._read_response(
+            timeout=2.0, expected={Response.DEBUG_SLAVE, Response.ERROR}
+        )
+        if cmd_id == Response.ERROR:
+            raise CommandError("DEBUG_SLAVE failed", payload[0] if payload else 0)
+        if len(payload) < 26:
+            raise ProtocolError(f"DEBUG_SLAVE payload too short: {len(payload)} bytes")
+        access_addr = int.from_bytes(payload[0:4], "little")
+        crc_init = int.from_bytes(payload[4:8], "little")
+        win_offset = int.from_bytes(payload[8:10], "little")
+        hop_interval = int.from_bytes(payload[10:12], "little")
+        latency = int.from_bytes(payload[12:14], "little")
+        superv_timeout = int.from_bytes(payload[14:16], "little")
+        hop_increment = payload[16]
+        connect_ind_end_rat = int.from_bytes(payload[17:21], "little")
+        first_anchor_rat = int.from_bytes(payload[21:25], "little")
+        count = payload[25]
+        entries = []
+        for i in range(count):
+            base = 26 + i * 17
+            if base + 17 > len(payload):
+                break
+            entries.append(
+                SlaveDbgEntry(
+                    event_counter=int.from_bytes(payload[base : base + 2], "little"),
+                    chan=payload[base + 2],
+                    anchor_rat=int.from_bytes(payload[base + 3 : base + 7], "little"),
+                    actual_start_rat=int.from_bytes(payload[base + 7 : base + 11], "little"),
+                    status=int.from_bytes(payload[base + 11 : base + 13], "little"),
+                    n_rx_ok=payload[base + 13],
+                    n_rx_nok=payload[base + 14],
+                    n_rx_ignored=payload[base + 15],
+                    pkt_status=payload[base + 16],
+                )
+            )
+        return SlaveDbgResult(
+            access_addr=access_addr,
+            crc_init=crc_init,
+            win_offset=win_offset,
+            hop_interval=hop_interval,
+            latency=latency,
+            superv_timeout=superv_timeout,
+            hop_increment=hop_increment,
+            connect_ind_end_rat=connect_ind_end_rat,
+            first_anchor_rat=first_anchor_rat,
+            entries=entries,
+        )
 
     def gatt_discover(self, timeout: float = 15.0) -> "GattDiscoveryResult":
         """Issue CMD_GATT_DISCOVER and collect the streamed services + chars.

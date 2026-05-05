@@ -89,6 +89,9 @@ class Command(IntEnum):
     DEBUG_TIMING = 0x47
     DEBUG_CONN_PARAMS = 0x48
 
+    # F21 — BLE Connectable Advertiser
+    BLE_ADV_LEGACY = 0x52
+
     # F8b Track B — passive connection follower
     FOLLOW_START = 0x50
     FOLLOW_STOP = 0x51

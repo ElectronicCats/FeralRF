@@ -209,6 +209,23 @@ class RxStreamError:
     context: int = 0
 
 
+def _mac_str_to_le_bytes(addr_str: str) -> bytes:
+    """Convert 'AA:BB:CC:DD:EE:FF' to 6-byte LE bytes (FF EE DD CC BB AA)."""
+    parts = addr_str.split(":")
+    if len(parts) != 6:
+        raise ValueError(f"Invalid MAC string: {addr_str!r}")
+    return bytes(int(p, 16) for p in reversed(parts))
+
+
+def _random_mac_le() -> bytes:
+    """Generate 6-byte LE random static address (top two bits = 0b11)."""
+    import os
+
+    addr = bytearray(os.urandom(6))
+    addr[5] |= 0xC0  # random static type per BT Core Spec Vol 3 Part C §10.8
+    return bytes(addr)
+
+
 class Radio:
     """
     Synchronous Radio interface for FeralRF.
@@ -675,6 +692,88 @@ class Radio:
             raise ValueError("Address must be XX:XX:XX:XX:XX:XX format")
         addr_bytes = bytes(int(p, 16) for p in reversed(parts))
         self.set_ble_addr(addr_bytes)
+
+    def advertise_ind(
+        self,
+        payload: bytes,
+        scan_resp_data: bytes = b"",
+        target_addr: Optional[str] = None,
+        count: int = 50,
+        channel: int = 37,
+        power_dbm: int = 0,
+        interval_us: int = 10_000,
+    ) -> None:
+        """F21 — emit ADV_IND (general connectable + scannable).
+
+        TI CPE handles SCAN_REQ→SCAN_RSP automatically. CONNECT_IND
+        received: firmware breaks the loop early (no F20 peripheral).
+        """
+        addr_le = _mac_str_to_le_bytes(target_addr) if target_addr else _random_mac_le()
+        interval_units = max(1, interval_us // 625)
+        cmd_payload = CommandBuilder.ble_adv_legacy(
+            pdu_type=0x0,
+            adv_addr_le=addr_le,
+            channel=channel,
+            power_dbm=power_dbm,
+            count=count,
+            interval_units=interval_units,
+            adv_data=payload,
+            scan_rsp_data=scan_resp_data,
+        )
+        self._send_command(Command.BLE_ADV_LEGACY, cmd_payload)
+        self._read_response(timeout=5.0, expected={Response.ACK, Response.ERROR})
+
+    def advertise_direct(
+        self,
+        target_addr: str,
+        init_addr: str,
+        mode: str = "low",
+        count: int = 50,
+        channel: int = 37,
+        power_dbm: int = 0,
+    ) -> None:
+        """F21 — emit ADV_DIRECT_IND. mode='low' (10ms) | 'high' (3.75ms)."""
+        addr_le = _mac_str_to_le_bytes(target_addr)
+        init_le = _mac_str_to_le_bytes(init_addr)
+        interval_us = 3_750 if mode == "high" else 10_000
+        interval_units = max(1, interval_us // 625)
+        cmd_payload = CommandBuilder.ble_adv_legacy(
+            pdu_type=0x1,
+            adv_addr_le=addr_le,
+            channel=channel,
+            power_dbm=power_dbm,
+            count=count,
+            interval_units=interval_units,
+            init_addr_le=init_le,
+        )
+        self._send_command(Command.BLE_ADV_LEGACY, cmd_payload)
+        self._read_response(timeout=5.0, expected={Response.ACK, Response.ERROR})
+
+    def advertise_scan_ind(
+        self,
+        payload: bytes,
+        scan_resp_data: bytes = b"",
+        target_addr: Optional[str] = None,
+        count: int = 50,
+        channel: int = 37,
+        power_dbm: int = 0,
+        interval_us: int = 10_000,
+    ) -> None:
+        """F21 — emit ADV_SCAN_IND (scannable non-connectable)."""
+        addr_le = _mac_str_to_le_bytes(target_addr) if target_addr else _random_mac_le()
+        interval_units = max(1, interval_us // 625)
+        cmd_payload = CommandBuilder.ble_adv_legacy(
+            pdu_type=0x6,
+            adv_addr_le=addr_le,
+            channel=channel,
+            power_dbm=power_dbm,
+            count=count,
+            interval_units=interval_units,
+            adv_data=payload,
+            scan_rsp_data=scan_resp_data,
+        )
+        self._send_command(Command.BLE_ADV_LEGACY, cmd_payload)
+        self._read_response(timeout=5.0, expected={Response.ACK, Response.ERROR})
 
     def ble_connect(
         self, addr_le: bytes, addr_type: int, timeout: float = 8.0

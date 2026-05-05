@@ -261,3 +261,52 @@ class CommandBuilder:
     def follow_stop() -> bytes:
         """Build CMD_FOLLOW_STOP payload (empty)."""
         return b""
+
+    @staticmethod
+    def ble_adv_legacy(
+        pdu_type: int,
+        adv_addr_le: bytes,
+        adv_addr_type: int = 1,
+        channel: int = 37,
+        power_dbm: int = 0,
+        count: int = 50,
+        interval_units: int = 16,
+        adv_data: bytes = b"",
+        scan_rsp_data: bytes = b"",
+        init_addr_le: bytes = b"",
+        init_addr_type: int = 1,
+    ) -> bytes:
+        """Build CMD_BLE_ADV_LEGACY (F21) payload.
+
+        pdu_type: 0x0 ADV_IND | 0x1 ADV_DIRECT_IND | 0x6 ADV_SCAN_IND.
+        Wire format per F21 spec docs/superpowers/specs/2026-05-04-f21-...
+        """
+        if pdu_type not in (0x0, 0x1, 0x6):
+            raise ValueError(f"pdu_type must be 0x0/0x1/0x6, got 0x{pdu_type:X}")
+        if len(adv_addr_le) != 6:
+            raise ValueError("adv_addr_le must be 6 bytes")
+        if power_dbm < -20 or power_dbm > 20:
+            raise ValueError(f"power_dbm out of range: {power_dbm}")
+        if channel not in (37, 38, 39):
+            raise ValueError(f"channel must be 37/38/39, got {channel}")
+        if count < 1 or count > 0xFFFF:
+            raise ValueError(f"count must be in [1, 65535], got {count}")
+        if interval_units < 1 or interval_units > 0xFFFF:
+            raise ValueError(f"interval_units must be in [1, 65535], got {interval_units}")
+
+        head = bytes([pdu_type, adv_addr_type & 0x01]) + adv_addr_le
+        head += bytes([channel, power_dbm & 0xFF])
+        head += struct.pack("<HH", count, interval_units)
+
+        if pdu_type == 0x1:
+            if len(init_addr_le) != 6:
+                raise ValueError("ADV_DIRECT_IND requires init_addr_le (6 bytes)")
+            return head + bytes([init_addr_type & 0x01]) + init_addr_le
+
+        if len(adv_data) > 31:
+            raise ValueError(f"adv_data > 31 bytes ({len(adv_data)})")
+        if len(scan_rsp_data) > 31:
+            raise ValueError(f"scan_rsp_data > 31 bytes ({len(scan_rsp_data)})")
+        return (
+            head + bytes([len(adv_data)]) + adv_data + bytes([len(scan_rsp_data)]) + scan_rsp_data
+        )

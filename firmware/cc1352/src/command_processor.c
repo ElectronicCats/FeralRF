@@ -10,16 +10,20 @@
 #include <string.h>
 
 #include "att_client.h"
+#include "att_server.h"
+#include "ble20_dispatch.h"
 #include "ble_conn.h"
 #include "ble_conn_mgr.h"
 #include "control_task.h"
 #include "crypto_engine.h"
 #include "ll_follower.h"
+
 #include "ll_manager.h"
 #include "output_if.h"
 #include "protocol.h"
 #include "radio_if.h"
 #include "task_event.h"
+#include <ti/drivers/rf/RF.h>
 
 /* All command, response, and error code #defines moved to protocol.h
  * (F8f #10 — single source of truth for the wire protocol). The helper
@@ -173,6 +177,10 @@ static void gatt_on_disconnected(uint8_t reason) {
     uint8_t rsp[1] = {reason};
     OutputIF_sendResponse(RSP_DISCONNECTED, 0u, rsp, sizeof(rsp));
 }
+
+/* F20.a.1 — Armed by CMD_GATT_SERVE_TABLE; cleared after handoff.
+ * When true, CMD_BLE_ADV_LEGACY enters slave loop on CONNECT_IND exit. */
+static bool s_peripheral_active = false;
 
 /* Set once on the first GATT-touching command. Both the AttClient
  * callbacks (.onService/.onChar/.onRead/.onDone/.onMtu/.onAttribute) and
@@ -1193,6 +1201,19 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
         return;
     }
 
+    case CMD_GATT_SERVE_TABLE: {
+        /* F20.a.1 — Arms peripheral mode. The next CMD_BLE_ADV_LEGACY will
+         * transition to slave loop on CONNECT_IND exit. No payload. */
+        if (payload_len != 0u) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            return;
+        }
+        AttServer_init();
+        s_peripheral_active = true;
+        send_ack(seq);
+        return;
+    }
+
     case CMD_BLE_ADV_LEGACY: {
         /* F21 — BLE Connectable advertiser. Wire format per F21 spec.
          * Common header (14B): pdu_type(1) + addr_type(1) + adv_addr(6 LE) +
@@ -1258,9 +1279,27 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
         /* ACK first; the loop in RadioIF_transmitBleAdvLegacy blocks for
          * count*interval_units*0.625 ms total. Caller times out at 5s + that. */
         send_ack(seq);
-        (void)RadioIF_transmitBleAdvLegacy(pdu_type, adv_addr_type, adv_addr, channel, power, count,
-                                           interval_units, adv_data, adv_data_len, scan_rsp_data,
-                                           scan_rsp_len, init_addr_type, init_addr);
+        bool adv_ok = RadioIF_transmitBleAdvLegacy(
+            pdu_type, adv_addr_type, adv_addr, channel, power, count, interval_units, adv_data,
+            adv_data_len, scan_rsp_data, scan_rsp_len, init_addr_type, init_addr);
+
+        /* F20.a.1: if peripheral mode is armed AND ADV exited because of
+         * CONNECT_IND, extract params and run the slave event loop. */
+        if (adv_ok && s_peripheral_active) {
+            BleConnMgr_SlaveParams sparams = {0};
+            if (RadioIF_extractConnectIndParams(&sparams)) {
+                /* Capture end-of-CONNECT_IND timestamp now (a few µs late but
+                 * well within first-event WinSize of 1.25–2.5ms). */
+                sparams.connectIndEndRat = RF_getCurrentTime();
+                ensure_gatt_callbacks();
+                BleConnMgr_startSlave(&sparams);
+                while (BleConnMgr_pollSlave()) {
+                    /* Runs until LL_TERMINATE_IND, supervision timeout, or
+                     * disconnect detected by Ble20_drainAndDispatch. */
+                }
+            }
+            s_peripheral_active = false; /* one-shot per CMD_GATT_SERVE_TABLE */
+        }
         return;
     }
 

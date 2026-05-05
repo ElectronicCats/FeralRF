@@ -22,7 +22,7 @@
 #include <ti/drivers/rf/RF.h>
 #include <ti/sysbios/knl/Task.h>
 
-/* F20.a.1 — Bundle 4 fills this in; weak stub keeps link clean until then. */
+/* F20.a.1 — Implemented in ble20_dispatch.c (Bundle 4). */
 void Ble20_drainAndDispatch(uint8_t *reason_out);
 
 /* ── LL Control PDU opcodes (Core Spec Vol 6, Part B, 2.4.2) ── */
@@ -652,11 +652,4 @@ bool BleConnMgr_pollSlave(void) {
     s_slave_event_counter++;
     s_slave_anchor_rat += hop_ticks;
     return true;
-}
-
-/* Weak stub — Bundle 4 provides the real implementation in ble20_dispatch.c */
-__attribute__((weak)) void Ble20_drainAndDispatch(uint8_t *reason_out) {
-    if (reason_out) {
-        *reason_out = 0u;
-    }
 }

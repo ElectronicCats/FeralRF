@@ -3024,3 +3024,46 @@ void RadioIF_stopJamSession(void) {
 bool RadioIF_isJamSessionActive(void) {
     return s_jam_session_active;
 }
+
+dataQueue_t *RadioIF_getRxQueue(void) {
+    return &s_rf_data_queue;
+}
+
+/* F20.a.1 — Walk the RX queue looking for the CONNECT_IND PDU left there
+ * by Ble5_0_cmdBleAdv when a peer initiates a connection. CONNECT_IND
+ * has PDU type 0x5 in the LL header. Body layout (per BLE Core Spec):
+ *   InitA(6) + AdvA(6) + AA(4) + CRCInit(3) + WinSize(1) + WinOffset(2) +
+ *   Interval(2) + Latency(2) + Timeout(2) + ChannelMap(5) + Hop+SCA(1)
+ * Returns true if found and populates accessAddr, crcInit,
+ * hopInterval_125us, latency, supervTimeout_10ms, hopIncrement, AND
+ * winOffset_125us. The caller sets connectIndEndRat externally from
+ * RF_getCurrentTime() since the s_f21_bleAdvPar config does not enable
+ * bAppendTimestamp. */
+bool RadioIF_extractConnectIndParams(BleConnMgr_SlaveParams *out_params) {
+    if (out_params == NULL)
+        return false;
+    rfc_dataEntryGeneral_t *entry = (rfc_dataEntryGeneral_t *)s_rf_data_queue.pCurrEntry;
+    while (entry != NULL && entry->status == DATA_ENTRY_FINISHED) {
+        uint8_t *pkt = (uint8_t *)&entry->data;
+        uint8_t header = pkt[0];
+        uint8_t pdu_type = header & 0x0Fu;
+        uint8_t length = pkt[1];
+        if (pdu_type == 0x5u && length >= 34u) {
+            const uint8_t *body = &pkt[2 + 6 + 6];
+            out_params->accessAddr = (uint32_t)body[0] | ((uint32_t)body[1] << 8) |
+                                     ((uint32_t)body[2] << 16) | ((uint32_t)body[3] << 24);
+            out_params->crcInit =
+                (uint32_t)body[4] | ((uint32_t)body[5] << 8) | ((uint32_t)body[6] << 16);
+            out_params->winOffset_125us = (uint16_t)body[8] | ((uint16_t)body[9] << 8);
+            out_params->hopInterval_125us = (uint16_t)body[10] | ((uint16_t)body[11] << 8);
+            out_params->latency = (uint16_t)body[12] | ((uint16_t)body[13] << 8);
+            out_params->supervTimeout_10ms = (uint16_t)body[14] | ((uint16_t)body[15] << 8);
+            out_params->hopIncrement = body[21] & 0x1Fu;
+            entry->status = DATA_ENTRY_PENDING;
+            return true;
+        }
+        entry->status = DATA_ENTRY_PENDING;
+        entry = (rfc_dataEntryGeneral_t *)entry->pNextEntry;
+    }
+    return false;
+}

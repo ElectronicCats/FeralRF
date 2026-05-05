@@ -145,6 +145,7 @@ set(APP_SOURCES
     src/smartrf_prop_0.c
     src/att_client.c
     src/att_server.c
+    src/ble20_dispatch.c
     src/gatt_table.c
     src/task_event.c
     src/tx_queue.c

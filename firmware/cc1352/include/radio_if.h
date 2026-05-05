@@ -11,6 +11,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "ble_conn_mgr.h"
+
 /* Data task clamps emitted data length to keep RX payload <= 255 with LL metadata. */
 #define RADIO_IF_MAX_PACKET_DATA 242u
 
@@ -188,6 +190,16 @@ int RadioIF_followAdvOnce(uint8_t adv_channel, uint32_t end_time_rat, RadioIF_Fo
  * crcInit. end_time_rat is absolute RAT tick; 0 means listen forever. */
 int RadioIF_followDataOnce(uint8_t data_channel, uint32_t accessAddr, uint32_t crcInit,
                            uint32_t end_time_rat, RadioIF_FollowPacketCb cb, void *user);
+
+/* F20.a.1 — Extract CONNECT_IND params from RX queue after ADV exit.
+ * Returns true and populates out_params if a CONNECT_IND (PDU type 0x5) is
+ * found. The caller must set out_params->connectIndEndRat separately via
+ * RF_getCurrentTime() since bAppendTimestamp is not enabled on the ADV cmd. */
+bool RadioIF_extractConnectIndParams(BleConnMgr_SlaveParams *out_params);
+
+/* F20.a.1 — Return a pointer to the internal RX data queue so that
+ * ble20_dispatch.c can walk it without exposing the static variable. */
+dataQueue_t *RadioIF_getRxQueue(void);
 
 /* Jamming functions - optimized continuous transmission */
 bool RadioIF_startJamSession(uint8_t phy, uint8_t channel, int8_t power_dbm);

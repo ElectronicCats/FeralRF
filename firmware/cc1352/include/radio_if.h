@@ -197,6 +197,21 @@ int RadioIF_followDataOnce(uint8_t data_channel, uint32_t accessAddr, uint32_t c
  * RF_getCurrentTime() since bAppendTimestamp is not enabled on the ADV cmd. */
 bool RadioIF_extractConnectIndParams(BleConnMgr_SlaveParams *out_params);
 
+/* F20.a.1.c — internal-state trace exposed via RSP_DEBUG_SLAVE.
+ * All counters saturate (no wrap) so a stuck condition reads as 0xFF/0xFFFF
+ * rather than as 0. Reset is implicit on each new advertise/extract cycle:
+ * extract counters reset on entry to RadioIF_extractConnectIndParams,
+ * advertise iterations reset on entry to RadioIF_transmitBleAdvLegacy. */
+typedef struct {
+    uint16_t lastTxStatus;        /* mirrors s_last_tx_status — last TX cmd->status */
+    uint16_t advertiseIterations; /* count of F21 ADV iterations executed in last call */
+    uint8_t extractCallCount;     /* times RadioIF_extractConnectIndParams was invoked */
+    uint8_t extractEntriesSeen;   /* FINISHED entries the most-recent parser call walked */
+    uint8_t extractFirstPduType;  /* (pkt[0] & 0x0F) of the first FINISHED entry seen */
+} RadioIF_DbgF21Trace;
+
+void RadioIF_getDbgF21Trace(RadioIF_DbgF21Trace *out);
+
 /* F20.a.1 — Return a pointer to the internal RX data queue so that
  * ble20_dispatch.c can walk it without exposing the static variable. */
 dataQueue_t *RadioIF_getRxQueue(void);

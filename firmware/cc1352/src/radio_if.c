@@ -168,6 +168,11 @@ static uint8_t s_jam_channel = 0u;
 static int8_t s_jam_power_dbm = 0;
 static bool s_prop_ook_active = false;
 static uint16_t s_last_tx_status = 0u;
+/* F20.a.1.c — internal-state trace counters (see RadioIF_DbgF21Trace). */
+static uint8_t s_dbg_extract_call_count = 0u;
+static uint8_t s_dbg_extract_entries_seen = 0u;
+static uint8_t s_dbg_extract_first_pdu_type = 0u;
+static uint16_t s_dbg_advertise_iterations = 0u;
 static uint8_t s_last_tx_result = 0u;
 static uint32_t s_last_tx_event = 0u;
 
@@ -791,7 +796,11 @@ bool RadioIF_transmitBleAdvLegacy(uint8_t pdu_type, uint8_t addr_type, const uin
      * count while central waited (and timed out) in data state. F21 V1.b
      * smoke didn't catch this because it tested ADV-only with no peer
      * connect. */
+    s_dbg_advertise_iterations = 0u;
     for (uint16_t i = 0u; i < count; i++) {
+        if (s_dbg_advertise_iterations < 0xFFFFu) {
+            s_dbg_advertise_iterations++;
+        }
         memset(&s_f21_adv_output, 0, sizeof(s_f21_adv_output));
         cmd->status = 0x0000;
         bool ok = RadioIF_executeTxCommand(&Ble5_0_mode, (RF_RadioSetup *)&Ble5_0_cmdBle5RadioSetup,
@@ -3071,12 +3080,25 @@ dataQueue_t *RadioIF_getRxQueue(void) {
 bool RadioIF_extractConnectIndParams(BleConnMgr_SlaveParams *out_params) {
     if (out_params == NULL)
         return false;
+    if (s_dbg_extract_call_count < 0xFFu) {
+        s_dbg_extract_call_count++;
+    }
+    s_dbg_extract_entries_seen = 0u;
+    s_dbg_extract_first_pdu_type = 0xFFu; /* sentinel: no entries seen yet */
+    bool first_seen = false;
     while (RadioIF_rfHasPacket()) {
         rfc_dataEntryGeneral_t *entry = s_rf_read_entry;
         uint8_t *pkt = (uint8_t *)&entry->data;
         uint8_t header = pkt[0];
         uint8_t pdu_type = header & 0x0Fu;
         uint8_t length = pkt[1];
+        if (!first_seen) {
+            s_dbg_extract_first_pdu_type = pdu_type;
+            first_seen = true;
+        }
+        if (s_dbg_extract_entries_seen < 0xFFu) {
+            s_dbg_extract_entries_seen++;
+        }
         if (pdu_type == 0x5u && length >= 34u) {
             const uint8_t *body = &pkt[2 + 6 + 6];
             out_params->accessAddr = (uint32_t)body[0] | ((uint32_t)body[1] << 8) |
@@ -3098,4 +3120,15 @@ bool RadioIF_extractConnectIndParams(BleConnMgr_SlaveParams *out_params) {
         RadioIF_rfConsumeEntry();
     }
     return false;
+}
+
+void RadioIF_getDbgF21Trace(RadioIF_DbgF21Trace *out) {
+    if (out == NULL) {
+        return;
+    }
+    out->lastTxStatus = s_last_tx_status;
+    out->advertiseIterations = s_dbg_advertise_iterations;
+    out->extractCallCount = s_dbg_extract_call_count;
+    out->extractEntriesSeen = s_dbg_extract_entries_seen;
+    out->extractFirstPduType = s_dbg_extract_first_pdu_type;
 }

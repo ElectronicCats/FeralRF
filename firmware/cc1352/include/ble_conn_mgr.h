@@ -1,5 +1,5 @@
 /*
- * FeralRF CC1352 - BLE Connection Manager (Central Mode)
+ * FeralRF CC1352 - BLE Connection Manager (Central + Peripheral Mode)
  *
  * Runs the connection event loop after Phase 1 establishes a connection.
  * Polled from RfTask — one connection event per poll() call.
@@ -90,6 +90,9 @@ typedef struct {
     uint16_t latency;
     uint16_t supervTimeout_10ms;
     uint8_t hopIncrement;
+    /* F20.a.1 — first-anchor timing inputs from CONNECT_IND capture (Bundle 4). */
+    uint32_t connectIndEndRat; /* RAT tick of CONNECT_IND end-of-air */
+    uint16_t winOffset_125us;  /* CONNECT_IND.WinOffset in 1.25ms units */
 } BleConnMgr_SlaveParams;
 
 void BleConnMgr_startSlave(const BleConnMgr_SlaveParams *params);

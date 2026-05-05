@@ -1,5 +1,5 @@
 /*
- * FeralRF CC1352 - BLE Connection Manager (Central Mode)
+ * FeralRF CC1352 - BLE Connection Manager (Central + Peripheral Mode)
  *
  * Maintains a BLE connection by running one connection event per poll() call.
  * After Phase 1's CMD_BLE5_INITIATOR establishes the link, this module
@@ -88,6 +88,10 @@ static bool s_dc_reason_pending;
 static bool s_pending_disconnect;
 static uint8_t s_disconnect_events_remaining;
 #define DISCONNECT_TX_GRACE_EVENTS 5u /* ~150 ms at 30 ms interval */
+
+/* ── LL / L2CAP named constants ── */
+#define LL_REASON_SUPERVISION_TIMEOUT 0x22u
+#define L2CAP_CID_ATT 0x0004u
 
 /* Debug timing ring buffer — populated each call to BleConnMgr_poll().
  * Cleared on BleConnMgr_start so each connect attempt sees a fresh log. */
@@ -545,10 +549,27 @@ void BleConnMgr_startSlave(const BleConnMgr_SlaveParams *params) {
     if (params == NULL) {
         return;
     }
+    if (s_running || s_slave_running) {
+        return;
+    }
     s_slave_params = *params;
     s_slave_event_counter = 0u;
-    s_slave_anchor_rat = RF_getCurrentTime() + CONN_INTERVAL_TO_TICKS(params->hopInterval_125us);
+
+    /* I3 — first-event anchor: end_of_CONNECT_IND + transmitWindowDelay + winOffset*1.25ms.
+     * If Bundle 4 hasn't populated connectIndEndRat yet (= 0), fall back to
+     * RF_getCurrentTime() + 1 interval — preserves Bundle 3 testability. */
+    uint32_t hop_ticks = CONN_INTERVAL_TO_TICKS(params->hopInterval_125us);
+    if (params->connectIndEndRat != 0u) {
+        s_slave_anchor_rat = params->connectIndEndRat + TRANSMIT_WINDOW_DELAY +
+                             (uint32_t)params->winOffset_125us * 5000u;
+    } else {
+        s_slave_anchor_rat = RF_getCurrentTime() + hop_ticks;
+    }
+
     s_slave_last_rx_rat = RF_getCurrentTime();
+    TXQueue_init();
+    RadioIF_bleResetSlaveSeqStat();
+    RadioIF_bleResetRxQueue();
     s_slave_running = true;
 }
 
@@ -565,7 +586,7 @@ bool BleConnMgr_pollSlave(void) {
     if (now - s_slave_last_rx_rat > superv_ticks) {
         s_slave_running = false;
         if (s_disconnect_cb) {
-            s_disconnect_cb(0x22u); /* LL_RESPONSE_TIMEOUT */
+            s_disconnect_cb(LL_REASON_SUPERVISION_TIMEOUT);
         }
         return false;
     }
@@ -588,7 +609,7 @@ bool BleConnMgr_pollSlave(void) {
             uint8_t l2cap_frame[ATT_DEFAULT_MTU + 4u];
             l2cap_frame[0] = att_len;
             l2cap_frame[1] = 0x00u;
-            l2cap_frame[2] = 0x04u; /* CID 0x0004 = ATT */
+            l2cap_frame[2] = (uint8_t)(L2CAP_CID_ATT & 0xFFu);
             l2cap_frame[3] = 0x00u;
             memcpy(&l2cap_frame[4], att, att_len);
             TXQueue_insert((uint8_t)(att_len + 4u), TX_QUEUE_LLID_DATA_START, l2cap_frame);
@@ -601,18 +622,19 @@ bool BleConnMgr_pollSlave(void) {
     uint32_t startTime = s_slave_anchor_rat;
     uint32_t endTime = s_slave_anchor_rat + hop_ticks;
     RadioIF_BleCentralStats stats = {0};
+    uint32_t numSent = 0u;
 
     int status = RadioIF_bleSlave(chan, s_slave_params.accessAddr, s_slave_params.crcInit, &txq,
-                                  startTime, endTime, &stats);
+                                  startTime, endTime, &numSent, &stats);
     (void)status;
 
-    TXQueue_flush(0u);
+    TXQueue_flush((uint8_t)numSent);
 
     /* Drain RX queue: route ATT to AttServer, detect LL_TERMINATE_IND. */
     RadioIF_bleDrainRxQueue();
     RadioIF_bleResetRxQueue();
 
-    if (stats.nRxOk > 0u || stats.nRxNok > 0u) {
+    if (stats.nRxOk > 0u) {
         s_slave_last_rx_rat = RF_getCurrentTime();
     }
 

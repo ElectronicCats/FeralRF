@@ -132,10 +132,13 @@ int RadioIF_bleCentral(uint8_t chan, uint32_t accessAddr, uint32_t crcInit, data
  * endTime: supervision deadline RAT tick.
  * pStats output (nullable). */
 int RadioIF_bleSlave(uint8_t chan, uint32_t accessAddr, uint32_t crcInit, dataQueue_t *pTxQueue,
-                     uint32_t startTime, uint32_t endTime, RadioIF_BleCentralStats *pStats);
+                     uint32_t startTime, uint32_t endTime, uint32_t *pNumSent,
+                     RadioIF_BleCentralStats *pStats);
 
 /* Reset seqStat for initiator→central transition */
 void RadioIF_bleResetSeqStat(void);
+/* Reset seqStat for peripheral connection start (mirrors RadioIF_bleResetSeqStat). */
+void RadioIF_bleResetSlaveSeqStat(void);
 void RadioIF_bleResetRxQueue(void);
 void RadioIF_bleDrainRxQueue(void);
 

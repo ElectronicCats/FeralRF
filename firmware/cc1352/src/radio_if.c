@@ -2645,7 +2645,8 @@ int RadioIF_bleCentral(uint8_t chan, uint32_t accessAddr, uint32_t crcInit, data
 }
 
 int RadioIF_bleSlave(uint8_t chan, uint32_t accessAddr, uint32_t crcInit, dataQueue_t *pTxQueue,
-                     uint32_t startTime, uint32_t endTime, RadioIF_BleCentralStats *pStats) {
+                     uint32_t startTime, uint32_t endTime, uint32_t *pNumSent,
+                     RadioIF_BleCentralStats *pStats) {
     rfc_bleMasterSlaveOutput_t output = {0};
 
     if (s_rf_handle == NULL || chan >= 37) {
@@ -2692,6 +2693,9 @@ int RadioIF_bleSlave(uint8_t chan, uint32_t accessAddr, uint32_t crcInit, dataQu
     RF_runCmd(s_rf_handle, (RF_Op *)&Ble5_0_cmdBle5Slave, RF_PriorityNormal, &RadioIF_rfCallback,
               RF_EventRxEntryDone);
 
+    if (pNumSent != NULL) {
+        *pNumSent = output.nTxEntryDone;
+    }
     if (pStats != NULL) {
         pStats->nTx = output.nTx;
         pStats->nRxOk = output.nRxOk;
@@ -2719,6 +2723,17 @@ void RadioIF_bleResetSeqStat(void) {
     Ble5_0_cmdBle5Master.pParams->seqStat.bLlCtrlTx = 0;
     Ble5_0_cmdBle5Master.pParams->seqStat.bLlCtrlAckRx = 0;
     Ble5_0_cmdBle5Master.pParams->seqStat.bLlCtrlAckPending = 0;
+}
+
+void RadioIF_bleResetSlaveSeqStat(void) {
+    Ble5_0_cmdBle5Slave.pParams->seqStat.lastRxSn = 1;
+    Ble5_0_cmdBle5Slave.pParams->seqStat.lastTxSn = 1;
+    Ble5_0_cmdBle5Slave.pParams->seqStat.nextTxSn = 0;
+    Ble5_0_cmdBle5Slave.pParams->seqStat.bFirstPkt = 1;
+    Ble5_0_cmdBle5Slave.pParams->seqStat.bAutoEmpty = 0;
+    Ble5_0_cmdBle5Slave.pParams->seqStat.bLlCtrlTx = 0;
+    Ble5_0_cmdBle5Slave.pParams->seqStat.bLlCtrlAckRx = 0;
+    Ble5_0_cmdBle5Slave.pParams->seqStat.bLlCtrlAckPending = 0;
 }
 
 void RadioIF_bleResetRxQueue(void) {

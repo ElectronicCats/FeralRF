@@ -659,3 +659,68 @@ rfc_CMD_BLE5_MASTER_t Ble5_0_cmdBle5Master = {
     .pOutput = 0,
     .tx20Power = 0x00000000,
 };
+
+/* F20.a.1 — BLE Peripheral / Slave (CMD_BLE5_SLAVE, 0x1821).
+ * Mirror of cmdBle5Master; pParams populated per-event by RadioIF_bleSlave. */
+static rfc_ble5SlavePar_t s_ble5SlavePar = {
+    .pRxQ = 0,
+    .pTxQ = 0,
+    .rxConfig.bAutoFlushIgnored = 0x0,
+    .rxConfig.bAutoFlushCrcErr = 0x0,
+    .rxConfig.bAutoFlushEmpty = 0x0,
+    .rxConfig.bIncludeLenByte = 0x0,
+    .rxConfig.bIncludeCrc = 0x0,
+    .rxConfig.bAppendRssi = 0x0,
+    .rxConfig.bAppendStatus = 0x0,
+    .rxConfig.bAppendTimestamp = 0x0,
+    .seqStat.lastRxSn = 0x0,
+    .seqStat.lastTxSn = 0x0,
+    .seqStat.nextTxSn = 0x0,
+    .seqStat.bFirstPkt = 0x1,
+    .seqStat.bAutoEmpty = 0x0,
+    .seqStat.bLlCtrlTx = 0x0,
+    .seqStat.bLlCtrlAckRx = 0x0,
+    .seqStat.bLlCtrlAckPending = 0x0,
+    .maxNack = 0x0,
+    .maxPkt = 0x0,
+    .accessAddress = 0x0,
+    .crcInit0 = 0x00,
+    .crcInit1 = 0x00,
+    .crcInit2 = 0x00,
+    .timeoutTrigger.triggerType = TRIG_REL_START,
+    .timeoutTrigger.bEnaCmd = 0x0,
+    .timeoutTrigger.triggerNo = 0x0,
+    .timeoutTrigger.pastTrig = 0x0,
+    .timeoutTime = 0x00000000,
+    .maxRxPktLen = 0xFF,
+    .endTrigger.triggerType = TRIG_NEVER,
+    .endTrigger.bEnaCmd = 0x0,
+    .endTrigger.triggerNo = 0x0,
+    .endTrigger.pastTrig = 0x0,
+    .endTime = 0x00000000,
+};
+
+static rfc_bleMasterSlaveOutput_t s_ble5SlaveOutput;
+
+rfc_CMD_BLE5_SLAVE_t Ble5_0_cmdBle5Slave = {
+    .commandNo = 0x1821, /* CMD_BLE5_SLAVE */
+    .status = 0x0000,
+    .pNextOp = 0,
+    .startTime = 0x00000000,
+    .startTrigger.triggerType = TRIG_ABSTIME,
+    .startTrigger.bEnaCmd = 0x0,
+    .startTrigger.triggerNo = 0x0,
+    .startTrigger.pastTrig = 0x1,
+    .condition.rule = COND_NEVER,
+    .condition.nSkip = 0x0,
+    .channel = 0x00,
+    .whitening.init = 0x0,
+    .whitening.bOverride = 0x1,
+    .phyMode.mainMode = 0x0, /* 1M */
+    .phyMode.coding = 0x0,
+    .rangeDelay = 0x00,
+    .txPower = 0x0000,
+    .pParams = &s_ble5SlavePar,
+    .pOutput = &s_ble5SlaveOutput,
+    .tx20Power = 0x00000000,
+};

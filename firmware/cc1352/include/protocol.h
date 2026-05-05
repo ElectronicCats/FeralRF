@@ -107,6 +107,7 @@
 #define CMD_FOLLOW_START 0x50u
 #define CMD_FOLLOW_STOP 0x51u
 #define CMD_BLE_ADV_LEGACY 0x52u
+#define CMD_GATT_SERVE_TABLE 0x53u
 #define CMD_FOLLOW_DEBUG 0x54u
 
 /* Test modes (F22) */

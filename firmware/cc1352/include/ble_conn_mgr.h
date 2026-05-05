@@ -78,6 +78,22 @@ typedef struct {
  * oldest first. The returned count equals min(active entries, maxEntries). */
 uint8_t BleConnMgr_getDebugTiming(BleConnMgr_DbgTimingEntry *out, uint8_t maxEntries);
 
+/* F20.a.1.b — slave-side per-event ring entry. 17 wire bytes; depth 13 keeps
+ * the response payload (26 B header + 13*17 B = 247 B) ≤ PROTOCOL_MAX_PAYLOAD. */
+#define BLE_CONN_MGR_DBG_SLAVE_RING_DEPTH 13u
+
+typedef struct {
+    uint16_t event_counter;
+    uint8_t chan;
+    uint32_t anchor_rat;       /* Computed anchor for this event (post catch-up). */
+    uint32_t actual_start_rat; /* RF_getCurrentTime() right before RadioIF_bleSlave. */
+    uint16_t status;           /* Ble5_0_cmdBle5Slave.status raw value. */
+    uint8_t nRxOk;
+    uint8_t nRxNok;
+    uint8_t nRxIgnored;
+    uint8_t pktStatus; /* Packed bitfield from output.pktStatus. */
+} BleConnMgr_DbgSlaveEntry;
+
 /* F20.a.1 — Start/stop the slave event loop driven by BleConnMgr_pollSlave.
  * Caller (command_processor handle CMD_BLE_ADV_LEGACY) extracts CONNECT_IND
  * params and invokes BleConnMgr_startSlave with them. The poll loop runs
@@ -97,5 +113,14 @@ typedef struct {
 
 void BleConnMgr_startSlave(const BleConnMgr_SlaveParams *params);
 bool BleConnMgr_pollSlave(void);
+
+/* Snapshot of the slave params seen by BleConnMgr_startSlave + the first
+ * anchor it computed. Populated once per slave session start. */
+void BleConnMgr_getDbgSlaveSnapshot(BleConnMgr_SlaveParams *out_params,
+                                    uint32_t *out_first_anchor_rat);
+
+/* Returns up to maxEntries snapshots of the most recent slave events,
+ * oldest first. The returned count = min(active entries, maxEntries). */
+uint8_t BleConnMgr_getDbgSlaveRing(BleConnMgr_DbgSlaveEntry *out_buf, uint8_t max_entries);
 
 #endif /* BLE_CONN_MGR_H */

@@ -114,6 +114,7 @@
 #define CMD_TX_CW 0x55u
 #define CMD_TX_PRBS 0x56u
 #define CMD_TX_TEST_STOP 0x57u
+#define CMD_DEBUG_SLAVE 0x58u /* F20.a.1.b */
 
 /* Crypto HW (F25) — already defined above as 0x59-0x62 */
 
@@ -155,6 +156,7 @@
 #define RSP_GATT_MTU 0xB0u
 #define RSP_GATT_ATTRIBUTE 0xB1u
 #define RSP_DISCONNECTED 0xB2u
+#define RSP_DEBUG_SLAVE 0xB3u /* F20.a.1.b */
 
 /* -------------------------------------------------------------------------
  * Error codes (consolidated F8f #10).

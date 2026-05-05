@@ -107,6 +107,13 @@ static uint16_t s_slave_event_counter = 0u;
 static uint32_t s_slave_anchor_rat = 0u;
 static uint32_t s_slave_last_rx_rat = 0u;
 
+/* F20.a.1.b — slave debug ring (separate from F8A central's s_dbg_timing). */
+static BleConnMgr_DbgSlaveEntry s_dbg_slave_ring[BLE_CONN_MGR_DBG_SLAVE_RING_DEPTH];
+static uint8_t s_dbg_slave_head;
+static uint8_t s_dbg_slave_count;
+static BleConnMgr_SlaveParams s_dbg_slave_params_snapshot;
+static uint32_t s_dbg_slave_first_anchor;
+
 /* ── LL Control PDU handling ── */
 
 static void handle_ll_ctrl(const uint8_t *payload, uint8_t len) {
@@ -544,6 +551,31 @@ uint8_t BleConnMgr_getDebugTiming(BleConnMgr_DbgTimingEntry *out, uint8_t maxEnt
     return n;
 }
 
+void BleConnMgr_getDbgSlaveSnapshot(BleConnMgr_SlaveParams *out_params,
+                                    uint32_t *out_first_anchor_rat) {
+    if (out_params != NULL) {
+        *out_params = s_dbg_slave_params_snapshot;
+    }
+    if (out_first_anchor_rat != NULL) {
+        *out_first_anchor_rat = s_dbg_slave_first_anchor;
+    }
+}
+
+uint8_t BleConnMgr_getDbgSlaveRing(BleConnMgr_DbgSlaveEntry *out_buf, uint8_t max_entries) {
+    if (out_buf == NULL || max_entries == 0u) {
+        return 0u;
+    }
+    uint8_t n = (s_dbg_slave_count < max_entries) ? s_dbg_slave_count : max_entries;
+    /* Walk oldest-first: start = (head + DEPTH - count) mod DEPTH */
+    uint8_t start =
+        (uint8_t)((BLE_CONN_MGR_DBG_SLAVE_RING_DEPTH + s_dbg_slave_head - s_dbg_slave_count) %
+                  BLE_CONN_MGR_DBG_SLAVE_RING_DEPTH);
+    for (uint8_t i = 0u; i < n; i++) {
+        out_buf[i] = s_dbg_slave_ring[(start + i) % BLE_CONN_MGR_DBG_SLAVE_RING_DEPTH];
+    }
+    return n;
+}
+
 /* ── F20.a.1 — Slave / Peripheral public API ── */
 
 void BleConnMgr_startSlave(const BleConnMgr_SlaveParams *params) {
@@ -569,6 +601,13 @@ void BleConnMgr_startSlave(const BleConnMgr_SlaveParams *params) {
     }
 
     s_slave_last_rx_rat = RF_getCurrentTime();
+
+    /* F20.a.1.b — debug snapshot (overwrites previous session). */
+    s_dbg_slave_params_snapshot = *params;
+    s_dbg_slave_first_anchor = s_slave_anchor_rat;
+    s_dbg_slave_head = 0u;
+    s_dbg_slave_count = 0u;
+
     TXQueue_init();
     RadioIF_bleResetSlaveSeqStat();
     RadioIF_bleResetRxQueue();
@@ -636,9 +675,9 @@ bool BleConnMgr_pollSlave(void) {
     RadioIF_BleCentralStats stats = {0};
     uint32_t numSent = 0u;
 
+    uint32_t actual_start = RF_getCurrentTime();
     int status = RadioIF_bleSlave(chan, s_slave_params.accessAddr, s_slave_params.crcInit, &txq,
                                   startTime, endTime, &numSent, &stats);
-    (void)status;
 
     TXQueue_flush((uint8_t)numSent);
 
@@ -648,6 +687,24 @@ bool BleConnMgr_pollSlave(void) {
 
     if (stats.nRxOk > 0u) {
         s_slave_last_rx_rat = RF_getCurrentTime();
+    }
+
+    /* F20.a.1.b — append slave event to debug ring. */
+    {
+        BleConnMgr_DbgSlaveEntry *e = &s_dbg_slave_ring[s_dbg_slave_head];
+        e->event_counter = s_slave_event_counter;
+        e->chan = chan;
+        e->anchor_rat = s_slave_anchor_rat;
+        e->actual_start_rat = actual_start;
+        e->status = (uint16_t)status;
+        e->nRxOk = stats.nRxOk;
+        e->nRxNok = stats.nRxNok;
+        e->nRxIgnored = stats.nRxIgnored;
+        e->pktStatus = stats.pktStatus;
+        s_dbg_slave_head = (uint8_t)((s_dbg_slave_head + 1u) % BLE_CONN_MGR_DBG_SLAVE_RING_DEPTH);
+        if (s_dbg_slave_count < BLE_CONN_MGR_DBG_SLAVE_RING_DEPTH) {
+            s_dbg_slave_count++;
+        }
     }
 
     /* Bundle 4 implements Ble20_drainAndDispatch — weak stub until then. */

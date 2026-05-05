@@ -78,9 +78,10 @@ typedef struct {
  * oldest first. The returned count equals min(active entries, maxEntries). */
 uint8_t BleConnMgr_getDebugTiming(BleConnMgr_DbgTimingEntry *out, uint8_t maxEntries);
 
-/* F20.a.1.b — slave-side per-event ring entry. sizeof==20 (3 B compiler padding);
- * hand-packed wire size is 17 B. Depth 13: 26 B header + 13*17 B = 247 B ≤ PROTOCOL_MAX_PAYLOAD. */
-#define BLE_CONN_MGR_DBG_SLAVE_RING_DEPTH 13u
+/* F20.a.1.c — slave-side per-event ring entry. sizeof==20 (3 B compiler padding);
+ * hand-packed wire size is 17 B. Depth 12: 34 B header + 12*17 B = 238 B ≤ PROTOCOL_MAX_PAYLOAD.
+ * Header grew from 26 → 34 B in F20.a.1.c (+8 B trace fields), so depth dropped 13 → 12. */
+#define BLE_CONN_MGR_DBG_SLAVE_RING_DEPTH 12u
 
 typedef struct {
     uint16_t event_counter;

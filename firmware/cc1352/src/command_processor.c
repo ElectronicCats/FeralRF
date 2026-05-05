@@ -1144,6 +1144,93 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
         return;
     }
 
+    case CMD_DEBUG_SLAVE: {
+        if (payload_len != 0u) {
+            send_error(seq, ERR_INVALID_PAYLOAD);
+            return;
+        }
+
+        BleConnMgr_SlaveParams snap;
+        uint32_t first_anchor = 0u;
+        BleConnMgr_getDbgSlaveSnapshot(&snap, &first_anchor);
+
+        BleConnMgr_DbgSlaveEntry entries[BLE_CONN_MGR_DBG_SLAVE_RING_DEPTH];
+        uint8_t n = BleConnMgr_getDbgSlaveRing(entries, BLE_CONN_MGR_DBG_SLAVE_RING_DEPTH);
+
+        /* Wire layout (26 B header + n * 17 B entries):
+         *   accessAddr        u32 LE   (4)
+         *   crcInit           u32 LE   (4)
+         *   winOffset_125us   u16 LE   (2)
+         *   hopInterval_125us u16 LE   (2)
+         *   latency           u16 LE   (2)
+         *   supervTimeout_10ms u16 LE  (2)
+         *   hopIncrement      u8       (1)
+         *   connectIndEndRat  u32 LE   (4)
+         *   firstAnchorRat    u32 LE   (4)
+         *   count             u8       (1)
+         *   entries[n] each:
+         *     event_counter   u16 LE   (2)
+         *     chan            u8       (1)
+         *     anchor_rat      u32 LE   (4)
+         *     actual_start    u32 LE   (4)
+         *     status          u16 LE   (2)
+         *     nRxOk           u8       (1)
+         *     nRxNok          u8       (1)
+         *     nRxIgnored      u8       (1)
+         *     pktStatus       u8       (1) */
+        uint8_t rsp[26u + BLE_CONN_MGR_DBG_SLAVE_RING_DEPTH * 17u];
+        rsp[0] = (uint8_t)(snap.accessAddr & 0xFFu);
+        rsp[1] = (uint8_t)((snap.accessAddr >> 8) & 0xFFu);
+        rsp[2] = (uint8_t)((snap.accessAddr >> 16) & 0xFFu);
+        rsp[3] = (uint8_t)((snap.accessAddr >> 24) & 0xFFu);
+        rsp[4] = (uint8_t)(snap.crcInit & 0xFFu);
+        rsp[5] = (uint8_t)((snap.crcInit >> 8) & 0xFFu);
+        rsp[6] = (uint8_t)((snap.crcInit >> 16) & 0xFFu);
+        rsp[7] = (uint8_t)((snap.crcInit >> 24) & 0xFFu);
+        rsp[8] = (uint8_t)(snap.winOffset_125us & 0xFFu);
+        rsp[9] = (uint8_t)((snap.winOffset_125us >> 8) & 0xFFu);
+        rsp[10] = (uint8_t)(snap.hopInterval_125us & 0xFFu);
+        rsp[11] = (uint8_t)((snap.hopInterval_125us >> 8) & 0xFFu);
+        rsp[12] = (uint8_t)(snap.latency & 0xFFu);
+        rsp[13] = (uint8_t)((snap.latency >> 8) & 0xFFu);
+        rsp[14] = (uint8_t)(snap.supervTimeout_10ms & 0xFFu);
+        rsp[15] = (uint8_t)((snap.supervTimeout_10ms >> 8) & 0xFFu);
+        rsp[16] = snap.hopIncrement;
+        rsp[17] = (uint8_t)(snap.connectIndEndRat & 0xFFu);
+        rsp[18] = (uint8_t)((snap.connectIndEndRat >> 8) & 0xFFu);
+        rsp[19] = (uint8_t)((snap.connectIndEndRat >> 16) & 0xFFu);
+        rsp[20] = (uint8_t)((snap.connectIndEndRat >> 24) & 0xFFu);
+        rsp[21] = (uint8_t)(first_anchor & 0xFFu);
+        rsp[22] = (uint8_t)((first_anchor >> 8) & 0xFFu);
+        rsp[23] = (uint8_t)((first_anchor >> 16) & 0xFFu);
+        rsp[24] = (uint8_t)((first_anchor >> 24) & 0xFFu);
+        rsp[25] = n;
+
+        for (uint8_t i = 0u; i < n; i++) {
+            uint8_t *p = &rsp[26u + (uint16_t)i * 17u];
+            p[0] = (uint8_t)(entries[i].event_counter & 0xFFu);
+            p[1] = (uint8_t)((entries[i].event_counter >> 8) & 0xFFu);
+            p[2] = entries[i].chan;
+            p[3] = (uint8_t)(entries[i].anchor_rat & 0xFFu);
+            p[4] = (uint8_t)((entries[i].anchor_rat >> 8) & 0xFFu);
+            p[5] = (uint8_t)((entries[i].anchor_rat >> 16) & 0xFFu);
+            p[6] = (uint8_t)((entries[i].anchor_rat >> 24) & 0xFFu);
+            p[7] = (uint8_t)(entries[i].actual_start_rat & 0xFFu);
+            p[8] = (uint8_t)((entries[i].actual_start_rat >> 8) & 0xFFu);
+            p[9] = (uint8_t)((entries[i].actual_start_rat >> 16) & 0xFFu);
+            p[10] = (uint8_t)((entries[i].actual_start_rat >> 24) & 0xFFu);
+            p[11] = (uint8_t)(entries[i].status & 0xFFu);
+            p[12] = (uint8_t)((entries[i].status >> 8) & 0xFFu);
+            p[13] = entries[i].nRxOk;
+            p[14] = entries[i].nRxNok;
+            p[15] = entries[i].nRxIgnored;
+            p[16] = entries[i].pktStatus;
+        }
+
+        send_response(RSP_DEBUG_SLAVE, seq, rsp, (uint16_t)(26u + (uint16_t)n * 17u));
+        return;
+    }
+
     case CMD_ATT_DEBUG: {
         /* F8b Track A Task 0.2: dump AttClient state-machine event ring buffer.
          * Wire layout: count(u8) + count × 8 bytes per entry, where the 8

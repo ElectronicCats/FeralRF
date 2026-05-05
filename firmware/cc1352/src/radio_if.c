@@ -672,6 +672,12 @@ static uint8_t s_f21_device_addr[BLE_ADV_TX_DEVICE_ADDR_LEN] __attribute__((alig
 static uint8_t s_f21_init_addr[BLE_ADV_TX_DEVICE_ADDR_LEN] __attribute__((aligned(4)));
 static rfc_bleAdvOutput_t s_f21_adv_output;
 
+/* Forward declaration — body below at line ~997. F20.a.1.b: F21 advertise
+ * needs to (re)create the RX queue before running so CONNECT_IND lands
+ * somewhere we can read it. */
+static bool RadioIF_createRfDataQueue(dataQueue_t *queue, uint8_t *buf, uint16_t buf_len,
+                                      uint8_t num_entries, uint16_t entry_len);
+
 bool RadioIF_transmitBleAdvLegacy(uint8_t pdu_type, uint8_t addr_type, const uint8_t *addr,
                                   uint8_t channel, int8_t power_dbm, uint16_t count,
                                   uint16_t interval_units, const uint8_t *adv_data,

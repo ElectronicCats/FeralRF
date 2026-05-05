@@ -782,26 +782,25 @@ bool RadioIF_transmitBleAdvLegacy(uint8_t pdu_type, uint8_t addr_type, const uin
      * RadioIF_executeTxCommand handles RF mode switch + FS post + TX exec
      * with persistent session reuse — same pattern as
      * RadioIF_transmitBleAdvRaw which is the validated F11 advertising
-     * path. Without it, RF_runCmd with raw cmd fails (no FS, no setup). */
+     * path. Without it, RF_runCmd with raw cmd fails (no FS, no setup).
+     *
+     * F20.a.1.b: pre-existing F21 bug — BLE_DONE_CONNECT is 0x1404 (or
+     * 0x140A for non-CSA#2 peers) per rf_ble_mailbox.h, NOT 0x1FFF
+     * (which is BLE_ERROR_RXBUF). The wrong check meant the loop never
+     * broke on CONNECT_IND; peripheral kept advertising for the full
+     * count while central waited (and timed out) in data state. F21 V1.b
+     * smoke didn't catch this because it tested ADV-only with no peer
+     * connect. */
     for (uint16_t i = 0u; i < count; i++) {
         memset(&s_f21_adv_output, 0, sizeof(s_f21_adv_output));
         cmd->status = 0x0000;
         bool ok = RadioIF_executeTxCommand(&Ble5_0_mode, (RF_RadioSetup *)&Ble5_0_cmdBle5RadioSetup,
                                            (RF_Op *)&Ble5_0_cmdFs, (RF_Op *)cmd, tx_power);
-        /* F20.a.1.b: when CONNECT_IND is received, the radio terminates
-         * via RX-side event (not RADIO_IF_TX_SUCCESS_EVENTS), so
-         * executeTxCommand returns false. cmd->status == 0x1FFFu still
-         * correctly reflects BLE_DONE_CONNECT. Break the loop "ok" so
-         * the F20 handoff in command_processor sees adv_ok=true. */
         if (!ok) {
-            if (cmd->status == 0x1FFFu) {
-                break;
-            }
             return false;
         }
-        /* BLE_DONE_CONNECT (0x1FFF) = CONNECT_IND received with TX-side
-         * success event also set. Break early. */
-        if (cmd->status == 0x1FFFu) {
+        /* BLE_DONE_CONNECT = 0x1404, BLE_DONE_CONNECT_CHSEL0 = 0x140A. */
+        if (cmd->status == 0x1404u || cmd->status == 0x140Au) {
             break;
         }
         if (interval_units > 0u && (uint16_t)(i + 1u) < count) {

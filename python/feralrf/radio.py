@@ -4,7 +4,7 @@ FeralRF - Radio interface
 
 import time
 from dataclasses import dataclass
-from typing import Iterator, Optional, Set, Union
+from typing import Any, Iterator, Optional, Set, Union
 
 import serial
 import serial.tools.list_ports
@@ -775,7 +775,8 @@ class Radio:
         self._send_command(Command.BLE_ADV_LEGACY, cmd_payload)
         self._read_response(timeout=5.0, expected={Response.ACK, Response.ERROR})
 
-    def serve_gatt(self, table: Optional[object] = None) -> None:
+    # TODO F20.b: replace `table: Optional[Any]` with a typed GattTable schema.
+    def serve_gatt(self, table: Optional[Any] = None) -> None:
         """F20.a.1 — toggle peripheral mode on. Subsequent advertise_ind()
         will auto-handoff to GATT server slave on CONNECT_IND.
 
@@ -787,8 +788,7 @@ class Radio:
             import warnings
 
             warnings.warn(
-                "table arg ignored in F20.a.1 — firmware uses hardcoded T2 table; "
-                "dynamic table coming in F20.b",
+                "table argument is not yet supported; serve_gatt() activates the built-in GATT table only",
                 stacklevel=2,
             )
         cmd_payload = CommandBuilder.gatt_serve_table()

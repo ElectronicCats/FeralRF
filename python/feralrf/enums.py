@@ -89,11 +89,11 @@ class Command(IntEnum):
     DEBUG_TIMING = 0x47
     DEBUG_CONN_PARAMS = 0x48
 
-    # F20 — BLE Peripheral + GATT server
-    GATT_SERVE_TABLE = 0x53
-
     # F21 — BLE Connectable Advertiser
     BLE_ADV_LEGACY = 0x52
+
+    # F20 — BLE Peripheral + GATT server
+    GATT_SERVE_TABLE = 0x53
 
     # F8b Track B — passive connection follower
     FOLLOW_START = 0x50
@@ -181,6 +181,7 @@ STABLE_COMMANDS = (
 EXPERIMENTAL_COMMANDS = (
     Command.JAM_CONTINUOUS,
     Command.JAM_STOP,
+    Command.GATT_SERVE_TABLE,
 )
 
 PENDING_COMMAND_IDS = {

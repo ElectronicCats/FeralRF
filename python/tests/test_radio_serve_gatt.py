@@ -83,7 +83,7 @@ class TestRadioServeGatt:
     def test_warns_when_table_arg_passed(self):
         radio, fake = _radio_with_fake_serial()
         fake.queue_response(Response.ACK, seq=radio._seq)
-        with pytest.warns(UserWarning, match="table arg ignored"):
+        with pytest.warns(UserWarning, match="not yet supported"):
             radio.serve_gatt(table=[("dummy",)])
 
     def test_seq_advances_after_call(self):

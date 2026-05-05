@@ -51,7 +51,7 @@ def _radio_with_fake_serial() -> Tuple[Radio, FakeSerial]:
 
 
 def _build_payload(snapshot: dict, entries: List[dict]) -> bytes:
-    """Build a synthetic RSP_DEBUG_SLAVE payload for testing."""
+    """Build a synthetic RSP_DEBUG_SLAVE payload for testing (F20.a.1.c layout)."""
     buf = bytearray()
     buf.extend(snapshot["access_addr"].to_bytes(4, "little"))
     buf.extend(snapshot["crc_init"].to_bytes(4, "little"))
@@ -62,6 +62,13 @@ def _build_payload(snapshot: dict, entries: List[dict]) -> bytes:
     buf.append(snapshot["hop_increment"])
     buf.extend(snapshot["connect_ind_end_rat"].to_bytes(4, "little"))
     buf.extend(snapshot["first_anchor_rat"].to_bytes(4, "little"))
+    # F20.a.1.c trace block (9 B) — fields default to 0 if absent
+    buf.extend(snapshot.get("last_tx_status", 0).to_bytes(2, "little"))
+    buf.append(snapshot.get("peripheral_active_at_handoff", 0))
+    buf.append(snapshot.get("extract_call_count", 0))
+    buf.append(snapshot.get("extract_entries_seen", 0))
+    buf.append(snapshot.get("extract_first_pdu_type", 0))
+    buf.extend(snapshot.get("advertise_iterations", 0).to_bytes(2, "little"))
     buf.append(len(entries))
     for e in entries:
         buf.extend(e["event_counter"].to_bytes(2, "little"))
@@ -155,8 +162,8 @@ class TestDebugSlaveParser:
         from feralrf.exceptions import ProtocolError
 
         radio, fake = _radio_with_fake_serial()
-        # 10 bytes — short of the 26-byte header
-        fake.queue_response(Response.DEBUG_SLAVE, seq=radio._seq, payload=b"\x00" * 10)
+        # 20 bytes — short of the 34-byte F20.a.1.c header
+        fake.queue_response(Response.DEBUG_SLAVE, seq=radio._seq, payload=b"\x00" * 20)
         with pytest.raises(ProtocolError, match="too short"):
             radio.debug_slave()
 
@@ -174,31 +181,82 @@ class TestDebugSlaveParser:
             "hop_increment": 7,
             "connect_ind_end_rat": 0,
             "first_anchor_rat": 0,
+            "last_tx_status": 0x1404,
+            "peripheral_active_at_handoff": 1,
+            "extract_call_count": 1,
+            "extract_entries_seen": 1,
+            "extract_first_pdu_type": 0x05,
+            "advertise_iterations": 1,
         }
-        full_payload = bytearray()
-        full_payload.extend(snap["access_addr"].to_bytes(4, "little"))
-        full_payload.extend(snap["crc_init"].to_bytes(4, "little"))
-        full_payload.extend(snap["win_offset"].to_bytes(2, "little"))
-        full_payload.extend(snap["hop_interval"].to_bytes(2, "little"))
-        full_payload.extend(snap["latency"].to_bytes(2, "little"))
-        full_payload.extend(snap["superv_timeout"].to_bytes(2, "little"))
-        full_payload.append(snap["hop_increment"])
-        full_payload.extend(snap["connect_ind_end_rat"].to_bytes(4, "little"))
-        full_payload.extend(snap["first_anchor_rat"].to_bytes(4, "little"))
-        full_payload.append(5)  # claims 5 entries
-        # but write only 2 entries
-        for ev in (1, 2):
-            full_payload.extend(ev.to_bytes(2, "little"))
-            full_payload.append(0)
-            full_payload.extend((0).to_bytes(4, "little"))
-            full_payload.extend((0).to_bytes(4, "little"))
-            full_payload.extend((0).to_bytes(2, "little"))
-            full_payload.append(0)
-            full_payload.append(0)
-            full_payload.append(0)
-            full_payload.append(0)
-        fake.queue_response(Response.DEBUG_SLAVE, seq=radio._seq, payload=bytes(full_payload))
+        # _build_payload writes len(entries) as count; we want count=5 with only
+        # 2 entries on the wire.
+        two_entries = [
+            {
+                "event_counter": 1,
+                "chan": 5,
+                "anchor_rat": 0,
+                "actual_start_rat": 0,
+                "status": 0,
+                "n_rx_ok": 0,
+                "n_rx_nok": 0,
+                "n_rx_ignored": 0,
+                "pkt_status": 0,
+            },
+            {
+                "event_counter": 2,
+                "chan": 5,
+                "anchor_rat": 0,
+                "actual_start_rat": 0,
+                "status": 0,
+                "n_rx_ok": 0,
+                "n_rx_nok": 0,
+                "n_rx_ignored": 0,
+                "pkt_status": 0,
+            },
+        ]
+        full = bytearray(_build_payload(snap, two_entries))
+        # Override the count byte at offset 33 to claim 5 entries, but leave
+        # only 2 on wire.
+        full[33] = 5
+        fake.queue_response(Response.DEBUG_SLAVE, seq=radio._seq, payload=bytes(full))
         result = radio.debug_slave()
         assert len(result.entries) == 2
         assert result.entries[0].event_counter == 1
         assert result.entries[1].event_counter == 2
+
+    def test_trace_fields_round_trip(self):
+        """F20.a.1.c — assert the 6 new trace fields parse from the wire."""
+        radio, fake = _radio_with_fake_serial()
+        snap = {
+            "access_addr": 0xDEADBEEF,
+            "crc_init": 0x00ABCDEF,
+            "win_offset": 5,
+            "hop_interval": 24,
+            "latency": 0,
+            "superv_timeout": 100,
+            "hop_increment": 7,
+            "connect_ind_end_rat": 0,
+            "first_anchor_rat": 0,
+            "last_tx_status": 0x1404,
+            "peripheral_active_at_handoff": 1,
+            "extract_call_count": 3,
+            "extract_entries_seen": 5,
+            "extract_first_pdu_type": 0x05,
+            "advertise_iterations": 42,
+        }
+        payload = _build_payload(snap, [])
+        fake.queue_response(Response.DEBUG_SLAVE, seq=radio._seq, payload=payload)
+        result = radio.debug_slave()
+        assert result.last_tx_status == 0x1404
+        assert result.peripheral_active_at_handoff == 1
+        assert result.extract_call_count == 3
+        assert result.extract_entries_seen == 5
+        assert result.extract_first_pdu_type == 0x05
+        assert result.advertise_iterations == 42
+        # Sentinel: 0xFF "no entries seen yet" should round-trip.
+        snap2 = dict(snap)
+        snap2["extract_first_pdu_type"] = 0xFF
+        payload2 = _build_payload(snap2, [])
+        fake.queue_response(Response.DEBUG_SLAVE, seq=radio._seq, payload=payload2)
+        result2 = radio.debug_slave()
+        assert result2.extract_first_pdu_type == 0xFF

@@ -788,11 +788,19 @@ bool RadioIF_transmitBleAdvLegacy(uint8_t pdu_type, uint8_t addr_type, const uin
         cmd->status = 0x0000;
         bool ok = RadioIF_executeTxCommand(&Ble5_0_mode, (RF_RadioSetup *)&Ble5_0_cmdBle5RadioSetup,
                                            (RF_Op *)&Ble5_0_cmdFs, (RF_Op *)cmd, tx_power);
+        /* F20.a.1.b: when CONNECT_IND is received, the radio terminates
+         * via RX-side event (not RADIO_IF_TX_SUCCESS_EVENTS), so
+         * executeTxCommand returns false. cmd->status == 0x1FFFu still
+         * correctly reflects BLE_DONE_CONNECT. Break the loop "ok" so
+         * the F20 handoff in command_processor sees adv_ok=true. */
         if (!ok) {
+            if (cmd->status == 0x1FFFu) {
+                break;
+            }
             return false;
         }
-        /* BLE_DONE_CONNECT (0x1FFF) = CONNECT_IND received. F20 not impl
-         * → break loop and return; phone will time out. */
+        /* BLE_DONE_CONNECT (0x1FFF) = CONNECT_IND received with TX-side
+         * success event also set. Break early. */
         if (cmd->status == 0x1FFFu) {
             break;
         }

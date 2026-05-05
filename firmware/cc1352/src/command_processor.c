@@ -182,6 +182,12 @@ static void gatt_on_disconnected(uint8_t reason) {
  * When true, CMD_BLE_ADV_LEGACY enters slave loop on CONNECT_IND exit. */
 static bool s_peripheral_active = false;
 
+/* F20.a.1.c — captured at the exact handoff check after RadioIF_transmitBleAdvLegacy.
+ * Lets RSP_DEBUG_SLAVE distinguish "serve_gatt never armed it" vs "armed but
+ * cleared between serve_gatt and the handoff check". 0xFF = never reached the
+ * handoff (CMD_BLE_ADV_LEGACY did not run since boot or last debug query). */
+static uint8_t s_dbg_peripheral_active_at_handoff = 0xFFu;
+
 /* Set once on the first GATT-touching command. Both the AttClient
  * callbacks (.onService/.onChar/.onRead/.onDone/.onMtu/.onAttribute) and
  * the BleConnMgr disconnect callback are sticky once installed — no need
@@ -1157,18 +1163,28 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
         BleConnMgr_DbgSlaveEntry entries[BLE_CONN_MGR_DBG_SLAVE_RING_DEPTH];
         uint8_t n = BleConnMgr_getDbgSlaveRing(entries, BLE_CONN_MGR_DBG_SLAVE_RING_DEPTH);
 
-        /* Wire layout (26 B header + n * 17 B entries):
-         *   accessAddr        u32 LE   (4)
-         *   crcInit           u32 LE   (4)
-         *   winOffset_125us   u16 LE   (2)
-         *   hopInterval_125us u16 LE   (2)
-         *   latency           u16 LE   (2)
-         *   supervTimeout_10ms u16 LE  (2)
-         *   hopIncrement      u8       (1)
-         *   connectIndEndRat  u32 LE   (4)
-         *   firstAnchorRat    u32 LE   (4)
-         *   count             u8       (1)
-         *   entries[n] each:
+        RadioIF_DbgF21Trace trace;
+        RadioIF_getDbgF21Trace(&trace);
+
+        /* Wire layout (34 B header + n * 17 B entries):
+         *   accessAddr               u32 LE   (4)   off  0
+         *   crcInit                  u32 LE   (4)   off  4
+         *   winOffset_125us          u16 LE   (2)   off  8
+         *   hopInterval_125us        u16 LE   (2)   off 10
+         *   latency                  u16 LE   (2)   off 12
+         *   supervTimeout_10ms       u16 LE   (2)   off 14
+         *   hopIncrement             u8       (1)   off 16
+         *   connectIndEndRat         u32 LE   (4)   off 17
+         *   firstAnchorRat           u32 LE   (4)   off 21
+         *   --- F20.a.1.c trace block (9 B) ---
+         *   lastTxStatus             u16 LE   (2)   off 25
+         *   peripheralActiveAtHand   u8       (1)   off 27
+         *   extractCallCount         u8       (1)   off 28
+         *   extractEntriesSeen       u8       (1)   off 29
+         *   extractFirstPduType      u8       (1)   off 30
+         *   advertiseIterations      u16 LE   (2)   off 31
+         *   count                    u8       (1)   off 33
+         *   --- entries[n] start at off 34, 17 B each ---
          *     event_counter   u16 LE   (2)
          *     chan            u8       (1)
          *     anchor_rat      u32 LE   (4)
@@ -1178,7 +1194,7 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
          *     nRxNok          u8       (1)
          *     nRxIgnored      u8       (1)
          *     pktStatus       u8       (1) */
-        uint8_t rsp[26u + BLE_CONN_MGR_DBG_SLAVE_RING_DEPTH * 17u];
+        uint8_t rsp[34u + BLE_CONN_MGR_DBG_SLAVE_RING_DEPTH * 17u];
         rsp[0] = (uint8_t)(snap.accessAddr & 0xFFu);
         rsp[1] = (uint8_t)((snap.accessAddr >> 8) & 0xFFu);
         rsp[2] = (uint8_t)((snap.accessAddr >> 16) & 0xFFu);
@@ -1204,10 +1220,18 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
         rsp[22] = (uint8_t)((first_anchor >> 8) & 0xFFu);
         rsp[23] = (uint8_t)((first_anchor >> 16) & 0xFFu);
         rsp[24] = (uint8_t)((first_anchor >> 24) & 0xFFu);
-        rsp[25] = n;
+        rsp[25] = (uint8_t)(trace.lastTxStatus & 0xFFu);
+        rsp[26] = (uint8_t)((trace.lastTxStatus >> 8) & 0xFFu);
+        rsp[27] = s_dbg_peripheral_active_at_handoff;
+        rsp[28] = trace.extractCallCount;
+        rsp[29] = trace.extractEntriesSeen;
+        rsp[30] = trace.extractFirstPduType;
+        rsp[31] = (uint8_t)(trace.advertiseIterations & 0xFFu);
+        rsp[32] = (uint8_t)((trace.advertiseIterations >> 8) & 0xFFu);
+        rsp[33] = n;
 
         for (uint8_t i = 0u; i < n; i++) {
-            uint8_t *p = &rsp[26u + (uint16_t)i * 17u];
+            uint8_t *p = &rsp[34u + (uint16_t)i * 17u];
             p[0] = (uint8_t)(entries[i].event_counter & 0xFFu);
             p[1] = (uint8_t)((entries[i].event_counter >> 8) & 0xFFu);
             p[2] = entries[i].chan;
@@ -1227,7 +1251,7 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
             p[16] = entries[i].pktStatus;
         }
 
-        send_response(RSP_DEBUG_SLAVE, seq, rsp, (uint16_t)(26u + (uint16_t)n * 17u));
+        send_response(RSP_DEBUG_SLAVE, seq, rsp, (uint16_t)(34u + (uint16_t)n * 17u));
         return;
     }
 
@@ -1374,6 +1398,7 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
          * CONNECT_IND, extract params and run the slave event loop.
          * connectIndEndRat is populated by extractConnectIndParams from
          * the HW-appended timestamp (s_f21_bleAdvPar.bAppendTimestamp=1). */
+        s_dbg_peripheral_active_at_handoff = s_peripheral_active ? 1u : 0u;
         if (adv_ok && s_peripheral_active) {
             BleConnMgr_SlaveParams sparams = {0};
             if (RadioIF_extractConnectIndParams(&sparams)) {

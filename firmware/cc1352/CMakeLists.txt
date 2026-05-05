@@ -144,6 +144,8 @@ set(APP_SOURCES
     src/smartrf_ieee_15_4_0.c
     src/smartrf_prop_0.c
     src/att_client.c
+    src/att_server.c
+    src/gatt_table.c
     src/task_event.c
     src/tx_queue.c
 )

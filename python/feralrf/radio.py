@@ -210,6 +210,34 @@ class SlaveDbgEntry:
     n_rx_ignored: int
     pkt_status: int
 
+    @property
+    def b_time_stamp_valid(self) -> bool:
+        return bool(self.pkt_status & 0x01)
+
+    @property
+    def b_last_crc_err(self) -> bool:
+        return bool(self.pkt_status & 0x02)
+
+    @property
+    def b_last_ignored(self) -> bool:
+        return bool(self.pkt_status & 0x04)
+
+    @property
+    def b_last_empty(self) -> bool:
+        return bool(self.pkt_status & 0x08)
+
+    @property
+    def b_last_ctrl(self) -> bool:
+        return bool(self.pkt_status & 0x10)
+
+    @property
+    def b_last_md(self) -> bool:
+        return bool(self.pkt_status & 0x20)
+
+    @property
+    def b_last_ack(self) -> bool:
+        return bool(self.pkt_status & 0x40)
+
 
 @dataclass
 class SlaveDbgResult:
@@ -224,25 +252,7 @@ class SlaveDbgResult:
     hop_increment: int
     connect_ind_end_rat: int
     first_anchor_rat: int
-    entries: list
-
-
-@dataclass
-class CentralDbgConnParams:
-    """Central-side conn-params dump from CMD_DEBUG_CONN_PARAMS (F8A telemetry)."""
-
-    access_addr: int
-    crc_init: int
-    channel_map: bytes  # 5 bytes
-    hop_increment: int
-    win_offset: int
-    event_counter: int
-    conn_time: int
-    conn_interval: int
-    superv_timeout: int
-    use_csa2: bool
-    connected: bool
-    ll_data: bytes  # raw 22 bytes
+    entries: list[SlaveDbgEntry]
 
 
 @dataclass(frozen=True)

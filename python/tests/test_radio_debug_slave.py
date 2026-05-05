@@ -2,6 +2,8 @@
 
 from typing import List, Optional, Tuple
 
+import pytest
+
 from feralrf.enums import Response
 from feralrf.protocol import build_frame
 from feralrf.radio import Radio, SlaveDbgResult
@@ -148,3 +150,55 @@ class TestDebugSlaveParser:
         assert result.entries[1].chan == 10
         assert result.entries[1].n_rx_ok == 1
         assert result.entries[1].pkt_status == 0x01
+
+    def test_truncated_header_raises(self):
+        from feralrf.exceptions import ProtocolError
+
+        radio, fake = _radio_with_fake_serial()
+        # 10 bytes — short of the 26-byte header
+        fake.queue_response(Response.DEBUG_SLAVE, seq=radio._seq, payload=b"\x00" * 10)
+        with pytest.raises(ProtocolError, match="too short"):
+            radio.debug_slave()
+
+    def test_count_truncated_by_payload(self):
+        """If header says count=5 but only 2 entries' worth of bytes follow,
+        parser should return the 2 actually-present entries (silent truncation)."""
+        radio, fake = _radio_with_fake_serial()
+        snap = {
+            "access_addr": 0xAAAAAAAA,
+            "crc_init": 0x00BBBBBB,
+            "win_offset": 0,
+            "hop_interval": 24,
+            "latency": 0,
+            "superv_timeout": 100,
+            "hop_increment": 7,
+            "connect_ind_end_rat": 0,
+            "first_anchor_rat": 0,
+        }
+        full_payload = bytearray()
+        full_payload.extend(snap["access_addr"].to_bytes(4, "little"))
+        full_payload.extend(snap["crc_init"].to_bytes(4, "little"))
+        full_payload.extend(snap["win_offset"].to_bytes(2, "little"))
+        full_payload.extend(snap["hop_interval"].to_bytes(2, "little"))
+        full_payload.extend(snap["latency"].to_bytes(2, "little"))
+        full_payload.extend(snap["superv_timeout"].to_bytes(2, "little"))
+        full_payload.append(snap["hop_increment"])
+        full_payload.extend(snap["connect_ind_end_rat"].to_bytes(4, "little"))
+        full_payload.extend(snap["first_anchor_rat"].to_bytes(4, "little"))
+        full_payload.append(5)  # claims 5 entries
+        # but write only 2 entries
+        for ev in (1, 2):
+            full_payload.extend(ev.to_bytes(2, "little"))
+            full_payload.append(0)
+            full_payload.extend((0).to_bytes(4, "little"))
+            full_payload.extend((0).to_bytes(4, "little"))
+            full_payload.extend((0).to_bytes(2, "little"))
+            full_payload.append(0)
+            full_payload.append(0)
+            full_payload.append(0)
+            full_payload.append(0)
+        fake.queue_response(Response.DEBUG_SLAVE, seq=radio._seq, payload=bytes(full_payload))
+        result = radio.debug_slave()
+        assert len(result.entries) == 2
+        assert result.entries[0].event_counter == 1
+        assert result.entries[1].event_counter == 2

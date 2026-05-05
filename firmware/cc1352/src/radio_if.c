@@ -3039,12 +3039,17 @@ dataQueue_t *RadioIF_getRxQueue(void) {
  * pkt[2 + length] (s_f21_bleAdvPar.rxConfig.bAppendTimestamp = 1). TI's
  * timestamp marks end of access-address detection; airtime after that =
  * (header(2) + length + CRC(3)) * 8 us = (5+length)*8 us. At 4MHz RAT,
- * that's (5+length)*32 ticks. */
+ * that's (5+length)*32 ticks.
+ *
+ * F20.a.1.b iter1: walk via s_rf_read_entry (read head), NOT
+ * s_rf_data_queue.pCurrEntry (write head). The write head points at the
+ * NEXT-to-be-written entry which is typically PENDING; FINISHED entries
+ * sit BEHIND it in the ring. Same pattern as RadioIF_drainFollowQueue. */
 bool RadioIF_extractConnectIndParams(BleConnMgr_SlaveParams *out_params) {
     if (out_params == NULL)
         return false;
-    rfc_dataEntryGeneral_t *entry = (rfc_dataEntryGeneral_t *)s_rf_data_queue.pCurrEntry;
-    while (entry != NULL && entry->status == DATA_ENTRY_FINISHED) {
+    while (RadioIF_rfHasPacket()) {
+        rfc_dataEntryGeneral_t *entry = s_rf_read_entry;
         uint8_t *pkt = (uint8_t *)&entry->data;
         uint8_t header = pkt[0];
         uint8_t pdu_type = header & 0x0Fu;
@@ -3064,11 +3069,10 @@ bool RadioIF_extractConnectIndParams(BleConnMgr_SlaveParams *out_params) {
             uint32_t timestamp = (uint32_t)ts[0] | ((uint32_t)ts[1] << 8) |
                                  ((uint32_t)ts[2] << 16) | ((uint32_t)ts[3] << 24);
             out_params->connectIndEndRat = timestamp + ((uint32_t)length + 5u) * 32u;
-            entry->status = DATA_ENTRY_PENDING;
+            RadioIF_rfConsumeEntry();
             return true;
         }
-        entry->status = DATA_ENTRY_PENDING;
-        entry = (rfc_dataEntryGeneral_t *)entry->pNextEntry;
+        RadioIF_rfConsumeEntry();
     }
     return false;
 }

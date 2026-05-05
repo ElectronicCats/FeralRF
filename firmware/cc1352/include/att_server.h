@@ -1,3 +1,6 @@
+/* FeralRF CC1352 - ATT server (F20.a.1).
+ * Handles discovery + Read paths over L2CAP CID 0x0004.
+ * Wired into BleConnMgr_pollSlave at Bundle 4. */
 #ifndef ATT_SERVER_H
 #define ATT_SERVER_H
 

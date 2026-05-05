@@ -1,3 +1,6 @@
+/* FeralRF CC1352 - GATT attribute table (F20.a.1).
+ * Static T2 layout: GAP service + custom test service.
+ * Read-only at A3.1; F20.a.2 will add Write/Notify perms. */
 #ifndef GATT_TABLE_H
 #define GATT_TABLE_H
 
@@ -19,8 +22,9 @@ typedef struct {
     const uint8_t *value;
 } Attribute;
 
-extern const Attribute g_gatt_table[];
-extern const size_t g_gatt_table_size;
+#define GATT_TABLE_NUM_ENTRIES 6u
+extern const Attribute g_gatt_table[GATT_TABLE_NUM_ENTRIES];
+#define GATT_TABLE_SIZE (sizeof(g_gatt_table) / sizeof(g_gatt_table[0]))
 
 const Attribute *GattTable_findByHandle(uint16_t handle);
 

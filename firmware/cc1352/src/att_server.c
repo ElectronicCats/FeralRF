@@ -1,3 +1,6 @@
+/* FeralRF CC1352 - ATT server (F20.a.1).
+ * Handles discovery + Read paths over L2CAP CID 0x0004.
+ * Wired into BleConnMgr_pollSlave at Bundle 4. */
 #include "att_server.h"
 
 #include <string.h>
@@ -8,6 +11,7 @@
 #define ATT_OP_EXCHANGE_MTU_REQ 0x02u
 #define ATT_OP_FIND_INFO_REQ 0x04u
 #define ATT_OP_FIND_BY_TYPE_VAL_REQ 0x06u
+#define ATT_OP_FIND_BY_TYPE_VAL_RSP 0x07u
 #define ATT_OP_READ_BY_TYPE_REQ 0x08u
 #define ATT_OP_READ_BY_TYPE_RSP 0x09u
 #define ATT_OP_READ_REQ 0x0Au
@@ -21,6 +25,7 @@
 
 #define ATT_ERR_INVALID_HANDLE 0x01u
 #define ATT_ERR_READ_NOT_PERMITTED 0x02u
+#define ATT_ERR_INVALID_PDU 0x04u
 #define ATT_ERR_REQUEST_NOT_SUPPORTED 0x06u
 #define ATT_ERR_ATTRIBUTE_NOT_FOUND 0x0Au
 
@@ -65,7 +70,7 @@ static void send_error_rsp(uint8_t opcode_in_error, uint16_t handle, uint8_t err
 
 static void handle_read_req(const uint8_t *pdu, uint8_t pdu_len) {
     if (pdu_len != 3u) {
-        send_error_rsp(ATT_OP_READ_REQ, 0x0000u, ATT_ERR_INVALID_HANDLE);
+        send_error_rsp(ATT_OP_READ_REQ, 0x0000u, ATT_ERR_INVALID_PDU);
         return;
     }
     uint16_t handle = (uint16_t)pdu[1] | ((uint16_t)pdu[2] << 8);
@@ -92,7 +97,7 @@ static void handle_read_req(const uint8_t *pdu, uint8_t pdu_len) {
  * Returns list of (start_handle, end_handle, service_uuid). */
 static void handle_read_by_group_type_req(const uint8_t *pdu, uint8_t pdu_len) {
     if (pdu_len != 7u) {
-        send_error_rsp(ATT_OP_READ_BY_GROUP_REQ, 0x0000u, ATT_ERR_INVALID_HANDLE);
+        send_error_rsp(ATT_OP_READ_BY_GROUP_REQ, 0x0000u, ATT_ERR_INVALID_PDU);
         return;
     }
     uint16_t start = (uint16_t)pdu[1] | ((uint16_t)pdu[2] << 8);
@@ -112,7 +117,7 @@ static void handle_read_by_group_type_req(const uint8_t *pdu, uint8_t pdu_len) {
     uint8_t out_pos = 2u;
     bool found_any = false;
 
-    for (size_t i = 0; i < g_gatt_table_size; i++) {
+    for (size_t i = 0; i < GATT_TABLE_SIZE; i++) {
         const Attribute *attr = &g_gatt_table[i];
         if (attr->type != ATTR_PRIMARY_SERVICE)
             continue;
@@ -125,8 +130,8 @@ static void handle_read_by_group_type_req(const uint8_t *pdu, uint8_t pdu_len) {
             break;
 
         /* Find end_handle: next service's handle - 1, or last attr handle */
-        uint16_t end_handle = g_gatt_table[g_gatt_table_size - 1u].handle;
-        for (size_t j = i + 1u; j < g_gatt_table_size; j++) {
+        uint16_t end_handle = g_gatt_table[GATT_TABLE_SIZE - 1u].handle;
+        for (size_t j = i + 1u; j < GATT_TABLE_SIZE; j++) {
             if (g_gatt_table[j].type == ATTR_PRIMARY_SERVICE) {
                 end_handle = (uint16_t)(g_gatt_table[j].handle - 1u);
                 break;
@@ -152,7 +157,7 @@ static void handle_read_by_group_type_req(const uint8_t *pdu, uint8_t pdu_len) {
 /* Discover Characteristics within a service range (Read By Type with type=0x2803). */
 static void handle_read_by_type_req(const uint8_t *pdu, uint8_t pdu_len) {
     if (pdu_len != 7u) {
-        send_error_rsp(ATT_OP_READ_BY_TYPE_REQ, 0x0000u, ATT_ERR_INVALID_HANDLE);
+        send_error_rsp(ATT_OP_READ_BY_TYPE_REQ, 0x0000u, ATT_ERR_INVALID_PDU);
         return;
     }
     uint16_t start = (uint16_t)pdu[1] | ((uint16_t)pdu[2] << 8);
@@ -162,7 +167,7 @@ static void handle_read_by_type_req(const uint8_t *pdu, uint8_t pdu_len) {
     /* A3.1: only support discovering characteristics by type 0x2803.
      * Other types (e.g. 0x2A00 Device Name as char value) → not supported here. */
     if (type != ATTR_CHARACTERISTIC) {
-        send_error_rsp(ATT_OP_READ_BY_TYPE_REQ, start, ATT_ERR_ATTRIBUTE_NOT_FOUND);
+        send_error_rsp(ATT_OP_READ_BY_TYPE_REQ, start, ATT_ERR_REQUEST_NOT_SUPPORTED);
         return;
     }
 
@@ -172,7 +177,7 @@ static void handle_read_by_type_req(const uint8_t *pdu, uint8_t pdu_len) {
     uint8_t out_pos = 2u;
     bool found_any = false;
 
-    for (size_t i = 0; i < g_gatt_table_size; i++) {
+    for (size_t i = 0; i < GATT_TABLE_SIZE; i++) {
         const Attribute *attr = &g_gatt_table[i];
         if (attr->type != ATTR_CHARACTERISTIC)
             continue;
@@ -200,7 +205,7 @@ static void handle_read_by_type_req(const uint8_t *pdu, uint8_t pdu_len) {
 /* Discover Primary Services by 16-bit UUID (Find By Type Value with type=0x2800). */
 static void handle_find_by_type_value_req(const uint8_t *pdu, uint8_t pdu_len) {
     if (pdu_len < 7u) {
-        send_error_rsp(ATT_OP_FIND_BY_TYPE_VAL_REQ, 0x0000u, ATT_ERR_INVALID_HANDLE);
+        send_error_rsp(ATT_OP_FIND_BY_TYPE_VAL_REQ, 0x0000u, ATT_ERR_INVALID_PDU);
         return;
     }
     uint16_t start = (uint16_t)pdu[1] | ((uint16_t)pdu[2] << 8);
@@ -215,11 +220,11 @@ static void handle_find_by_type_value_req(const uint8_t *pdu, uint8_t pdu_len) {
     uint16_t target = (uint16_t)pdu[7] | ((uint16_t)pdu[8] << 8);
 
     uint8_t rsp[ATT_MAX_RSP_LEN];
-    rsp[0] = 0x07u; /* ATT_OP_FIND_BY_TYPE_VAL_RSP */
+    rsp[0] = ATT_OP_FIND_BY_TYPE_VAL_RSP;
     uint8_t out_pos = 1u;
     bool found_any = false;
 
-    for (size_t i = 0; i < g_gatt_table_size; i++) {
+    for (size_t i = 0; i < GATT_TABLE_SIZE; i++) {
         const Attribute *attr = &g_gatt_table[i];
         if (attr->type != ATTR_PRIMARY_SERVICE)
             continue;
@@ -234,8 +239,8 @@ static void handle_find_by_type_value_req(const uint8_t *pdu, uint8_t pdu_len) {
         if (out_pos + 4u > ATT_MAX_RSP_LEN)
             break;
 
-        uint16_t end_handle = g_gatt_table[g_gatt_table_size - 1u].handle;
-        for (size_t j = i + 1u; j < g_gatt_table_size; j++) {
+        uint16_t end_handle = g_gatt_table[GATT_TABLE_SIZE - 1u].handle;
+        for (size_t j = i + 1u; j < GATT_TABLE_SIZE; j++) {
             if (g_gatt_table[j].type == ATTR_PRIMARY_SERVICE) {
                 end_handle = (uint16_t)(g_gatt_table[j].handle - 1u);
                 break;

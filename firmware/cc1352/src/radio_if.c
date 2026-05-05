@@ -756,15 +756,25 @@ bool RadioIF_transmitBleAdvLegacy(uint8_t pdu_type, uint8_t addr_type, const uin
         }
     }
 
-    if (cmd == NULL || s_rf_handle == NULL) {
+    if (cmd == NULL) {
         return false;
     }
 
-    /* Per-iteration loop. CONNECT_IND breaks the loop early. */
+    RF_TxPowerTable_Value tx_power = RadioIF_resolveTxPowerValue(power_dbm);
+
+    /* Per-iteration loop. CONNECT_IND breaks the loop early.
+     * RadioIF_executeTxCommand handles RF mode switch + FS post + TX exec
+     * with persistent session reuse — same pattern as
+     * RadioIF_transmitBleAdvRaw which is the validated F11 advertising
+     * path. Without it, RF_runCmd with raw cmd fails (no FS, no setup). */
     for (uint16_t i = 0u; i < count; i++) {
         memset(&s_f21_adv_output, 0, sizeof(s_f21_adv_output));
         cmd->status = 0x0000;
-        (void)RF_runCmd(s_rf_handle, cmd, RF_PriorityNormal, NULL, 0);
+        bool ok = RadioIF_executeTxCommand(&Ble5_0_mode, (RF_RadioSetup *)&Ble5_0_cmdBle5RadioSetup,
+                                           (RF_Op *)&Ble5_0_cmdFs, (RF_Op *)cmd, tx_power);
+        if (!ok) {
+            return false;
+        }
         /* BLE_DONE_CONNECT (0x1FFF) = CONNECT_IND received. F20 not impl
          * → break loop and return; phone will time out. */
         if (cmd->status == 0x1FFFu) {

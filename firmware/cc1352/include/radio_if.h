@@ -124,6 +124,16 @@ int RadioIF_bleCentral(uint8_t chan, uint32_t accessAddr, uint32_t crcInit, data
                        uint32_t startTime, uint32_t endTime, uint32_t *pNumSent,
                        RadioIF_BleCentralStats *pStats);
 
+/* F20.a.1 — Run one BLE peripheral connection event.
+ * chan: data channel (0..36).
+ * accessAddr / crcInit: from CONNECT_IND captured by F21.
+ * pTxQueue: ATT responses to enqueue (built by BleConnMgr_pollSlave).
+ * startTime: anchor RAT tick.
+ * endTime: supervision deadline RAT tick.
+ * pStats output (nullable). */
+int RadioIF_bleSlave(uint8_t chan, uint32_t accessAddr, uint32_t crcInit, dataQueue_t *pTxQueue,
+                     uint32_t startTime, uint32_t endTime, RadioIF_BleCentralStats *pStats);
+
 /* Reset seqStat for initiator→central transition */
 void RadioIF_bleResetSeqStat(void);
 void RadioIF_bleResetRxQueue(void);

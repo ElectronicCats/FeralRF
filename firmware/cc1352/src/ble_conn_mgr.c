@@ -11,13 +11,19 @@
 
 #include "ble_conn_mgr.h"
 #include "att_client.h"
+#include "att_server.h"
 #include "ble_conn.h"
 #include "csa2.h"
 #include "radio_if.h"
 #include "tx_queue.h"
 
+#include <string.h>
+
 #include <ti/drivers/rf/RF.h>
 #include <ti/sysbios/knl/Task.h>
+
+/* F20.a.1 — Bundle 4 fills this in; weak stub keeps link clean until then. */
+void Ble20_drainAndDispatch(uint8_t *reason_out);
 
 /* ── LL Control PDU opcodes (Core Spec Vol 6, Part B, 2.4.2) ── */
 #define LL_CONNECTION_UPDATE_IND 0x00u
@@ -88,6 +94,13 @@ static uint8_t s_disconnect_events_remaining;
 static BleConnMgr_DbgTimingEntry s_dbg_timing[BLE_CONN_MGR_DBG_TIMING_DEPTH];
 static uint8_t s_dbg_timing_head;  /* next write slot 0..DEPTH-1 */
 static uint8_t s_dbg_timing_count; /* number of valid entries (saturates at DEPTH) */
+
+/* ── F20.a.1 — Slave / Peripheral state ── */
+static bool s_slave_running = false;
+static BleConnMgr_SlaveParams s_slave_params;
+static uint16_t s_slave_event_counter = 0u;
+static uint32_t s_slave_anchor_rat = 0u;
+static uint32_t s_slave_last_rx_rat = 0u;
 
 /* ── LL Control PDU handling ── */
 
@@ -524,4 +537,104 @@ uint8_t BleConnMgr_getDebugTiming(BleConnMgr_DbgTimingEntry *out, uint8_t maxEnt
         out[i] = s_dbg_timing[(start + i) % BLE_CONN_MGR_DBG_TIMING_DEPTH];
     }
     return n;
+}
+
+/* ── F20.a.1 — Slave / Peripheral public API ── */
+
+void BleConnMgr_startSlave(const BleConnMgr_SlaveParams *params) {
+    if (params == NULL) {
+        return;
+    }
+    s_slave_params = *params;
+    s_slave_event_counter = 0u;
+    s_slave_anchor_rat = RF_getCurrentTime() + CONN_INTERVAL_TO_TICKS(params->hopInterval_125us);
+    s_slave_last_rx_rat = RF_getCurrentTime();
+    s_slave_running = true;
+}
+
+bool BleConnMgr_pollSlave(void) {
+    if (!s_slave_running) {
+        return false;
+    }
+
+    uint32_t hop_ticks = CONN_INTERVAL_TO_TICKS(s_slave_params.hopInterval_125us);
+
+    /* Check supervision timeout (in 10ms units → 40000 4MHz ticks per unit). */
+    uint32_t superv_ticks = SUPERV_TO_TICKS(s_slave_params.supervTimeout_10ms);
+    uint32_t now = RF_getCurrentTime();
+    if (now - s_slave_last_rx_rat > superv_ticks) {
+        s_slave_running = false;
+        if (s_disconnect_cb) {
+            s_disconnect_cb(0x22u); /* LL_RESPONSE_TIMEOUT */
+        }
+        return false;
+    }
+
+    /* Wait until anchor point (sleep until ~500us before) */
+    uint32_t wait = s_slave_anchor_rat - now;
+    if (wait < 0x80000000u && wait > 2000u) {
+        Task_sleep(wait / 40u);
+    }
+
+    /* CSA#1 channel calc per BLE Core Spec Vol 6 Part B §4.5.8.1. */
+    uint8_t chan =
+        (uint8_t)(((uint32_t)(s_slave_event_counter + 1u) * s_slave_params.hopIncrement) % 37u);
+
+    /* Build TX queue from AttServer pending RSP (if any). */
+    if (AttServer_hasPendingTx()) {
+        uint8_t att[ATT_DEFAULT_MTU];
+        uint8_t att_len = AttServer_takePendingTx(att, sizeof(att));
+        if (att_len > 0u) {
+            uint8_t l2cap_frame[ATT_DEFAULT_MTU + 4u];
+            l2cap_frame[0] = att_len;
+            l2cap_frame[1] = 0x00u;
+            l2cap_frame[2] = 0x04u; /* CID 0x0004 = ATT */
+            l2cap_frame[3] = 0x00u;
+            memcpy(&l2cap_frame[4], att, att_len);
+            TXQueue_insert((uint8_t)(att_len + 4u), TX_QUEUE_LLID_DATA_START, l2cap_frame);
+        }
+    }
+    TXQueue_insert(0u, TX_QUEUE_LLID_DATA_CONT, NULL);
+    dataQueue_t txq;
+    TXQueue_take(&txq);
+
+    uint32_t startTime = s_slave_anchor_rat;
+    uint32_t endTime = s_slave_anchor_rat + hop_ticks;
+    RadioIF_BleCentralStats stats = {0};
+
+    int status = RadioIF_bleSlave(chan, s_slave_params.accessAddr, s_slave_params.crcInit, &txq,
+                                  startTime, endTime, &stats);
+    (void)status;
+
+    TXQueue_flush(0u);
+
+    /* Drain RX queue: route ATT to AttServer, detect LL_TERMINATE_IND. */
+    RadioIF_bleDrainRxQueue();
+    RadioIF_bleResetRxQueue();
+
+    if (stats.nRxOk > 0u || stats.nRxNok > 0u) {
+        s_slave_last_rx_rat = RF_getCurrentTime();
+    }
+
+    /* Bundle 4 implements Ble20_drainAndDispatch — weak stub until then. */
+    uint8_t reason = 0u;
+    Ble20_drainAndDispatch(&reason);
+    if (reason != 0u) {
+        s_slave_running = false;
+        if (s_disconnect_cb) {
+            s_disconnect_cb(reason);
+        }
+        return false;
+    }
+
+    s_slave_event_counter++;
+    s_slave_anchor_rat += hop_ticks;
+    return true;
+}
+
+/* Weak stub — Bundle 4 provides the real implementation in ble20_dispatch.c */
+__attribute__((weak)) void Ble20_drainAndDispatch(uint8_t *reason_out) {
+    if (reason_out) {
+        *reason_out = 0u;
+    }
 }

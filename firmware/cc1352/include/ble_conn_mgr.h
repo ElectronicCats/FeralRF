@@ -78,4 +78,21 @@ typedef struct {
  * oldest first. The returned count equals min(active entries, maxEntries). */
 uint8_t BleConnMgr_getDebugTiming(BleConnMgr_DbgTimingEntry *out, uint8_t maxEntries);
 
+/* F20.a.1 — Start/stop the slave event loop driven by BleConnMgr_pollSlave.
+ * Caller (command_processor handle CMD_BLE_ADV_LEGACY) extracts CONNECT_IND
+ * params and invokes BleConnMgr_startSlave with them. The poll loop runs
+ * inside the RfTask context until disconnect; emits the existing
+ * disconnect callback (gatt_on_disconnected → RSP_DISCONNECTED). */
+typedef struct {
+    uint32_t accessAddr;
+    uint32_t crcInit;
+    uint16_t hopInterval_125us; /* CONNECT_IND interval, 1.25ms units */
+    uint16_t latency;
+    uint16_t supervTimeout_10ms;
+    uint8_t hopIncrement;
+} BleConnMgr_SlaveParams;
+
+void BleConnMgr_startSlave(const BleConnMgr_SlaveParams *params);
+bool BleConnMgr_pollSlave(void);
+
 #endif /* BLE_CONN_MGR_H */

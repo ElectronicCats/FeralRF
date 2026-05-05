@@ -102,10 +102,13 @@ def run_central_attempt(port: str, baud: int, target_addr: str) -> dict:
 
 
 def query_diagnostics(per_port: str, cen_port: str, baud: int):
-    """After disconnect, query both boards for their diagnostic dumps."""
+    """After disconnect, query both boards for their diagnostic dumps.
+    Must call connect() — Radio() ctor doesn't open the port."""
     per = Radio(port=per_port, baudrate=baud)
     cen = Radio(port=cen_port, baudrate=baud)
     try:
+        per.connect()
+        cen.connect()
         slave_dump = per.debug_slave()
         central_dump = cen.debug_conn_params()
         return slave_dump, central_dump

@@ -173,6 +173,13 @@ static uint8_t s_dbg_extract_call_count = 0u;
 static uint8_t s_dbg_extract_entries_seen = 0u;
 static uint8_t s_dbg_extract_first_pdu_type = 0u;
 static uint16_t s_dbg_advertise_iterations = 0u;
+/* F20.a.1.d — dedicated F21 ADV trace, written ONLY from
+ * RadioIF_transmitBleAdvLegacy. Replaces the polluted s_last_tx_status
+ * read in the trace getter, which captured leakage from Prop433/cmd_test
+ * paths instead of the actual CMD_BLE_ADV exit status. */
+static uint16_t s_dbg_f21_last_status = 0u;
+static uint16_t s_dbg_f21_first_nonzero_status = 0u;
+static uint8_t s_dbg_f21_advA[6] = {0};
 static uint8_t s_last_tx_result = 0u;
 static uint32_t s_last_tx_event = 0u;
 
@@ -704,6 +711,11 @@ bool RadioIF_transmitBleAdvLegacy(uint8_t pdu_type, uint8_t addr_type, const uin
 
     /* Copy device address (6 bytes LE) */
     memcpy(s_f21_device_addr, addr, BLE_ADV_TX_DEVICE_ADDR_LEN);
+    /* F20.a.1.d — capture AdvA actually used and reset per-call counters
+     * so each new advertise call has a clean evidence trail. */
+    memcpy(s_dbg_f21_advA, addr, sizeof(s_dbg_f21_advA));
+    s_dbg_f21_last_status = 0u;
+    s_dbg_f21_first_nonzero_status = 0u;
 
     /* Reset shared params struct fields per call */
     s_f21_bleAdvPar.advConfig.deviceAddrType = (addr_type & 0x1u);
@@ -807,6 +819,15 @@ bool RadioIF_transmitBleAdvLegacy(uint8_t pdu_type, uint8_t addr_type, const uin
                                            (RF_Op *)&Ble5_0_cmdFs, (RF_Op *)cmd, tx_power);
         if (!ok) {
             return false;
+        }
+        /* F20.a.1.d — record the actual exit status of CMD_BLE_ADV per
+         * iteration. last_status reflects the most recent iteration;
+         * first_nonzero_status pins the first iteration whose status was
+         * not BLE_DONE_OK (helps pinpoint when CONNECT_IND attempts hit
+         * a parser/RX-path failure mid-loop). */
+        s_dbg_f21_last_status = cmd->status;
+        if (s_dbg_f21_first_nonzero_status == 0u && cmd->status != 0x1400u) {
+            s_dbg_f21_first_nonzero_status = cmd->status;
         }
         /* BLE_DONE_CONNECT = 0x1404, BLE_DONE_CONNECT_CHSEL0 = 0x140A. */
         if (cmd->status == 0x1404u || cmd->status == 0x140Au) {

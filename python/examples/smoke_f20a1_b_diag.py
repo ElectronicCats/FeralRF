@@ -169,6 +169,19 @@ def diff_table(slave, central):
     return all_match, lines
 
 
+def _interpret_ble_status(status: int) -> str:
+    return {
+        0x1400: "BLE_DONE_OK",
+        0x1402: "BLE_DONE_NOSYNC",
+        0x1403: "BLE_DONE_RXERR",
+        0x1404: "BLE_DONE_CONNECT (CSA#2)",
+        0x140A: "BLE_DONE_CONNECT_CHSEL0 (legacy CSA)",
+        0x140B: "BLE_DONE_ENDED",
+        0x1810: "BLE_ERROR_PAR",
+        0x1811: "BLE_ERROR_RXBUF",
+    }.get(status, f"unknown 0x{status:04X}")
+
+
 def trace_table(slave):
     """F20.a.1.c — print the 6 internal-state trace fields with interpretive
     notes. The output of this table is the primary diagnostic signal for
@@ -186,13 +199,11 @@ def trace_table(slave):
     lines.append(f"peripheral_active_at_handoff   0x{pa:02X}            {pa_note}")
 
     ts = slave.f21_last_status
-    ts_note = {
-        0x0000: "never set (no TX ran since boot/last query)",
-        0x1404: "BLE_DONE_CONNECT (CONNECT_IND received - happy path)",
-        0x140A: "BLE_DONE_CONNECT_CHSEL0 (CONNECT_IND, legacy ch sel)",
-        0x1400: "BLE_DONE_OK (ADV completed, no CONNECT_IND)",
-        0x1FFF: "BLE_ERROR_RXBUF",
-    }.get(ts, "other - check rf_ble_mailbox.h")
+    ts_note = (
+        "never set (no TX ran since boot/last query)"
+        if ts == 0x0000
+        else _interpret_ble_status(ts)
+    )
     lines.append(f"f21_last_status                 0x{ts:04X}          {ts_note}")
 
     ec = slave.extract_call_count
@@ -227,6 +238,20 @@ def trace_table(slave):
         else "broke early - likely CONNECT_IND"
     )
     lines.append(f"advertise_iterations           {ai:<5}           {ai_note}")
+
+    fns = slave.f21_first_nonzero_status
+    fns_note = (
+        "no non-OK iter — all iterations returned BLE_DONE_OK"
+        if fns == 0
+        else _interpret_ble_status(fns)
+    )
+    lines.append(f"f21_first_nonzero_status       0x{fns:04X}          {fns_note}")
+
+    adv_a_str = ":".join(f"{b:02X}" for b in reversed(slave.f21_adv_a))
+    lines.append(
+        f"f21_adv_a                      {adv_a_str:<17}"
+        "AdvA bytes actually used by CMD_BLE_ADV — compare against Sniffle wire capture"
+    )
 
     return lines
 

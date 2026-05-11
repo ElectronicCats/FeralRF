@@ -1,4 +1,4 @@
-"""F20.a.1.b — unit tests for Radio.debug_slave parser (no hardware)."""
+"""F20.a.1.d — unit tests for Radio.debug_slave parser (no hardware)."""
 
 from typing import List, Optional, Tuple
 
@@ -51,7 +51,7 @@ def _radio_with_fake_serial() -> Tuple[Radio, FakeSerial]:
 
 
 def _build_payload(snapshot: dict, entries: List[dict]) -> bytes:
-    """Build a synthetic RSP_DEBUG_SLAVE payload for testing (F20.a.1.c layout)."""
+    """Build a synthetic RSP_DEBUG_SLAVE payload for testing (F20.a.1.d 42 B layout)."""
     buf = bytearray()
     buf.extend(snapshot["access_addr"].to_bytes(4, "little"))
     buf.extend(snapshot["crc_init"].to_bytes(4, "little"))
@@ -228,7 +228,7 @@ class TestDebugSlaveParser:
         assert result.entries[1].event_counter == 2
 
     def test_trace_fields_round_trip(self):
-        """F20.a.1.c — assert the 6 new trace fields parse from the wire."""
+        """F20.a.1.d — assert the 8 trace fields (renamed f21_last_status + new f21_first_nonzero_status + f21_adv_a) parse from the wire."""
         radio, fake = _radio_with_fake_serial()
         snap = {
             "access_addr": 0xDEADBEEF,

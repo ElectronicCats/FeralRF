@@ -51,7 +51,7 @@ def _radio_with_fake_serial() -> Tuple[Radio, FakeSerial]:
 
 
 def _build_payload(snapshot: dict, entries: List[dict]) -> bytes:
-    """Build a synthetic RSP_DEBUG_SLAVE payload for testing (F20.a.1.d 42 B layout)."""
+    """Build a synthetic RSP_DEBUG_SLAVE payload for testing (F20.a.1.e 51 B layout)."""
     buf = bytearray()
     buf.extend(snapshot["access_addr"].to_bytes(4, "little"))
     buf.extend(snapshot["crc_init"].to_bytes(4, "little"))
@@ -63,7 +63,7 @@ def _build_payload(snapshot: dict, entries: List[dict]) -> bytes:
     buf.extend(snapshot["connect_ind_end_rat"].to_bytes(4, "little"))
     buf.extend(snapshot["first_anchor_rat"].to_bytes(4, "little"))
     # F20.a.1.d trace block (16 B): renames last_tx_status → f21_last_status,
-    # adds f21_first_nonzero_status (u16) + f21_adv_a (6 B). count moves to off 41.
+    # adds f21_first_nonzero_status (u16) + f21_adv_a (6 B).
     buf.extend(snapshot.get("f21_last_status", 0).to_bytes(2, "little"))  # off 25
     buf.append(snapshot.get("peripheral_active_at_handoff", 0))  # off 27
     buf.append(snapshot.get("extract_call_count", 0))  # off 28
@@ -72,7 +72,13 @@ def _build_payload(snapshot: dict, entries: List[dict]) -> bytes:
     buf.extend(snapshot.get("advertise_iterations", 0).to_bytes(2, "little"))  # off 31
     buf.extend(snapshot.get("f21_first_nonzero_status", 0).to_bytes(2, "little"))  # off 33
     buf.extend(snapshot.get("f21_adv_a", b"\x00" * 6))  # off 35
-    buf.append(len(entries))  # off 41
+    # F20.a.1.e HW counters block (9 B)
+    buf.extend(snapshot.get("f21_total_tx_adv_ind", 0).to_bytes(2, "little"))  # off 41
+    buf.extend(snapshot.get("f21_total_rx_connect_req", 0).to_bytes(2, "little"))  # off 43
+    buf.extend(snapshot.get("f21_total_rx_ignored", 0).to_bytes(2, "little"))  # off 45
+    buf.extend(snapshot.get("f21_total_rx_nok", 0).to_bytes(2, "little"))  # off 47
+    buf.append(snapshot.get("f21_last_rssi", 0) & 0xFF)  # off 49 (i8 as unsigned byte)
+    buf.append(len(entries))  # off 50
     for e in entries:
         buf.extend(e["event_counter"].to_bytes(2, "little"))
         buf.append(e["chan"])
@@ -218,9 +224,9 @@ class TestDebugSlaveParser:
             },
         ]
         full = bytearray(_build_payload(snap, two_entries))
-        # Override the count byte at offset 41 to claim 5 entries, but leave
+        # Override the count byte at offset 50 to claim 5 entries, but leave
         # only 2 on wire.
-        full[41] = 5
+        full[50] = 5
         fake.queue_response(Response.DEBUG_SLAVE, seq=radio._seq, payload=bytes(full))
         result = radio.debug_slave()
         assert len(result.entries) == 2
@@ -307,3 +313,69 @@ class TestDebugSlaveParser:
         fake.queue_response(Response.DEBUG_SLAVE, seq=radio._seq, payload=payload)
         result = radio.debug_slave()
         assert result.f21_adv_a == expected_adv_a
+
+    def test_f21_hw_counters_round_trip(self):
+        """F20.a.1.e — parser exposes the 4 HW counters (off 41-48)."""
+        radio, fake = _radio_with_fake_serial()
+        snap = {
+            "access_addr": 0x0,
+            "crc_init": 0x0,
+            "win_offset": 0,
+            "hop_interval": 0,
+            "latency": 0,
+            "superv_timeout": 0,
+            "hop_increment": 0,
+            "connect_ind_end_rat": 0,
+            "first_anchor_rat": 0,
+            "f21_total_tx_adv_ind": 200,
+            "f21_total_rx_connect_req": 0,
+            "f21_total_rx_ignored": 3,
+            "f21_total_rx_nok": 1,
+        }
+        payload = _build_payload(snap, [])
+        fake.queue_response(Response.DEBUG_SLAVE, seq=radio._seq, payload=payload)
+        result = radio.debug_slave()
+        assert result.f21_total_tx_adv_ind == 200
+        assert result.f21_total_rx_connect_req == 0
+        assert result.f21_total_rx_ignored == 3
+        assert result.f21_total_rx_nok == 1
+
+    def test_f21_last_rssi_negative(self):
+        """F20.a.1.e — parser decodes f21_last_rssi as signed int8 (off 49)."""
+        radio, fake = _radio_with_fake_serial()
+        snap = {
+            "access_addr": 0x0,
+            "crc_init": 0x0,
+            "win_offset": 0,
+            "hop_interval": 0,
+            "latency": 0,
+            "superv_timeout": 0,
+            "hop_increment": 0,
+            "connect_ind_end_rat": 0,
+            "first_anchor_rat": 0,
+            "f21_last_rssi": -47,
+        }
+        payload = _build_payload(snap, [])
+        fake.queue_response(Response.DEBUG_SLAVE, seq=radio._seq, payload=payload)
+        result = radio.debug_slave()
+        assert result.f21_last_rssi == -47
+
+    def test_f21_hw_counters_saturate(self):
+        """F20.a.1.e — counters cap at 0xFFFF (saturating, not wrapping)."""
+        radio, fake = _radio_with_fake_serial()
+        snap = {
+            "access_addr": 0x0,
+            "crc_init": 0x0,
+            "win_offset": 0,
+            "hop_interval": 0,
+            "latency": 0,
+            "superv_timeout": 0,
+            "hop_increment": 0,
+            "connect_ind_end_rat": 0,
+            "first_anchor_rat": 0,
+            "f21_total_tx_adv_ind": 0xFFFF,
+        }
+        payload = _build_payload(snap, [])
+        fake.queue_response(Response.DEBUG_SLAVE, seq=radio._seq, payload=payload)
+        result = radio.debug_slave()
+        assert result.f21_total_tx_adv_ind == 0xFFFF

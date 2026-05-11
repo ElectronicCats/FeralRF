@@ -261,6 +261,12 @@ class SlaveDbgResult:
     advertise_iterations: int
     f21_first_nonzero_status: int  # F20.a.1.d — first non-OK iter status (0 if none)
     f21_adv_a: bytes  # F20.a.1.d — 6-byte AdvA used in last CMD_BLE_ADV call
+    # F20.a.1.e — HW counters from rfc_bleAdvOutput_t, accumulated across the F21 loop
+    f21_total_tx_adv_ind: int
+    f21_total_rx_connect_req: int
+    f21_total_rx_ignored: int
+    f21_total_rx_nok: int
+    f21_last_rssi: int  # signed int8 in [-128, 127]
     entries: list[SlaveDbgEntry]
 
 
@@ -995,7 +1001,7 @@ class Radio:
         )
         if cmd_id == Response.ERROR:
             raise CommandError("DEBUG_SLAVE failed", payload[0] if payload else 0)
-        if len(payload) < 42:
+        if len(payload) < 51:
             raise ProtocolError(f"DEBUG_SLAVE payload too short: {len(payload)} bytes")
         access_addr = int.from_bytes(payload[0:4], "little")
         crc_init = int.from_bytes(payload[4:8], "little")
@@ -1014,10 +1020,16 @@ class Radio:
         advertise_iterations = int.from_bytes(payload[31:33], "little")
         f21_first_nonzero_status = int.from_bytes(payload[33:35], "little")
         f21_adv_a = bytes(payload[35:41])
-        count = payload[41]
+        # F20.a.1.e HW counters at offsets 41-49
+        f21_total_tx_adv_ind = int.from_bytes(payload[41:43], "little")
+        f21_total_rx_connect_req = int.from_bytes(payload[43:45], "little")
+        f21_total_rx_ignored = int.from_bytes(payload[45:47], "little")
+        f21_total_rx_nok = int.from_bytes(payload[47:49], "little")
+        f21_last_rssi = int.from_bytes(payload[49:50], "little", signed=True)
+        count = payload[50]
         entries = []
         for i in range(count):
-            base = 42 + i * 17
+            base = 51 + i * 17
             if base + 17 > len(payload):
                 break
             entries.append(
@@ -1051,6 +1063,11 @@ class Radio:
             advertise_iterations=advertise_iterations,
             f21_first_nonzero_status=f21_first_nonzero_status,
             f21_adv_a=f21_adv_a,
+            f21_total_tx_adv_ind=f21_total_tx_adv_ind,
+            f21_total_rx_connect_req=f21_total_rx_connect_req,
+            f21_total_rx_ignored=f21_total_rx_ignored,
+            f21_total_rx_nok=f21_total_rx_nok,
+            f21_last_rssi=f21_last_rssi,
             entries=entries,
         )
 

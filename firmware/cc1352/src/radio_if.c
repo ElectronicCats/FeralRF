@@ -189,7 +189,8 @@ static uint16_t s_dbg_f21_total_tx_adv_ind = 0u;
 static uint16_t s_dbg_f21_total_rx_connect_req = 0u;
 static uint16_t s_dbg_f21_total_rx_ignored = 0u;
 static uint16_t s_dbg_f21_total_rx_nok = 0u;
-static int8_t s_dbg_f21_last_rssi = INT8_MIN; /* -128 = sentinel "no RX captured" (below CC1352 sensitivity floor) */
+static int8_t s_dbg_f21_last_rssi =
+    INT8_MIN; /* -128 = sentinel "no RX captured" (below CC1352 sensitivity floor) */
 static inline uint16_t RadioIF_satAddU16(uint16_t a, uint16_t b) {
     uint32_t sum = (uint32_t)a + (uint32_t)b;
     return (sum > 0xFFFFu) ? 0xFFFFu : (uint16_t)sum;
@@ -856,8 +857,7 @@ bool RadioIF_transmitBleAdvLegacy(uint8_t pdu_type, uint8_t addr_type, const uin
             RadioIF_satAddU16(s_dbg_f21_total_rx_connect_req, s_f21_adv_output.nRxConnectReq);
         s_dbg_f21_total_rx_ignored =
             RadioIF_satAddU16(s_dbg_f21_total_rx_ignored, s_f21_adv_output.nRxIgnored);
-        s_dbg_f21_total_rx_nok =
-            RadioIF_satAddU16(s_dbg_f21_total_rx_nok, s_f21_adv_output.nRxNok);
+        s_dbg_f21_total_rx_nok = RadioIF_satAddU16(s_dbg_f21_total_rx_nok, s_f21_adv_output.nRxNok);
         if (s_f21_adv_output.nRxScanReq > 0u || s_f21_adv_output.nRxConnectReq > 0u ||
             s_f21_adv_output.nRxIgnored > 0u || s_f21_adv_output.nRxNok > 0u) {
             s_dbg_f21_last_rssi = s_f21_adv_output.lastRssi;

@@ -203,11 +203,18 @@ bool RadioIF_extractConnectIndParams(BleConnMgr_SlaveParams *out_params);
  * extract counters reset on entry to RadioIF_extractConnectIndParams,
  * advertise iterations reset on entry to RadioIF_transmitBleAdvLegacy. */
 typedef struct {
-    uint16_t lastTxStatus;        /* mirrors s_last_tx_status — last TX cmd->status */
-    uint16_t advertiseIterations; /* count of F21 ADV iterations executed in last call */
-    uint8_t extractCallCount;     /* times RadioIF_extractConnectIndParams was invoked */
-    uint8_t extractEntriesSeen;   /* FINISHED entries the most-recent parser call walked */
-    uint8_t extractFirstPduType;  /* (pkt[0] & 0x0F) of the first FINISHED entry seen */
+    /* F20.a.1.d — f21LastStatus replaces the polluted lastTxStatus.
+     * Written ONLY from RadioIF_transmitBleAdvLegacy's CMD_BLE_ADV loop.
+     * f21FirstNonzeroStatus pins the first iteration whose status was
+     * not BLE_DONE_OK (0x1400). f21AdvA[6] records the address bytes
+     * actually used as pDeviceAddress for the most recent advertise call. */
+    uint16_t f21LastStatus;
+    uint16_t f21FirstNonzeroStatus;
+    uint16_t advertiseIterations;
+    uint8_t extractCallCount;
+    uint8_t extractEntriesSeen;
+    uint8_t extractFirstPduType;
+    uint8_t f21AdvA[6];
 } RadioIF_DbgF21Trace;
 
 void RadioIF_getDbgF21Trace(RadioIF_DbgF21Trace *out);

@@ -1177,7 +1177,7 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
          *   connectIndEndRat         u32 LE   (4)   off 17
          *   firstAnchorRat           u32 LE   (4)   off 21
          *   --- F20.a.1.c trace block (9 B) ---
-         *   lastTxStatus             u16 LE   (2)   off 25
+         *   f21LastStatus            u16 LE   (2)   off 25
          *   peripheralActiveAtHand   u8       (1)   off 27
          *   extractCallCount         u8       (1)   off 28
          *   extractEntriesSeen       u8       (1)   off 29
@@ -1220,8 +1220,8 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
         rsp[22] = (uint8_t)((first_anchor >> 8) & 0xFFu);
         rsp[23] = (uint8_t)((first_anchor >> 16) & 0xFFu);
         rsp[24] = (uint8_t)((first_anchor >> 24) & 0xFFu);
-        rsp[25] = (uint8_t)(trace.lastTxStatus & 0xFFu);
-        rsp[26] = (uint8_t)((trace.lastTxStatus >> 8) & 0xFFu);
+        rsp[25] = (uint8_t)(trace.f21LastStatus & 0xFFu);
+        rsp[26] = (uint8_t)((trace.f21LastStatus >> 8) & 0xFFu);
         rsp[27] = s_dbg_peripheral_active_at_handoff;
         rsp[28] = trace.extractCallCount;
         rsp[29] = trace.extractEntriesSeen;

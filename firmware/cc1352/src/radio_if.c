@@ -3148,9 +3148,11 @@ void RadioIF_getDbgF21Trace(RadioIF_DbgF21Trace *out) {
     if (out == NULL) {
         return;
     }
-    out->lastTxStatus = s_last_tx_status;
+    out->f21LastStatus = s_dbg_f21_last_status;
+    out->f21FirstNonzeroStatus = s_dbg_f21_first_nonzero_status;
     out->advertiseIterations = s_dbg_advertise_iterations;
     out->extractCallCount = s_dbg_extract_call_count;
     out->extractEntriesSeen = s_dbg_extract_entries_seen;
     out->extractFirstPduType = s_dbg_extract_first_pdu_type;
+    memcpy(out->f21AdvA, s_dbg_f21_advA, sizeof(out->f21AdvA));
 }

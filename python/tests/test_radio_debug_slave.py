@@ -171,7 +171,7 @@ class TestDebugSlaveParser:
         from feralrf.exceptions import ProtocolError
 
         radio, fake = _radio_with_fake_serial()
-        # 20 bytes — short of the 42-byte F20.a.1.d header
+        # 20 bytes — short of the 51-byte F20.a.1.e header
         fake.queue_response(Response.DEBUG_SLAVE, seq=radio._seq, payload=b"\x00" * 20)
         with pytest.raises(ProtocolError, match="too short"):
             radio.debug_slave()
@@ -315,7 +315,7 @@ class TestDebugSlaveParser:
         assert result.f21_adv_a == expected_adv_a
 
     def test_f21_hw_counters_round_trip(self):
-        """F20.a.1.e — parser exposes the 4 HW counters (off 41-48)."""
+        """F20.a.1.e — parser exposes the 4 HW counters (off 41-49, 4×u16 LE)."""
         radio, fake = _radio_with_fake_serial()
         snap = {
             "access_addr": 0x0,

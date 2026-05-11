@@ -180,6 +180,7 @@ static uint16_t s_dbg_advertise_iterations = 0u;
 static uint16_t s_dbg_f21_last_status = 0u;
 static uint16_t s_dbg_f21_first_nonzero_status = 0u;
 static uint8_t s_dbg_f21_advA[6] = {0};
+/* Generic TX outcome — updated by RadioIF_executeTxCommand for all PHYs. */
 static uint8_t s_last_tx_result = 0u;
 static uint32_t s_last_tx_event = 0u;
 
@@ -826,7 +827,7 @@ bool RadioIF_transmitBleAdvLegacy(uint8_t pdu_type, uint8_t addr_type, const uin
          * not BLE_DONE_OK (helps pinpoint when CONNECT_IND attempts hit
          * a parser/RX-path failure mid-loop). */
         s_dbg_f21_last_status = cmd->status;
-        if (s_dbg_f21_first_nonzero_status == 0u && cmd->status != 0x1400u) {
+        if (s_dbg_f21_first_nonzero_status == 0u && cmd->status != BLE_DONE_OK) {
             s_dbg_f21_first_nonzero_status = cmd->status;
         }
         /* BLE_DONE_CONNECT = 0x1404, BLE_DONE_CONNECT_CHSEL0 = 0x140A. */

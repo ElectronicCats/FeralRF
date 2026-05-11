@@ -189,7 +189,7 @@ static uint16_t s_dbg_f21_total_tx_adv_ind = 0u;
 static uint16_t s_dbg_f21_total_rx_connect_req = 0u;
 static uint16_t s_dbg_f21_total_rx_ignored = 0u;
 static uint16_t s_dbg_f21_total_rx_nok = 0u;
-static int8_t s_dbg_f21_last_rssi = 0;
+static int8_t s_dbg_f21_last_rssi = INT8_MIN; /* -128 = sentinel "no RX captured" (below CC1352 sensitivity floor) */
 static inline uint16_t RadioIF_satAddU16(uint16_t a, uint16_t b) {
     uint32_t sum = (uint32_t)a + (uint32_t)b;
     return (sum > 0xFFFFu) ? 0xFFFFu : (uint16_t)sum;
@@ -736,7 +736,7 @@ bool RadioIF_transmitBleAdvLegacy(uint8_t pdu_type, uint8_t addr_type, const uin
     s_dbg_f21_total_rx_connect_req = 0u;
     s_dbg_f21_total_rx_ignored = 0u;
     s_dbg_f21_total_rx_nok = 0u;
-    s_dbg_f21_last_rssi = 0;
+    s_dbg_f21_last_rssi = INT8_MIN; /* sentinel */
 
     /* Reset shared params struct fields per call */
     s_f21_bleAdvPar.advConfig.deviceAddrType = (addr_type & 0x1u);

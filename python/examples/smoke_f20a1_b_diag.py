@@ -335,6 +335,21 @@ def main() -> int:
     reset_cc1352(args.peripheral_port)
     reset_cc1352(args.central_port)
 
+    # F20.a.1.f — Reversed sequencing: central FIRST (~2s for reset_device +
+    # init + ble_connect cmd dispatch to enter scan window), THEN slave starts
+    # advertising. Previously slave ran first and often finished BEFORE central
+    # was scanning — guaranteed timing miss for low peripheral_count.
+    cen_holder: dict = {}
+
+    def central_wrapper() -> None:
+        cen_holder["result"] = run_central_attempt(
+            args.central_port, args.baudrate, args.target_mac
+        )
+
+    cen_thread = Thread(target=central_wrapper, daemon=True)
+    cen_thread.start()
+    time.sleep(2.5)  # cover reset_device (~1.5s) + init + initiator dispatch
+
     per_thread = Thread(
         target=run_peripheral,
         args=(
@@ -346,10 +361,19 @@ def main() -> int:
         daemon=True,
     )
     per_thread.start()
-    time.sleep(2.0)
 
-    cen_result = run_central_attempt(args.central_port, args.baudrate, args.target_mac)
-    per_thread.join(timeout=10.0)
+    cen_thread.join(timeout=15.0)
+    per_thread.join(timeout=15.0)
+    cen_result = cen_holder.get(
+        "result",
+        {
+            "services_count": 0,
+            "chars_count": 0,
+            "name_val": b"",
+            "test_val": b"",
+            "connected": False,
+        },
+    )
 
     print("\n--- Central run ---")
     print(f"connected: {cen_result['connected']}")

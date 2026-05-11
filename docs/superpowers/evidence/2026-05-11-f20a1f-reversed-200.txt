@@ -1,0 +1,52 @@
+F20.a.1.b smoke V2 - NOSYNC diagnostic
+Peripheral=/dev/ttyACM0 Central=/dev/ttyACM3
+Target MAC=DE:AD:BE:EF:CA:FE
+============================================================
+
+--- Central run ---
+connected: True
+services discovered: 0
+chars discovered: 0
+device name: b''
+test value: b''
+
+--- Querying diagnostic dumps ---
+
+--- Field diff (slave parsed vs central actual) ---
+Field            Slave            Central          Match
+------------------------------------------------------------
+accessAddr       0x00000000       0x7526A9FB       MISMATCH
+crcInit          0x000000         0x2AA717         MISMATCH
+hopIncrement     0                10               MISMATCH
+winOffset        0                14               MISMATCH
+hopInterval      0                24               MISMATCH
+supervTimeout    0                100              MISMATCH
+
+--- F20.a.1.c internal-state trace ---
+Field                          Value           Interpretation
+------------------------------------------------------------------------------
+peripheral_active_at_handoff   0x01            flag survived (handoff entered the inner block)
+f21_last_status                 0x1404          BLE_DONE_CONNECT (CSA#2)
+extract_call_count             1               parser ran 1 time(s)
+extract_entries_seen           1               parser walked 1 FINISHED entry(ies)
+extract_first_pdu_type         0x07            other - check BT Core Spec PDU types
+advertise_iterations           48              broke early - likely CONNECT_IND
+f21_first_nonzero_status       0x1402          BLE_DONE_NOSYNC
+f21_adv_a                      DE:AD:BE:EF:CA:FEAdvA bytes actually used by CMD_BLE_ADV — compare against Sniffle wire capture
+f21_total_tx_adv_ind           48               HW count of ADV_IND packets fully TX'd
+f21_total_rx_connect_req       1                HW count of CONNECT_IND accepted by radio filter
+f21_total_rx_ignored           0                HW count of packets RX'd OK but ignored (filter mismatch)
+f21_total_rx_nok               0                HW count of CRC-error packets in RX window
+f21_last_rssi                  -81              dBm of last RX'd packet (any kind, -128 = no RX captured)
+
+NOSYNC verdict: CONNECT_IND was accepted by HW filter (1x) — bug is in TI status code interpretation or BLE state machine. NOT a radio-layer reject.
+
+--- Slave RX ring (oldest first) ---
+  (empty - startSlave never ran or pollSlave never completed an event)
+
+============================================================
+[FAIL] all parsed fields match central actuals
+[FAIL] slave received >=1 packet from master (any nRxOk>0)
+[FAIL] GATT path: services>=2, name+test correct
+
+[FAIL] Smoke V2 overall

@@ -859,7 +859,7 @@ bool RadioIF_transmitBleAdvLegacy(uint8_t pdu_type, uint8_t addr_type, const uin
         s_dbg_f21_total_rx_nok =
             RadioIF_satAddU16(s_dbg_f21_total_rx_nok, s_f21_adv_output.nRxNok);
         if (s_f21_adv_output.nRxScanReq > 0u || s_f21_adv_output.nRxConnectReq > 0u ||
-            s_f21_adv_output.nRxIgnored > 0u) {
+            s_f21_adv_output.nRxIgnored > 0u || s_f21_adv_output.nRxNok > 0u) {
             s_dbg_f21_last_rssi = s_f21_adv_output.lastRssi;
         }
         if (s_dbg_f21_first_nonzero_status == 0u && cmd->status != BLE_DONE_OK) {

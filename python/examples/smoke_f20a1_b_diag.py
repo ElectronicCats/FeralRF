@@ -187,6 +187,42 @@ def _interpret_ble_status(status: int) -> str:
     }.get(status, f"unknown 0x{status:04X}")
 
 
+def _diagnose_nosync(result) -> str:
+    """F20.a.1.e — interpret HW counters to identify root cause of NOSYNC.
+
+    Returns a single-line verdict based on which counters are non-zero.
+    """
+    tx = result.f21_total_tx_adv_ind
+    cr = result.f21_total_rx_connect_req
+    ig = result.f21_total_rx_ignored
+    nok = result.f21_total_rx_nok
+
+    if tx == 0:
+        return "SLAVE NEVER TX'd ADV_IND — RF setup failed before loop entry"
+    if cr > 0:
+        return (
+            f"CONNECT_IND was accepted by HW filter ({cr}x) — bug is in TI status "
+            "code interpretation or BLE state machine. NOT a radio-layer reject."
+        )
+    if ig > 0:
+        return (
+            f"CONNECT_IND or other packets arrived ({ig}x) but HW filter rejected "
+            "them — check AdvA/InitA address bytes at radio level; LSB-first wire "
+            "encoding might be inverted vs. firmware-side stored bytes."
+        )
+    if nok > 0:
+        return (
+            f"Packets arrived in RX window but {nok}x had CRC errors — RF/antenna "
+            "issue or different access address (0x8E89BED6 expected on adv chan)."
+        )
+    return (
+        "NO packets arrived in RX window across the entire loop — CONNECT_IND "
+        "never lands inside the T_IFS=150µs window after slave's ADV_IND TX. "
+        "Master timing too slow / master scanning other channels / master not "
+        "actually attempting connection."
+    )
+
+
 def trace_table(slave):
     """F20.a.1.d — print the 8 internal-state trace fields with interpretive notes.
 
@@ -256,6 +292,23 @@ def trace_table(slave):
         f"f21_adv_a                      {adv_a_str:<17}"
         "AdvA bytes actually used by CMD_BLE_ADV — compare against Sniffle wire capture"
     )
+    lines.append(
+        f"f21_total_tx_adv_ind           {slave.f21_total_tx_adv_ind:<17d}HW count of ADV_IND packets fully TX'd"
+    )
+    lines.append(
+        f"f21_total_rx_connect_req       {slave.f21_total_rx_connect_req:<17d}HW count of CONNECT_IND accepted by radio filter"
+    )
+    lines.append(
+        f"f21_total_rx_ignored           {slave.f21_total_rx_ignored:<17d}HW count of packets RX'd OK but ignored (filter mismatch)"
+    )
+    lines.append(
+        f"f21_total_rx_nok               {slave.f21_total_rx_nok:<17d}HW count of CRC-error packets in RX window"
+    )
+    lines.append(
+        f"f21_last_rssi                  {slave.f21_last_rssi:<17d}dBm of last RX'd packet (any kind, -128 = no RX captured)"
+    )
+    lines.append("")
+    lines.append(f"NOSYNC verdict: {_diagnose_nosync(slave)}")
 
     return lines
 

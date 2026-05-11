@@ -1,0 +1,45 @@
+F20.a.1.b smoke V2 - NOSYNC diagnostic
+Peripheral=/dev/ttyACM0 Central=/dev/ttyACM3
+Target MAC=DE:AD:BE:EF:CA:FE
+============================================================
+
+--- Central run ---
+connected: False
+services discovered: 0
+chars discovered: 0
+device name: b''
+test value: b''
+
+--- Querying diagnostic dumps ---
+
+--- Field diff (slave parsed vs central actual) ---
+Field            Slave            Central          Match
+------------------------------------------------------------
+accessAddr       0x00000000       0x627FF8CE       MISMATCH
+crcInit          0x000000         0xA8B9DD         MISMATCH
+hopIncrement     0                5                MISMATCH
+winOffset        0                13               MISMATCH
+hopInterval      0                24               MISMATCH
+supervTimeout    0                100              MISMATCH
+
+--- F20.a.1.c internal-state trace ---
+Field                          Value           Interpretation
+------------------------------------------------------------------------------
+peripheral_active_at_handoff   0x01            flag survived (handoff entered the inner block)
+f21_last_status                 0x1402          BLE_DONE_NOSYNC
+extract_call_count             1               parser ran 1 time(s)
+extract_entries_seen           3               parser walked 3 FINISHED entry(ies)
+extract_first_pdu_type         0x01            other - check BT Core Spec PDU types
+advertise_iterations           200             broke early - likely CONNECT_IND
+f21_first_nonzero_status       0x1402          BLE_DONE_NOSYNC
+f21_adv_a                      DE:AD:BE:EF:CA:FEAdvA bytes actually used by CMD_BLE_ADV — compare against Sniffle wire capture
+
+--- Slave RX ring (oldest first) ---
+  (empty - startSlave never ran or pollSlave never completed an event)
+
+============================================================
+[FAIL] all parsed fields match central actuals
+[FAIL] slave received >=1 packet from master (any nRxOk>0)
+[FAIL] GATT path: services>=2, name+test correct
+
+[FAIL] Smoke V2 overall

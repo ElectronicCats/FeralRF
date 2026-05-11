@@ -215,6 +215,17 @@ typedef struct {
     uint8_t extractEntriesSeen;
     uint8_t extractFirstPduType;
     uint8_t f21AdvA[6];
+    /* F20.a.1.e — HW counters accumulated across the F21 ADV loop.
+     * f21LastRssi is the RSSI of the most recent RX'd packet (any kind).
+     * Use these to disambiguate NOSYNC: nRxConnectReq>0 means radio HW saw
+     * a valid CONNECT_IND; nRxIgnored>0 means a packet arrived but HW filter
+     * rejected it; both 0 + nTxAdvInd > 0 means no packet ever entered the
+     * RX window (timing miss). */
+    uint16_t f21TotalTxAdvInd;
+    uint16_t f21TotalRxConnectReq;
+    uint16_t f21TotalRxIgnored;
+    uint16_t f21TotalRxNok;
+    int8_t f21LastRssi;
 } RadioIF_DbgF21Trace;
 
 void RadioIF_getDbgF21Trace(RadioIF_DbgF21Trace *out);

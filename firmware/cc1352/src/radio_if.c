@@ -3190,4 +3190,9 @@ void RadioIF_getDbgF21Trace(RadioIF_DbgF21Trace *out) {
     out->extractEntriesSeen = s_dbg_extract_entries_seen;
     out->extractFirstPduType = s_dbg_extract_first_pdu_type;
     memcpy(out->f21AdvA, s_dbg_f21_advA, sizeof(out->f21AdvA));
+    out->f21TotalTxAdvInd = s_dbg_f21_total_tx_adv_ind;
+    out->f21TotalRxConnectReq = s_dbg_f21_total_rx_connect_req;
+    out->f21TotalRxIgnored = s_dbg_f21_total_rx_ignored;
+    out->f21TotalRxNok = s_dbg_f21_total_rx_nok;
+    out->f21LastRssi = s_dbg_f21_last_rssi;
 }

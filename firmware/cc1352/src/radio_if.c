@@ -180,6 +180,20 @@ static uint16_t s_dbg_advertise_iterations = 0u;
 static uint16_t s_dbg_f21_last_status = 0u;
 static uint16_t s_dbg_f21_first_nonzero_status = 0u;
 static uint8_t s_dbg_f21_advA[6] = {0};
+/* F20.a.1.e — HW counters from rfc_bleAdvOutput_t accumulated across the F21
+ * ADV loop. Each iteration's s_f21_adv_output is reset by memset before
+ * RF_runCmd; we add its values to these accumulators *before* the next iter.
+ * All counters saturate at U16_MAX so a stuck radio doesn't roll over and
+ * mask a real problem. */
+static uint16_t s_dbg_f21_total_tx_adv_ind = 0u;
+static uint16_t s_dbg_f21_total_rx_connect_req = 0u;
+static uint16_t s_dbg_f21_total_rx_ignored = 0u;
+static uint16_t s_dbg_f21_total_rx_nok = 0u;
+static int8_t s_dbg_f21_last_rssi = 0;
+static inline uint16_t RadioIF_satAddU16(uint16_t a, uint16_t b) {
+    uint32_t sum = (uint32_t)a + (uint32_t)b;
+    return (sum > 0xFFFFu) ? 0xFFFFu : (uint16_t)sum;
+}
 /* Generic TX outcome — updated by RadioIF_executeTxCommand for all PHYs. */
 static uint8_t s_last_tx_result = 0u;
 static uint32_t s_last_tx_event = 0u;
@@ -717,6 +731,12 @@ bool RadioIF_transmitBleAdvLegacy(uint8_t pdu_type, uint8_t addr_type, const uin
     memcpy(s_dbg_f21_advA, addr, sizeof(s_dbg_f21_advA));
     s_dbg_f21_last_status = 0u;
     s_dbg_f21_first_nonzero_status = 0u;
+    /* F20.a.1.e — reset HW counter accumulators per call. */
+    s_dbg_f21_total_tx_adv_ind = 0u;
+    s_dbg_f21_total_rx_connect_req = 0u;
+    s_dbg_f21_total_rx_ignored = 0u;
+    s_dbg_f21_total_rx_nok = 0u;
+    s_dbg_f21_last_rssi = 0;
 
     /* Reset shared params struct fields per call */
     s_f21_bleAdvPar.advConfig.deviceAddrType = (addr_type & 0x1u);
@@ -827,6 +847,21 @@ bool RadioIF_transmitBleAdvLegacy(uint8_t pdu_type, uint8_t addr_type, const uin
          * not BLE_DONE_OK (helps pinpoint when CONNECT_IND attempts hit
          * a parser/RX-path failure mid-loop). */
         s_dbg_f21_last_status = cmd->status;
+        /* F20.a.1.e — accumulate HW counters from this iteration's output.
+         * s_f21_adv_output is memset'd to zero before each RF_runCmd above,
+         * so its fields reflect only this iteration. */
+        s_dbg_f21_total_tx_adv_ind =
+            RadioIF_satAddU16(s_dbg_f21_total_tx_adv_ind, s_f21_adv_output.nTxAdvInd);
+        s_dbg_f21_total_rx_connect_req =
+            RadioIF_satAddU16(s_dbg_f21_total_rx_connect_req, s_f21_adv_output.nRxConnectReq);
+        s_dbg_f21_total_rx_ignored =
+            RadioIF_satAddU16(s_dbg_f21_total_rx_ignored, s_f21_adv_output.nRxIgnored);
+        s_dbg_f21_total_rx_nok =
+            RadioIF_satAddU16(s_dbg_f21_total_rx_nok, s_f21_adv_output.nRxNok);
+        if (s_f21_adv_output.nRxScanReq > 0u || s_f21_adv_output.nRxConnectReq > 0u ||
+            s_f21_adv_output.nRxIgnored > 0u) {
+            s_dbg_f21_last_rssi = s_f21_adv_output.lastRssi;
+        }
         if (s_dbg_f21_first_nonzero_status == 0u && cmd->status != BLE_DONE_OK) {
             s_dbg_f21_first_nonzero_status = cmd->status;
         }

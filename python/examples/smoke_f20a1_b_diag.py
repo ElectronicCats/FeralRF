@@ -170,6 +170,11 @@ def diff_table(slave, central):
 
 
 def _interpret_ble_status(status: int) -> str:
+    """Map a TI BLE mailbox status word to a human-readable label.
+
+    Codes from firmware/sdk/.../driverlib/rf_ble_mailbox.h (BLE_DONE_*, BLE_ERROR_*).
+    """
+    # rf_ble_mailbox.h status words
     return {
         0x1400: "BLE_DONE_OK",
         0x1402: "BLE_DONE_NOSYNC",
@@ -183,8 +188,9 @@ def _interpret_ble_status(status: int) -> str:
 
 
 def trace_table(slave):
-    """F20.a.1.c — print the 6 internal-state trace fields with interpretive
-    notes. The output of this table is the primary diagnostic signal for
+    """F20.a.1.d — print the 8 internal-state trace fields with interpretive notes.
+
+    The output of this table is the primary diagnostic signal for
     Smoke V2: whichever line disagrees with the expected value tells us
     which firmware layer is failing. Returns the list of printed lines."""
     lines = ["Field                          Value           Interpretation"]
@@ -200,9 +206,7 @@ def trace_table(slave):
 
     ts = slave.f21_last_status
     ts_note = (
-        "never set (no TX ran since boot/last query)"
-        if ts == 0x0000
-        else _interpret_ble_status(ts)
+        "never set (no TX ran since boot/last query)" if ts == 0x0000 else _interpret_ble_status(ts)
     )
     lines.append(f"f21_last_status                 0x{ts:04X}          {ts_note}")
 
@@ -241,7 +245,7 @@ def trace_table(slave):
 
     fns = slave.f21_first_nonzero_status
     fns_note = (
-        "no non-OK iter — all iterations returned BLE_DONE_OK"
+        "never set — no non-OK status recorded (loop may not have run, or all iters were OK)"
         if fns == 0
         else _interpret_ble_status(fns)
     )

@@ -62,14 +62,17 @@ def _build_payload(snapshot: dict, entries: List[dict]) -> bytes:
     buf.append(snapshot["hop_increment"])
     buf.extend(snapshot["connect_ind_end_rat"].to_bytes(4, "little"))
     buf.extend(snapshot["first_anchor_rat"].to_bytes(4, "little"))
-    # F20.a.1.c trace block (9 B) — fields default to 0 if absent
-    buf.extend(snapshot.get("last_tx_status", 0).to_bytes(2, "little"))
-    buf.append(snapshot.get("peripheral_active_at_handoff", 0))
-    buf.append(snapshot.get("extract_call_count", 0))
-    buf.append(snapshot.get("extract_entries_seen", 0))
-    buf.append(snapshot.get("extract_first_pdu_type", 0))
-    buf.extend(snapshot.get("advertise_iterations", 0).to_bytes(2, "little"))
-    buf.append(len(entries))
+    # F20.a.1.d trace block (16 B): renames last_tx_status → f21_last_status,
+    # adds f21_first_nonzero_status (u16) + f21_adv_a (6 B). count moves to off 41.
+    buf.extend(snapshot.get("f21_last_status", 0).to_bytes(2, "little"))  # off 25
+    buf.append(snapshot.get("peripheral_active_at_handoff", 0))  # off 27
+    buf.append(snapshot.get("extract_call_count", 0))  # off 28
+    buf.append(snapshot.get("extract_entries_seen", 0))  # off 29
+    buf.append(snapshot.get("extract_first_pdu_type", 0))  # off 30
+    buf.extend(snapshot.get("advertise_iterations", 0).to_bytes(2, "little"))  # off 31
+    buf.extend(snapshot.get("f21_first_nonzero_status", 0).to_bytes(2, "little"))  # off 33
+    buf.extend(snapshot.get("f21_adv_a", b"\x00" * 6))  # off 35
+    buf.append(len(entries))  # off 41
     for e in entries:
         buf.extend(e["event_counter"].to_bytes(2, "little"))
         buf.append(e["chan"])
@@ -162,7 +165,7 @@ class TestDebugSlaveParser:
         from feralrf.exceptions import ProtocolError
 
         radio, fake = _radio_with_fake_serial()
-        # 20 bytes — short of the 34-byte F20.a.1.c header
+        # 20 bytes — short of the 42-byte F20.a.1.d header
         fake.queue_response(Response.DEBUG_SLAVE, seq=radio._seq, payload=b"\x00" * 20)
         with pytest.raises(ProtocolError, match="too short"):
             radio.debug_slave()
@@ -181,7 +184,7 @@ class TestDebugSlaveParser:
             "hop_increment": 7,
             "connect_ind_end_rat": 0,
             "first_anchor_rat": 0,
-            "last_tx_status": 0x1404,
+            "f21_last_status": 0x1404,
             "peripheral_active_at_handoff": 1,
             "extract_call_count": 1,
             "extract_entries_seen": 1,
@@ -215,9 +218,9 @@ class TestDebugSlaveParser:
             },
         ]
         full = bytearray(_build_payload(snap, two_entries))
-        # Override the count byte at offset 33 to claim 5 entries, but leave
+        # Override the count byte at offset 41 to claim 5 entries, but leave
         # only 2 on wire.
-        full[33] = 5
+        full[41] = 5
         fake.queue_response(Response.DEBUG_SLAVE, seq=radio._seq, payload=bytes(full))
         result = radio.debug_slave()
         assert len(result.entries) == 2
@@ -237,7 +240,7 @@ class TestDebugSlaveParser:
             "hop_increment": 7,
             "connect_ind_end_rat": 0,
             "first_anchor_rat": 0,
-            "last_tx_status": 0x1404,
+            "f21_last_status": 0x1404,
             "peripheral_active_at_handoff": 1,
             "extract_call_count": 3,
             "extract_entries_seen": 5,
@@ -247,7 +250,7 @@ class TestDebugSlaveParser:
         payload = _build_payload(snap, [])
         fake.queue_response(Response.DEBUG_SLAVE, seq=radio._seq, payload=payload)
         result = radio.debug_slave()
-        assert result.last_tx_status == 0x1404
+        assert result.f21_last_status == 0x1404
         assert result.peripheral_active_at_handoff == 1
         assert result.extract_call_count == 3
         assert result.extract_entries_seen == 5
@@ -260,3 +263,47 @@ class TestDebugSlaveParser:
         fake.queue_response(Response.DEBUG_SLAVE, seq=radio._seq, payload=payload2)
         result2 = radio.debug_slave()
         assert result2.extract_first_pdu_type == 0xFF
+
+    def test_f21_first_nonzero_status_round_trip(self):
+        """F20.a.1.d — parser exposes f21_first_nonzero_status (u16 LE off 33)."""
+        radio, fake = _radio_with_fake_serial()
+        snap = {
+            "access_addr": 0x0,
+            "crc_init": 0x0,
+            "win_offset": 0,
+            "hop_interval": 0,
+            "latency": 0,
+            "superv_timeout": 0,
+            "hop_increment": 0,
+            "connect_ind_end_rat": 0,
+            "first_anchor_rat": 0,
+            "f21_last_status": 0x1404,
+            "f21_first_nonzero_status": 0x1402,  # BLE_DONE_NOSYNC mid-loop
+            "advertise_iterations": 100,
+        }
+        payload = _build_payload(snap, [])
+        fake.queue_response(Response.DEBUG_SLAVE, seq=radio._seq, payload=payload)
+        result = radio.debug_slave()
+        assert result.f21_first_nonzero_status == 0x1402
+        assert result.f21_last_status == 0x1404
+
+    def test_f21_adv_a_round_trip(self):
+        """F20.a.1.d — parser exposes the 6-byte AdvA used by CMD_BLE_ADV (off 35)."""
+        radio, fake = _radio_with_fake_serial()
+        expected_adv_a = bytes([0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF])
+        snap = {
+            "access_addr": 0x0,
+            "crc_init": 0x0,
+            "win_offset": 0,
+            "hop_interval": 0,
+            "latency": 0,
+            "superv_timeout": 0,
+            "hop_increment": 0,
+            "connect_ind_end_rat": 0,
+            "first_anchor_rat": 0,
+            "f21_adv_a": expected_adv_a,
+        }
+        payload = _build_payload(snap, [])
+        fake.queue_response(Response.DEBUG_SLAVE, seq=radio._seq, payload=payload)
+        result = radio.debug_slave()
+        assert result.f21_adv_a == expected_adv_a

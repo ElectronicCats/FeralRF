@@ -185,7 +185,7 @@ def trace_table(slave):
     }.get(pa, "unexpected value")
     lines.append(f"peripheral_active_at_handoff   0x{pa:02X}            {pa_note}")
 
-    ts = slave.last_tx_status
+    ts = slave.f21_last_status
     ts_note = {
         0x0000: "never set (no TX ran since boot/last query)",
         0x1404: "BLE_DONE_CONNECT (CONNECT_IND received - happy path)",
@@ -193,7 +193,7 @@ def trace_table(slave):
         0x1400: "BLE_DONE_OK (ADV completed, no CONNECT_IND)",
         0x1FFF: "BLE_ERROR_RXBUF",
     }.get(ts, "other - check rf_ble_mailbox.h")
-    lines.append(f"last_tx_status                 0x{ts:04X}          {ts_note}")
+    lines.append(f"f21_last_status                 0x{ts:04X}          {ts_note}")
 
     ec = slave.extract_call_count
     ec_note = (

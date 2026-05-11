@@ -241,7 +241,7 @@ class SlaveDbgEntry:
 
 @dataclass
 class SlaveDbgResult:
-    """Slave-side diagnostic dump from CMD_DEBUG_SLAVE (F20.a.1.b + .c trace)."""
+    """Slave-side diagnostic dump from CMD_DEBUG_SLAVE (F20.a.1.b/.c/.d trace)."""
 
     access_addr: int
     crc_init: int
@@ -252,13 +252,15 @@ class SlaveDbgResult:
     hop_increment: int
     connect_ind_end_rat: int
     first_anchor_rat: int
-    # F20.a.1.c — internal-state trace
-    last_tx_status: int
+    # F20.a.1.c/.d — internal-state trace
+    f21_last_status: int  # F20.a.1.d — was last_tx_status (renamed)
     peripheral_active_at_handoff: int
     extract_call_count: int
     extract_entries_seen: int
     extract_first_pdu_type: int
     advertise_iterations: int
+    f21_first_nonzero_status: int  # F20.a.1.d — first non-OK iter status (0 if none)
+    f21_adv_a: bytes  # F20.a.1.d — 6-byte AdvA used in last CMD_BLE_ADV call
     entries: list[SlaveDbgEntry]
 
 
@@ -976,14 +978,15 @@ class Radio:
         return DebugConnParamsResponse.parse(payload)
 
     def debug_slave(self) -> SlaveDbgResult:
-        """F20.a.1.b/.c — query slave-side diagnostic dump.
+        """F20.a.1.b/.c/.d — query slave-side diagnostic dump.
 
         Returns the snapshot of CONNECT_IND values parsed by the slave plus
-        the F20.a.1.c trace (last_tx_status, peripheral_active_at_handoff,
+        the F20.a.1.d trace (f21_last_status, peripheral_active_at_handoff,
         extract_call_count, extract_entries_seen, extract_first_pdu_type,
-        advertise_iterations) plus a ring of the most recent per-event RX
-        stats. Used by the smoke V2 harness to diff slave-parsed values
-        against the central's actuals and to spot-check radio behavior.
+        advertise_iterations, f21_first_nonzero_status, f21_adv_a) plus a
+        ring of the most recent per-event RX stats. Used by the smoke V2
+        harness to diff slave-parsed values against the central's actuals and
+        to spot-check radio behavior.
         Debug-only API; not in the stable command set.
         """
         self._send_command(Command.DEBUG_SLAVE, b"")
@@ -992,7 +995,7 @@ class Radio:
         )
         if cmd_id == Response.ERROR:
             raise CommandError("DEBUG_SLAVE failed", payload[0] if payload else 0)
-        if len(payload) < 34:
+        if len(payload) < 42:
             raise ProtocolError(f"DEBUG_SLAVE payload too short: {len(payload)} bytes")
         access_addr = int.from_bytes(payload[0:4], "little")
         crc_init = int.from_bytes(payload[4:8], "little")
@@ -1003,16 +1006,18 @@ class Radio:
         hop_increment = payload[16]
         connect_ind_end_rat = int.from_bytes(payload[17:21], "little")
         first_anchor_rat = int.from_bytes(payload[21:25], "little")
-        last_tx_status = int.from_bytes(payload[25:27], "little")
+        f21_last_status = int.from_bytes(payload[25:27], "little")
         peripheral_active_at_handoff = payload[27]
         extract_call_count = payload[28]
         extract_entries_seen = payload[29]
         extract_first_pdu_type = payload[30]
         advertise_iterations = int.from_bytes(payload[31:33], "little")
-        count = payload[33]
+        f21_first_nonzero_status = int.from_bytes(payload[33:35], "little")
+        f21_adv_a = bytes(payload[35:41])
+        count = payload[41]
         entries = []
         for i in range(count):
-            base = 34 + i * 17
+            base = 42 + i * 17
             if base + 17 > len(payload):
                 break
             entries.append(
@@ -1038,12 +1043,14 @@ class Radio:
             hop_increment=hop_increment,
             connect_ind_end_rat=connect_ind_end_rat,
             first_anchor_rat=first_anchor_rat,
-            last_tx_status=last_tx_status,
+            f21_last_status=f21_last_status,
             peripheral_active_at_handoff=peripheral_active_at_handoff,
             extract_call_count=extract_call_count,
             extract_entries_seen=extract_entries_seen,
             extract_first_pdu_type=extract_first_pdu_type,
             advertise_iterations=advertise_iterations,
+            f21_first_nonzero_status=f21_first_nonzero_status,
+            f21_adv_a=f21_adv_a,
             entries=entries,
         )
 

@@ -1235,7 +1235,7 @@ static void handle_command(uint8_t cmd, uint8_t seq, const uint8_t *payload, uin
         rsp[32] = (uint8_t)((trace.advertiseIterations >> 8) & 0xFFu);
         rsp[33] = (uint8_t)(trace.f21FirstNonzeroStatus & 0xFFu);
         rsp[34] = (uint8_t)((trace.f21FirstNonzeroStatus >> 8) & 0xFFu);
-        memcpy(&rsp[35], trace.f21AdvA, 6u);
+        memcpy(&rsp[35], trace.f21AdvA, sizeof(trace.f21AdvA));
         rsp[41] = n;
 
         for (uint8_t i = 0u; i < n; i++) {

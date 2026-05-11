@@ -79,8 +79,9 @@ typedef struct {
 uint8_t BleConnMgr_getDebugTiming(BleConnMgr_DbgTimingEntry *out, uint8_t maxEntries);
 
 /* F20.a.1.c — slave-side per-event ring entry. sizeof==20 (3 B compiler padding);
- * hand-packed wire size is 17 B. Depth 12: 34 B header + 12*17 B = 238 B ≤ PROTOCOL_MAX_PAYLOAD.
- * Header grew from 26 → 34 B in F20.a.1.c (+8 B trace fields), so depth dropped 13 → 12. */
+ * hand-packed wire size is 17 B. Depth 12: 42 B header + 12*17 B = 246 B ≤ PROTOCOL_MAX_PAYLOAD
+ * (F20.a.1.d). Header grew from 26 → 34 B in F20.a.1.c (+8 B trace fields), so depth dropped 13
+ * → 12. */
 #define BLE_CONN_MGR_DBG_SLAVE_RING_DEPTH 12u
 
 typedef struct {

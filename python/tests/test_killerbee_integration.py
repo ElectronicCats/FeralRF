@@ -7,6 +7,7 @@ from feralrf.radio import DeviceInfo, Packet
 
 class FakeRadio:
     def __init__(self):
+        self.port = "/dev/fake"
         self.phy = self.channel = None
         self.rx = False
         self.tx = []
@@ -150,3 +151,19 @@ def test_list_devices_delegates(monkeypatch):
     )
     devs = kb.KillerBeeFeralRF.list_devices()
     assert devs and devs[0]["port"] == "/dev/ttyACM0"
+
+
+def test_inject_with_delay_sleeps_between_frames(monkeypatch):
+    fr = FakeRadio()
+    a = _adapter(monkeypatch, fr)
+    sleeps = []
+    monkeypatch.setattr(kb.time, "sleep", lambda s: sleeps.append(s))
+    a.inject(b"\x01\x08\x00\xff\xff\xff\xff", channel=11, count=3, delay=0.5)
+    assert sleeps == [0.5, 0.5]
+    assert len(fr.tx) == 3
+
+
+def test_inject_oversize_raises(monkeypatch):
+    a = _adapter(monkeypatch)
+    with pytest.raises(Exception):
+        a.inject(b"\x00" * 200)

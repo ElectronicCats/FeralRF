@@ -5,11 +5,11 @@ so importing feralrf never requires killerbee to be installed.
 """
 
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from feralrf.enums import PHY
-from feralrf.radio import Packet, Radio
+from feralrf.radio import Radio
 
 
 def _kbcaps():
@@ -30,6 +30,7 @@ class KillerBeeFeralRF:
         self.dev = dev
         self.radio = radio if radio is not None else Radio(port=dev)
         self._info = self.radio.init()
+        self.dev = self.radio.port
         self._channel: Optional[int] = None
         self._page = 0
         KBCapabilities = _kbcaps()
@@ -62,7 +63,7 @@ class KillerBeeFeralRF:
 
     def set_channel(self, channel, page=0):
         if not (11 <= channel <= 26):
-            raise Exception("channel %r out of range 11-26" % channel)
+            raise ValueError("channel %r out of range 11-26" % channel)
         self.radio.set_phy(PHY.IEEE_802_15_4, channel)
         self.radio.set_channel(channel)
         self._channel, self._page = channel, page
@@ -90,7 +91,7 @@ class KillerBeeFeralRF:
             "rssi": pkt.rssi_dbm,
             "dbm": pkt.rssi_dbm,
             "location": None,
-            "datetime": datetime.utcnow(),
+            "datetime": datetime.now(timezone.utc),
         }
 
     def inject(self, packet, channel=None, count=1, delay=0, page=0):
@@ -98,7 +99,7 @@ class KillerBeeFeralRF:
             self.set_channel(channel, page)
         mpdu = packet[:-2] if len(packet) >= 5 else packet  # RF core appends FCS
         if len(mpdu) > 125:
-            raise Exception("frame too long (%d > 125)" % len(mpdu))
+            raise ValueError("frame too long (%d > 125)" % len(mpdu))
         for i in range(count):
             self.radio.transmit_frame(mpdu)
             if delay and i < count - 1:

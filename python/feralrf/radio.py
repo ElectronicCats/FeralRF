@@ -1670,6 +1670,20 @@ class Radio:
             except TimeoutError:
                 break
 
+    def read_one_packet(self, timeout: float = 1.0) -> Optional[Packet]:
+        """Return the next Packet within `timeout` seconds, or None.
+
+        Bridges KillerBee's one-packet pnext() to the read_packets() stream.
+        Async RxStreamError events are skipped (they are surfaced by
+        read_packets for streaming callers; a single-packet caller wants the
+        next real frame). The Radio's rx buffer persists across calls, so
+        abandoning the generator after one Packet loses no data.
+        """
+        for item in self.read_packets(timeout=timeout):
+            if isinstance(item, Packet):
+                return item
+        return None
+
     def transmit(self, packet: bytes, power_dbm: int = -128, timeout: float = 5.0) -> None:
         """Transmit a packet"""
         self._send_command(Command.TX_RAW, CommandBuilder.tx_raw(packet, power_dbm))

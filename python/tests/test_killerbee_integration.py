@@ -141,3 +141,12 @@ def test_jammer_on_off_maps_to_feralrf(monkeypatch):
     assert fr.jam_ch == 20
     a.jammer_off()
     assert fr.jam_stopped is True
+
+
+def test_list_devices_delegates(monkeypatch):
+    monkeypatch.setattr(
+        "feralrf.radio.Radio.list_devices",
+        staticmethod(lambda: [{"port": "/dev/ttyACM0", "vid": 0x1209, "pid": 0x0001}]),
+    )
+    devs = kb.KillerBeeFeralRF.list_devices()
+    assert devs and devs[0]["port"] == "/dev/ttyACM0"

@@ -22,6 +22,10 @@ def _kbcaps():
 class KillerBeeFeralRF:
     NAME = "FeralRF CatSniffer (CC1352)"
 
+    @staticmethod
+    def list_devices():
+        return Radio.list_devices()
+
     def __init__(self, dev, radio: Optional[Radio] = None):
         self.dev = dev
         self.radio = radio if radio is not None else Radio(port=dev)

@@ -1,3 +1,5 @@
+import pytest
+
 import feralrf.integrations.killerbee as kb
 from feralrf.enums import PHY
 from feralrf.radio import DeviceInfo, Packet
@@ -82,3 +84,42 @@ def test_dev_info_and_close(monkeypatch):
     assert isinstance(info, list) and len(info) == 3 and info[2] == "2.0.0"
     a.close()
     assert fr.disconnected
+
+
+def test_set_channel_validates_and_sets_phy(monkeypatch):
+    fr = FakeRadio()
+    a = _adapter(monkeypatch, fr)
+    a.set_channel(20)
+    assert fr.phy == PHY.IEEE_802_15_4 and fr.channel == 20 and a._channel == 20
+    with pytest.raises(Exception):
+        a.set_channel(99)
+
+
+def test_sniffer_on_starts_rx(monkeypatch):
+    fr = FakeRadio()
+    a = _adapter(monkeypatch, fr)
+    a.sniffer_on(15)
+    assert fr.phy == PHY.IEEE_802_15_4 and fr.channel == 15 and fr.rx is True
+
+
+def test_pnext_maps_packet_dict(monkeypatch):
+    fr = FakeRadio()
+    fr.queue.append(
+        Packet(
+            timestamp_us=7, channel=15, rssi_dbm=-61, lqi=100, crc_ok=True, data=b"\x03\x08\xff\xff"
+        )
+    )
+    a = _adapter(monkeypatch, fr)
+    a.sniffer_on(15)
+    pkt = a.pnext(timeout=200)
+    assert pkt["bytes"] == b"\x03\x08\xff\xff"
+    assert pkt["validcrc"] is True
+    assert pkt["rssi"] == -61 and pkt["dbm"] == -61
+    assert pkt["location"] is None
+    assert pkt[0] == b"\x03\x08\xff\xff" and pkt[1] is True and pkt[2] == -61
+
+
+def test_pnext_none_on_empty(monkeypatch):
+    a = _adapter(monkeypatch)
+    a.sniffer_on(11)
+    assert a.pnext(timeout=10) is None

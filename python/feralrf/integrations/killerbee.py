@@ -3,6 +3,7 @@
 `killerbee` is an OPTIONAL dependency. It is imported lazily via _kbcaps()
 so importing feralrf never requires killerbee to be installed.
 """
+
 import time
 from datetime import datetime
 from typing import Optional
@@ -54,3 +55,36 @@ class KillerBeeFeralRF:
             self.radio.disconnect()
         except Exception:
             pass
+
+    def set_channel(self, channel, page=0):
+        if not (11 <= channel <= 26):
+            raise Exception("channel %r out of range 11-26" % channel)
+        self.radio.set_phy(PHY.IEEE_802_15_4, channel)
+        self.radio.set_channel(channel)
+        self._channel, self._page = channel, page
+
+    def sniffer_on(self, channel=None, page=0):
+        if channel is not None:
+            self.set_channel(channel, page)
+        elif self._channel is None:
+            self.set_channel(11)
+        self.radio.start_rx()
+
+    def sniffer_off(self):
+        self.radio.stop_rx()
+
+    def pnext(self, timeout=100):
+        pkt = self.radio.read_one_packet(timeout=timeout / 1000.0)
+        if pkt is None:
+            return None
+        return {
+            0: pkt.data,
+            1: pkt.crc_ok,
+            2: pkt.rssi_dbm,
+            "bytes": pkt.data,
+            "validcrc": pkt.crc_ok,
+            "rssi": pkt.rssi_dbm,
+            "dbm": pkt.rssi_dbm,
+            "location": None,
+            "datetime": datetime.utcnow(),
+        }

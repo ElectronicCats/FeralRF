@@ -19,6 +19,7 @@ import sys
 import time
 from typing import Optional
 
+from feralrf.exceptions import ConnectionError, FeralRFError, TimeoutError
 from feralrf.integrations.killerbee import KillerBeeFeralRF
 
 DLT_IEEE802_15_4 = 195
@@ -143,6 +144,15 @@ def main() -> int:
         print()
         ok(f"stopped by user, packets={count}")
         return 0
+    except ConnectionError as exc:
+        fail(f"Connection error: {exc}")
+        return 3
+    except TimeoutError as exc:
+        fail(f"Timeout waiting for response: {exc}")
+        return 4
+    except FeralRFError as exc:
+        fail(f"Protocol/command error: {exc}")
+        return 5
     except Exception as exc:
         fail(f"Unexpected error: {exc}")
         return 6
@@ -150,8 +160,14 @@ def main() -> int:
         if pcap is not None:
             pcap.close()
         if kb is not None:
-            kb.sniffer_off()
-            kb.close()
+            try:
+                kb.sniffer_off()
+            except Exception:
+                pass
+            try:
+                kb.close()
+            except Exception:
+                pass
 
 
 if __name__ == "__main__":

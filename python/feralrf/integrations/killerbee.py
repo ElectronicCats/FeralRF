@@ -88,3 +88,22 @@ class KillerBeeFeralRF:
             "location": None,
             "datetime": datetime.utcnow(),
         }
+
+    def inject(self, packet, channel=None, count=1, delay=0, page=0):
+        if channel is not None:
+            self.set_channel(channel, page)
+        mpdu = packet[:-2] if len(packet) >= 5 else packet  # RF core appends FCS
+        if len(mpdu) > 125:
+            raise Exception("frame too long (%d > 125)" % len(mpdu))
+        for i in range(count):
+            self.radio.transmit_frame(mpdu)
+            if delay and i < count - 1:
+                time.sleep(delay)
+
+    def jammer_on(self, channel=None, page=0):
+        ch = channel if channel is not None else (self._channel or 11)
+        self.set_channel(ch, page)
+        self.radio.start_jam(channel=ch, duration_ms=30000)
+
+    def jammer_off(self, channel=None, page=0):
+        self.radio.stop_jam()

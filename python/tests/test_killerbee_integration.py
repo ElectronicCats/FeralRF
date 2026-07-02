@@ -123,3 +123,21 @@ def test_pnext_none_on_empty(monkeypatch):
     a = _adapter(monkeypatch)
     a.sniffer_on(11)
     assert a.pnext(timeout=10) is None
+
+
+def test_inject_strips_fcs_and_repeats(monkeypatch):
+    fr = FakeRadio()
+    a = _adapter(monkeypatch, fr)
+    frame_with_fcs = b"\x01\x08\x00\xff\xff\xff\xff\xaa\xbb"  # last 2 = FCS
+    a.inject(frame_with_fcs, channel=11, count=2)
+    assert fr.channel == 11
+    assert fr.tx == [b"\x01\x08\x00\xff\xff\xff\xff", b"\x01\x08\x00\xff\xff\xff\xff"]
+
+
+def test_jammer_on_off_maps_to_feralrf(monkeypatch):
+    fr = FakeRadio()
+    a = _adapter(monkeypatch, fr)
+    a.jammer_on(20)
+    assert fr.jam_ch == 20
+    a.jammer_off()
+    assert fr.jam_stopped is True

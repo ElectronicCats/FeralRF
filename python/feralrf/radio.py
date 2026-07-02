@@ -362,17 +362,87 @@ class Radio:
             raise ConnectionError(f"Failed to connect to {self.port}: {e}")
 
     def _get_shell_port(self) -> str:
-        """Derive RP2040 shell port from bridge port (offset +2)."""
+        """Derive the RP2040 shell/console port from the bridge port.
+
+        Two strategies are tried, in order:
+
+        1. list_ports sibling match: enumerate
+           ``serial.tools.list_ports.comports()`` and look for the other
+           CDC-ACM interface belonging to the *same physical device* as
+           the bridge port -- matched by USB ``serial_number`` (preferred)
+           or, failing that, by the ``location`` USB-path prefix (same
+           bus/port, different interface number). If exactly one such
+           sibling exists, it is unambiguously the shell port. This is
+           required on macOS, where CDC devices enumerate as
+           ``/dev/cu.usbmodem<serial><iface>`` and the trailing digits are
+           not a sequential index, so a numeric offset cannot work.
+        2. Trailing-number offset (+2): the historical Linux ``ttyACM``
+           behavior (``/dev/ttyACM0`` -> ``/dev/ttyACM2``), kept as a
+           fallback when list_ports can't disambiguate (e.g. siblings
+           don't expose a shared serial_number/location, or list_ports
+           itself is unavailable/empty). This preserves existing Linux
+           behavior unchanged.
+
+        CAVEAT: the exact CatSniffer USB CDC-interface layout on macOS has
+        not been verified against real hardware -- the sibling-match
+        heuristic above is a best-effort guess at which interface is the
+        shell/console. reset_device() already treats a wrong/unreachable
+        shell port as non-fatal (the reset step is simply skipped), so a
+        wrong guess here degrades to "no reset" -- the same outcome as
+        today -- rather than causing a crash.
+        """
         import re
 
         if self.port is None:
             raise ConnectionError("Cannot derive shell port without an active bridge port")
+
+        sibling = self._find_shell_port_sibling()
+        if sibling is not None:
+            return sibling
 
         m = re.search(r"(\d+)$", self.port)
         if m:
             base_num = int(m.group(1))
             return self.port[: m.start(1)] + str(base_num + 2)
         raise ConnectionError(f"Cannot derive shell port from {self.port}")
+
+    def _find_shell_port_sibling(self) -> Optional[str]:
+        """Find the bridge port's sibling CDC interface via list_ports.
+
+        Returns the ``device`` path of the single other port that shares
+        the bridge port's ``serial_number`` or ``location`` USB-path
+        prefix, or None if no such port exists, list_ports can't be
+        queried, or the match is ambiguous (more than one candidate).
+        """
+        try:
+            ports = list(serial.tools.list_ports.comports())
+        except Exception:
+            return None
+
+        bridge = next((p for p in ports if getattr(p, "device", None) == self.port), None)
+        if bridge is None:
+            return None
+
+        bridge_serial = getattr(bridge, "serial_number", None)
+        bridge_location = getattr(bridge, "location", None)
+        bridge_prefix = bridge_location.split(":", 1)[0] if bridge_location else None
+
+        def is_sibling(p) -> bool:
+            if p.device == self.port:
+                return False
+            if bridge_serial and getattr(p, "serial_number", None) == bridge_serial:
+                return True
+            p_location = getattr(p, "location", None)
+            if bridge_prefix and p_location and p_location.split(":", 1)[0] == bridge_prefix:
+                return True
+            return False
+
+        # De-duplicate while preserving order, in case a port matches both
+        # the serial_number and location checks.
+        siblings = list(dict.fromkeys(p.device for p in ports if is_sibling(p)))
+        if len(siblings) == 1:
+            return siblings[0]
+        return None
 
     def reset_device(self, wait: float = 1.5) -> None:
         """Power-cycle the CC1352 via RP2040 shell reset pin.

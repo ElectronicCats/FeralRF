@@ -92,29 +92,31 @@ def test_construct_reports_capabilities(monkeypatch):
     assert a.check_capability(StubCaps.FREQ_2400)
 
 
-def test_reset_on_init_default_power_cycles(monkeypatch):
+def test_reset_default_off(monkeypatch):
+    # Default is reset_on_init=False: on real hardware the reset disrupts the
+    # CC1352 (2026-07-02 bench), so it must not run unless opted in.
     monkeypatch.setattr(kb, "_kbcaps", lambda: StubCaps)
     fr = FakeRadio()
-    kb.KillerBeeFeralRF(dev="/dev/fake", radio=fr)  # reset_on_init defaults True
+    kb.KillerBeeFeralRF(dev="/dev/fake", radio=fr)  # reset_on_init defaults False
+    assert fr.reset_count == 0
+    assert fr.connected is False
+
+
+def test_reset_on_init_opt_in(monkeypatch):
+    monkeypatch.setattr(kb, "_kbcaps", lambda: StubCaps)
+    fr = FakeRadio()
+    kb.KillerBeeFeralRF(dev="/dev/fake", radio=fr, reset_on_init=True)
     assert fr.connected is True
     assert fr.reset_count == 1
     assert fr.reset_before_connect is False  # connect() runs before reset_device()
-
-
-def test_reset_on_init_disabled(monkeypatch):
-    monkeypatch.setattr(kb, "_kbcaps", lambda: StubCaps)
-    fr = FakeRadio()
-    kb.KillerBeeFeralRF(dev="/dev/fake", radio=fr, reset_on_init=False)
-    assert fr.reset_count == 0
-    assert fr.connected is False
 
 
 def test_reset_failure_is_swallowed(monkeypatch):
     monkeypatch.setattr(kb, "_kbcaps", lambda: StubCaps)
     fr = FakeRadio()
     fr.reset_raises = True  # e.g. no RP2040 shell port
-    # Construction must still succeed (falls through to a plain init).
-    a = kb.KillerBeeFeralRF(dev="/dev/fake", radio=fr)
+    # With reset opted in, a reset failure must not break construction.
+    a = kb.KillerBeeFeralRF(dev="/dev/fake", radio=fr, reset_on_init=True)
     assert a.check_capability(StubCaps.INJECT)
     assert a._info.firmware_version == "2.0.0"
 

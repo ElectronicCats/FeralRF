@@ -26,16 +26,17 @@ class KillerBeeFeralRF:
     def list_devices():
         return Radio.list_devices()
 
-    def __init__(self, dev, radio: Optional[Radio] = None, reset_on_init: bool = True):
+    def __init__(self, dev, radio: Optional[Radio] = None, reset_on_init: bool = False):
         self.dev = dev
         self.radio = radio if radio is not None else Radio(port=dev)
-        # A stale PHY state (e.g. the stick left in BLE mode) can make the first
-        # IEEE 802.15.4 session misbehave — FeralRF documents that IEEE<->BLE
-        # switches need a device reset between them (see f9-partial). Best-effort
-        # power-cycle to a clean boot state before selecting the IEEE PHY. This
-        # needs the RP2040 shell port; if it is unavailable the reset raises and
-        # we fall through to a plain init. Pass reset_on_init=False to skip
-        # (e.g. when the caller manages the radio lifecycle).
+        # Opt-in power-cycle before selecting the IEEE PHY. Rationale: a stale PHY
+        # state (e.g. the stick left in BLE mode) can make the first IEEE session
+        # misbehave (FeralRF f9-partial: IEEE<->BLE needs a reset between modes).
+        # DEFAULT OFF: on real hardware (2026-07-02 bench, stock RP2040 passthrough)
+        # the reset_device() boot/exit cycle disrupts the CC1352 and the following
+        # init() times out — verified that a plain init works reliably while the
+        # reset breaks it. Enable only with FeralRF's own RP2040 firmware, or
+        # power-cycle the stick manually if you need a guaranteed-clean PHY.
         if reset_on_init:
             try:
                 self.radio.connect()

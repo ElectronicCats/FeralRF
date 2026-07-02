@@ -15,6 +15,20 @@ class FakeRadio:
         self.jam_stopped = False
         self.queue = []
         self.disconnected = False
+        self.connected = False
+        self.reset_count = 0
+        self.reset_before_connect = False
+        self.reset_raises = False
+
+    def connect(self):
+        self.connected = True
+
+    def reset_device(self, wait=1.5):
+        if not self.connected:
+            self.reset_before_connect = True
+        if self.reset_raises:
+            raise RuntimeError("no shell port")
+        self.reset_count += 1
 
     def init(self):
         return DeviceInfo(firmware_version="2.0.0", capabilities=0x01, serial="00" * 8)
@@ -76,6 +90,33 @@ def test_construct_reports_capabilities(monkeypatch):
     assert a.check_capability(StubCaps.INJECT)
     assert a.check_capability(StubCaps.PHYJAM)
     assert a.check_capability(StubCaps.FREQ_2400)
+
+
+def test_reset_on_init_default_power_cycles(monkeypatch):
+    monkeypatch.setattr(kb, "_kbcaps", lambda: StubCaps)
+    fr = FakeRadio()
+    kb.KillerBeeFeralRF(dev="/dev/fake", radio=fr)  # reset_on_init defaults True
+    assert fr.connected is True
+    assert fr.reset_count == 1
+    assert fr.reset_before_connect is False  # connect() runs before reset_device()
+
+
+def test_reset_on_init_disabled(monkeypatch):
+    monkeypatch.setattr(kb, "_kbcaps", lambda: StubCaps)
+    fr = FakeRadio()
+    kb.KillerBeeFeralRF(dev="/dev/fake", radio=fr, reset_on_init=False)
+    assert fr.reset_count == 0
+    assert fr.connected is False
+
+
+def test_reset_failure_is_swallowed(monkeypatch):
+    monkeypatch.setattr(kb, "_kbcaps", lambda: StubCaps)
+    fr = FakeRadio()
+    fr.reset_raises = True  # e.g. no RP2040 shell port
+    # Construction must still succeed (falls through to a plain init).
+    a = kb.KillerBeeFeralRF(dev="/dev/fake", radio=fr)
+    assert a.check_capability(StubCaps.INJECT)
+    assert a._info.firmware_version == "2.0.0"
 
 
 def test_dev_info_and_close(monkeypatch):

@@ -26,11 +26,24 @@ class KillerBeeFeralRF:
     def list_devices():
         return Radio.list_devices()
 
-    def __init__(self, dev, radio: Optional[Radio] = None):
+    def __init__(self, dev, radio: Optional[Radio] = None, reset_on_init: bool = True):
         self.dev = dev
         self.radio = radio if radio is not None else Radio(port=dev)
+        # A stale PHY state (e.g. the stick left in BLE mode) can make the first
+        # IEEE 802.15.4 session misbehave — FeralRF documents that IEEE<->BLE
+        # switches need a device reset between them (see f9-partial). Best-effort
+        # power-cycle to a clean boot state before selecting the IEEE PHY. This
+        # needs the RP2040 shell port; if it is unavailable the reset raises and
+        # we fall through to a plain init. Pass reset_on_init=False to skip
+        # (e.g. when the caller manages the radio lifecycle).
+        if reset_on_init:
+            try:
+                self.radio.connect()
+                self.radio.reset_device()
+            except Exception:
+                pass
         self._info = self.radio.init()
-        self.dev = self.radio.port
+        self.dev = self.radio.port or dev
         self._channel: Optional[int] = None
         self._page = 0
         KBCapabilities = _kbcaps()

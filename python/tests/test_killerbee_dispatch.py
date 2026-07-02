@@ -24,6 +24,12 @@ class FakeRadio:
         self.port = port
         self.channel = None
 
+    def connect(self):
+        pass
+
+    def reset_device(self, wait=1.5):
+        pass
+
     def init(self):
         return DeviceInfo(firmware_version="2.0.0", capabilities=0x01, serial="00" * 8)
 

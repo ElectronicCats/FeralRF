@@ -1,0 +1,99 @@
+diff --git a/killerbee/__init__.py b/killerbee/__init__.py
+index ac4febf..b7ad9e5 100644
+--- a/killerbee/__init__.py
++++ b/killerbee/__init__.py
+@@ -13,6 +13,7 @@ from .kbutils import isIpAddr
+ from .kbutils import search_usb
+ from .kbutils import isSerialDeviceString
+ from .kbutils import issl_nodetest
++from .kbutils import iscatsniffer
+ from .kbutils import issl_beehive
+ from .kbutils import iszigduino
+ from .kbutils import isfreakduino
+@@ -99,6 +100,9 @@ class KillerBee:
+             elif hardware == "sewio":
+                 from .dev_sewio import SEWIO
+                 self.driver = SEWIO(dev=device)
++            elif hardware == "feralcat":
++                from .dev_feralcat import FERALCAT
++                self.driver = FERALCAT(device)
+ 
+         else:
+             if self.driver is None:
+@@ -158,6 +162,9 @@ class KillerBee:
+                 if self.dev is not None:
+                     if (self.dev == gps_devstring):
+                         pass
++                    elif (DEV_ENABLE_CATSNIFFER and iscatsniffer(self.dev)):
++                        from .dev_feralcat import FERALCAT
++                        self.driver = FERALCAT(self.dev)
+                     elif (DEV_ENABLE_SL_NODETEST and issl_nodetest(self.dev)):
+                         from .dev_sl_nodetest import SL_NODETEST
+                         self.driver = SL_NODETEST(self.dev)
+diff --git a/killerbee/config.py b/killerbee/config.py
+index a4189cb..362bd59 100644
+--- a/killerbee/config.py
++++ b/killerbee/config.py
+@@ -23,3 +23,4 @@ DEV_ENABLE_TELOSB: bool       = False
+ DEV_ENABLE_APIMOTE2: bool     = True
+ DEV_ENABLE_APIMOTE1: bool     = False
+ DEV_ENABLE_BUMBLEBEE: bool    = False
++DEV_ENABLE_CATSNIFFER: bool   = True
+diff --git a/killerbee/dev_feralcat.py b/killerbee/dev_feralcat.py
+new file mode 100644
+index 0000000..8f91338
+--- /dev/null
++++ b/killerbee/dev_feralcat.py
+@@ -0,0 +1,13 @@
++"""KillerBee driver for the FeralRF CatSniffer (CC1352).
++
++The implementation lives in the feralrf package
++(feralrf.integrations.killerbee.KillerBeeFeralRF) so it is versioned with the
++firmware/host stack. This module exposes it under KillerBee's dev_* driver
++convention as FERALCAT, which killerbee/__init__.py instantiates as
++FERALCAT(device).
++
++Requires: pip install feralrf   (or feralrf[killerbee])
++"""
++from feralrf.integrations.killerbee import KillerBeeFeralRF as FERALCAT
++
++__all__ = ["FERALCAT"]
+diff --git a/killerbee/kbutils.py b/killerbee/kbutils.py
+index a8df149..e35a24c 100644
+--- a/killerbee/kbutils.py
++++ b/killerbee/kbutils.py
+@@ -273,6 +273,8 @@ def devlist(vendor: Optional[Any]=None, product: Optional[Any]=None, gps: Option
+     for serialdev in get_serial_ports(include=include):
+         if serialdev == gps_devstring:
+             continue
++        elif (DEV_ENABLE_CATSNIFFER and iscatsniffer(serialdev)):
++            devlist.append([serialdev, "FeralRF CatSniffer (CC1352)", ""])
+         elif (DEV_ENABLE_SL_NODETEST and issl_nodetest(serialdev)):
+             devlist.append([serialdev, "Silabs NodeTest", ""])
+         elif (DEV_ENABLE_SL_BEEHIVE and issl_beehive(serialdev)):
+@@ -395,6 +397,25 @@ def isgoodfetccspi(serialdev: str) -> Tuple[bool, Optional[int]]:
+     # Nothing found
+     return False, None
+ 
++def iscatsniffer(serialdev: str) -> bool:
++    '''
++    Determine if a given serial device is a FeralRF CatSniffer (CC1352).
++    Passive check via the feralrf package's device list (matches the Cat-Bridge
++    CDC, USB VID 0x1209); does NOT open the port, so it is safe to run before
++    the aggressive GoodFET probe. Returns False if feralrf is not installed.
++    @type serialdev:  String
++    @param serialdev: Path to a serial device, ex /dev/ttyACM0.
++    @rtype:   Boolean
++    '''
++    try:
++        from feralrf.integrations.killerbee import KillerBeeFeralRF
++    except Exception:
++        return False
++    try:
++        return any(d.get("port") == serialdev for d in KillerBeeFeralRF.list_devices())
++    except Exception:
++        return False
++
+ def iszigduino(serialdev: str) -> bool:
+     '''
+     Determine if a given serial device is running the GoodFET firmware with the atmel_radio application.

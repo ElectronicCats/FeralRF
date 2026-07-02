@@ -27,7 +27,9 @@ FeralRF's IEEE 802.15.4 path (`radio_if.c`, `smartrf_ieee_15_4_0.c`) is already 
 - Adapter lives **inside FeralRF** as `feralrf/integrations/killerbee.py` (new subpackage). KillerBee is an **optional** dependency (`pip install feralrf[killerbee]`), imported lazily so core FeralRF never hard-depends on it.
 - **Jamming is wired**: `jammer_on/off` → `Radio.start_jam/stop_jam` (FeralRF-experimental), and `PHYJAM` is advertised.
 
-**Out:** any firmware change; bad-FCS *injection* (RF core appends valid FCS — deferred); reactive jamming; sub-GHz/other pages; upstreaming a maintained `dev_*.py` into KillerBee (only a documented one-line shim is provided).
+**Out:** any firmware change; bad-FCS *injection* (RF core appends valid FCS — deferred); reactive jamming; sub-GHz/other pages.
+
+**KillerBee-side integration (built + tested 2026-07-01):** the `dev_feralcat.py` shim, `kbutils.iscatsniffer()` probe + `devlist()` branch, `DEV_ENABLE_CATSNIFFER` flag, and the two `__init__.py` dispatch branches are implemented against a real KillerBee clone. Applyable patch: `docs/killerbee-catsniffer.patch`; install + attack runbook: `docs/killerbee-catsniffer.md`. Verified by `python/tests/test_killerbee_dispatch.py` (skips when killerbee absent). Remaining is on-hardware RF validation + the live key-capture.
 
 ## Architecture
 

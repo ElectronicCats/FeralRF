@@ -124,8 +124,12 @@ COBS-framed binary con CRC16-CCITT. Detalles completos en [`protocol.md`](protoc
 
 Frame structure:
 ```
-[COBS-encoded]: [LEN(2) | CMD/RSP(1) | SEQ(1) | PAYLOAD(N) | CRC16(2)]
+[COBS-encoded]: [CMD/RSP(1) | SEQ(1) | LEN(2, LE) | PAYLOAD(N) | CRC16(2, LE)]
 [0x00 delimiter]
+
+Campos multibyte en little-endian. CRC16-CCITT (poly 0x1021, init 0xFFFF)
+calculado sobre CMD/RSP + SEQ + LEN + PAYLOAD. Fuente de verdad:
+`python/feralrf/protocol.py` y `firmware/cc1352/src/protocol.c` (identicos).
 ```
 
 | ID range | Tipo |

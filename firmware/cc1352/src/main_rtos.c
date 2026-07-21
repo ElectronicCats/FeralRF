@@ -39,7 +39,6 @@
 #endif
 
 /* FeralRF app */
-#include "ble_conn_mgr.h"
 #include "command_processor.h"
 #include "config.h"
 #include "control_task.h"
@@ -121,12 +120,7 @@ static void UartTask_taskFxn(UArg a0, UArg a1) {
     CommandProcessor_init();
     HostIFTask_init();
 
-    /* UART polling loop.
-     *
-     * BleConnMgr_poll() used to live here too, but Task_sleep() inside
-     * it starved HostIFTask_poll() during live BLE connections. It now
-     * runs in RfTask, aligned with Sniffle's RadioTask model.
-     */
+    /* UART polling loop. */
     uint32_t led_counter = 0;
     while (1) {
         HostIFTask_poll();
@@ -179,13 +173,6 @@ static void RfTask_taskFxn(UArg a0, UArg a1) {
     DataTask_init();
     while (1) {
         DataTask_poll();
-
-        /* Run BLE central connection events here (not in UartTask).
-         * BleConnMgr_poll() sleeps up to one conn interval per event;
-         * keeping it off UartTask prevents host-command starvation. */
-        if (BleConnMgr_isRunning()) {
-            BleConnMgr_poll();
-        }
 
         Task_yield();
     }

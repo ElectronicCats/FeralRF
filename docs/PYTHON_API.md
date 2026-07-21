@@ -1,6 +1,6 @@
 # FeralRF Python API
 
-Fecha: 2026-04-08
+Fecha: 2026-07-20
 
 Este documento resume la API publica recomendada del paquete `feralrf` y su estado actual.
 
@@ -49,9 +49,6 @@ Metodos estables de `Radio`:
 - `stop_transmit()`
 - `get_stats()`
 - `configure_prop()`
-- `set_ble_addr()`
-- `set_ble_addr_str()`
-- `set_ble_scan_mode()`
 - `set_adv_hop()`
 - `reset_device()`
 
@@ -72,9 +69,12 @@ Razon:
 No se consideran parte de la API publica final todavia:
 
 - spectrum / RSSI scan
-- GATT discovery
-- BLE initiator
 - helpers ofensivos IEEE 802.15.4 y Sub-1GHz aun no implementados
+
+El stack de protocolo BLE (conexion, GATT discovery, BLE initiator, scan
+activo/pasivo) fue removido de firmware y de la API Python (2026-07-20) y no
+va a reimplementarse aqui: `Sniffle` cubre ese caso de uso. BLE PHY se
+mantiene solo para captura cruda (ver `docs/ARCHITECTURE.md`).
 
 Comandos reservados o pendientes hoy:
 
@@ -88,9 +88,6 @@ Comandos reservados o pendientes hoy:
 
 - Para sesiones normales:
 - `init() -> set_phy() -> set_channel()/configure_prop() -> start_rx()/transmit_*()`
-
-- Para BLE active scan:
-- llamar `set_ble_scan_mode(active=True)` antes de `start_rx()`
 
 - Para modo propietario (GFSK/FSK/OOK/MSK):
 - `set_phy(PHY.PROPRIETARY_GFSK)` seguido de `configure_prop(frequency_hz, mod_type, ...)`

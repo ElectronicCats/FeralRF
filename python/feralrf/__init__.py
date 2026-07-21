@@ -1,13 +1,13 @@
 """
 FeralRF - Python API for CatSniffer RF pentesting
 
-Supports: BLE, IEEE 802.15.4 (Zigbee/Thread), Sub-1GHz, OOK, GFSK/FSK
+Supports: IEEE 802.15.4 (Zigbee/Thread), Sub-1GHz, OOK, GFSK/FSK, plus raw
+BLE-PHY capture (no BLE protocol stack; use Sniffle for BLE).
 
 Public API status:
-- Stable: session control, RX/TX multi-PHY, proprietary configuration,
-  BLE scan configuration, OOK recovery.
+- Stable: session control, RX/TX multi-PHY, proprietary configuration, OOK recovery.
 - Experimental: jamming helpers.
-- Pending: spectrum helpers, GATT/initiator workflows.
+- Pending: spectrum helpers.
 """
 
 from feralrf.enums import (
@@ -28,19 +28,14 @@ from feralrf.exceptions import (
 )
 from feralrf.presets import PROP_PRESETS
 from feralrf.radio import (
-    ConnectionResult,
-    ConnectionStatus,
     DeviceInfo,
     DeviceStats,
-    GattCharacteristic,
-    GattDiscoveryResult,
-    GattService,
     Packet,
     Radio,
     RxStreamError,
 )
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 __author__ = "Electronic Cats"
 
 __all__ = [
@@ -48,11 +43,6 @@ __all__ = [
     "Packet",
     "DeviceInfo",
     "DeviceStats",
-    "ConnectionResult",
-    "ConnectionStatus",
-    "GattService",
-    "GattCharacteristic",
-    "GattDiscoveryResult",
     "RxStreamError",
     "PHY",
     "Command",

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-FeralRF is universal firmware plus a Python host API for CatSniffer hardware (CC1352P7 + RP2040). It provides RF sniffing, TX/RX, jamming, spectrum work, BLE central/GATT, and crypto helpers across BLE 5.x, IEEE 802.15.4 (Zigbee/Thread), and Sub-1GHz (868/915 MHz), plus SX1262 LoRa on the RP2040 side.
+FeralRF is universal firmware plus a Python host API for CatSniffer hardware (CC1352P7 + RP2040). It provides RF sniffing, TX/RX, jamming, spectrum work, and crypto helpers across raw BLE PHY capture (BLE 5.x; protocol/connection handling is out of scope here - Sniffle covers that), IEEE 802.15.4 (Zigbee/Thread), and Sub-1GHz (868/915 MHz), plus SX1262 LoRa on the RP2040 side.
 
 License: GPL-3.0. Authoritative design doc: `docs/ARCHITECTURE.md` (read it before touching firmware or the wire protocol).
 
@@ -59,7 +59,6 @@ cd python && pytest                 # unit tests, no hardware (asyncio_mode=auto
 pytest --cov=feralrf
 pytest tests/test_protocol.py -k crc16    # single file / single test
 pytest -m hardware                  # requires a connected FeralRF device
-pytest -m hardware_ble              # requires a device AND a real BLE peripheral in range
 ```
 
 Beyond unit tests: `python/examples/*.py` are official smoke/release-gate scripts run against real hardware; `python/examples/lab/*` are manual/OTA/soak/demo workflows. The end-to-end KillerBee-on-Linux runbook (software tests -> firmware -> KillerBee CLI -> key-capture attack) is `docs/TESTING-ON-LINUX.md`.
@@ -70,8 +69,8 @@ Layered; do not skip layers (rule in `docs/ARCHITECTURE.md` section 4):
 
 - L1 transport: `protocol.py` (COBS + CRC16-CCITT + pyserial).
 - L2 commands: `commands.py`, `_responses.py` (frame builders / response parsing).
-- L3 core (the stable public API): `radio.py` (the `Radio` class - one big class exposing everything: `set_phy`, `start_rx`/`read_packets`, `transmit*`, BLE `scan_ble_active`/`advertise_*`/`ble_connect`/`gatt_*`/`follow_connection`, `configure_prop`, TX test modes, and AES/SHA/ECDH/ECDSA crypto), plus `enums.py`, `presets.py`, `exceptions.py`.
-- L4 features: `attacks/`, `ble/`, `emulation/` (BLE peripheral, IEEE154, OOK, sub-1GHz device emulation), `_jamming.py`, `_spectrum.py`.
+- L3 core (the stable public API): `radio.py` (the `Radio` class - one big class exposing everything: `set_phy`, `start_rx`/`read_packets`, `transmit*`, `configure_prop`, TX test modes, and AES/SHA/ECDH/ECDSA crypto), plus `enums.py`, `presets.py`, `exceptions.py`. BLE PHY raw capture stays (`PHY.BLE_1M`/`BLE_2M`/`BLE_CODED_S8`/`BLE_CODED_S2`); the BLE connection/GATT protocol stack was removed 2026-07-20 (Sniffle handles BLE).
+- L4 features: `emulation/` (IEEE154, OOK, sub-1GHz device emulation), `_jamming.py`, `_spectrum.py`.
 - Integrations: `integrations/killerbee.py` - exposes a CatSniffer as a KillerBee IEEE 802.15.4 device (`killerbee` is an optional, lazily imported dependency). Note `reset_on_init` defaults to False: the reset cycle breaks `init()` on stock RP2040 passthrough firmware and is only safe with FeralRF's own RP2040 build.
 
 `feralrf/__init__.py` marks API stability tiers (STABLE / EXPERIMENTAL / PENDING command sets). Public surface is `Radio` + dataclasses; features build on L3 and never bypass to L2/L1.
@@ -80,12 +79,12 @@ Layered; do not skip layers (rule in `docs/ARCHITECTURE.md` section 4):
 
 COBS-framed binary with CRC16-CCITT (poly 0x1021). The framing implemented in `python/feralrf/protocol.py` (`build_frame`, `crc16_ccitt`) is the source of truth; `docs/protocol.md` documents it. The authoritative command/response IDs are the `Command` and `Response` IntEnums in `python/feralrf/enums.py` and the firmware's `command_processor.c` - keep those two in sync when adding a command.
 
-- Command IDs (host -> device): `0x01`-`0x62`.
+- Command IDs (host -> device): `0x01`-`0x62`, not contiguous. Several IDs in the `0x09`-`0x52` range were the BLE connection/GATT protocol commands (`SET_BLE_ADDR`, `SET_BLE_SCAN_MODE`, `CONNECT`, `GATT_*`, `FOLLOW_*`, `BLE_ADV_LEGACY`, etc.) and were retired when the BLE stack was removed 2026-07-20; those numeric IDs are not reused.
 - Response IDs (device -> host): `0x80`-`0xFF`. Key ones: `ACK 0x80`, `ERROR 0x81`, `RX_PACKET 0x90`.
 
 ## CC1352 firmware layout (`firmware/cc1352/src/`)
 
-Layered radio engine (full table in `docs/ARCHITECTURE.md` section 2). Notable modules: `radio_if.c`/`phy_manager.c` (PHY abstraction + SmartRF configs), `ll_manager.c`/`ble_conn*.c`/`att_client.c`/`csa2.c` (BLE link layer, connection, GATT client), `host_if.c`/`protocol.c`/`command_processor.c` (UART + COBS + dispatch), `control_task.c`/`data_task.c` (TI-RTOS tasks).
+Layered radio engine (full table in `docs/ARCHITECTURE.md` section 2). Notable modules: `radio_if.c`/`phy_manager.c` (PHY abstraction + SmartRF configs), `ll_manager.c` (kept RX PDU classifier - identifies ADV/SCAN/CONNECT/DATA kinds from raw BLE captures; not part of the deleted protocol stack), `host_if.c`/`protocol.c`/`command_processor.c` (UART + COBS + dispatch), `control_task.c`/`data_task.c` (TI-RTOS tasks). The BLE connection/GATT stack (`ble_conn.c`, `ble_conn_mgr.c`, `ble_conn_pdu.c`, `ll_follower.c`, `att_client.c`, `csa2.c`) was deleted 2026-07-20; BLE PHY (`smartrf_ble5_0.c`) and `crypto_engine.c` are unaffected and stay.
 
 ### Critical RF invariants (load-bearing - violating these causes silent hangs)
 

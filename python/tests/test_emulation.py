@@ -6,7 +6,7 @@ TestIeee154Personalities / TestSub1GhzPersonalities / TestOokPersonalities
 classes below.
 """
 
-# Captured from real Soundcore Boom 2 — see demo_emulate_soundcore.py
+# Captured from a real Soundcore Boom 2 Fast Pair advertisement
 ANKER_PAYLOAD = bytes.fromhex("02010a0505daf57b010ffff42b7d355a0e0000000000000000")
 FASTPAIR_DISCOVERABLE = bytes.fromhex("020af606162cfe8f95f8")
 

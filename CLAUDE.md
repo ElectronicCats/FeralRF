@@ -4,123 +4,123 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-FeralRF is a universal firmware for CatSniffer hardware (CC1352P + RP2040) providing RF capabilities: sniffing, TX/RX, jamming, and spectrum analysis for BLE, Zigbee, and Sub-1GHz (868/915 MHz).
+FeralRF is universal firmware plus a Python host API for CatSniffer hardware (CC1352P7 + RP2040). It provides RF sniffing, TX/RX, jamming, spectrum work, and crypto helpers across raw BLE PHY capture (BLE 5.x; protocol/connection handling is out of scope here - Sniffle covers that), IEEE 802.15.4 (Zigbee/Thread), and Sub-1GHz (868/915 MHz), plus SX1262 LoRa on the RP2040 side.
 
-**License:** GPL-3.0
+License: GPL-3.0. Authoritative design doc: `docs/ARCHITECTURE.md` (read it before touching firmware or the wire protocol).
 
-## Architecture
+## The three build targets
 
 ```
-HOST (Python API) <-> RP2040 (USB Bridge) <-> CC1352P (Radio Engine)
+HOST (Python: feralrf)  <->  RP2040 (Zephyr USB bridge)  <->  CC1352P7 (TI-RTOS 7 radio engine)
 ```
 
-- **CC1352P**: Radio operations, COBS protocol, command processing, TI-RTOS 7
-- **RP2040**: USB-CDC bridge, timestamping, CC1352 reset monitoring, flow control
-- **Python API**: `feralrf` package, async/sync interfaces, pyserial-asyncio
+Each target has its own toolchain and lives in its own tree. They rarely change together.
 
-## Hardware Configuration
-
-See `hardware/PINOUT.md` for full details.
-
-### RP2040 ↔ CC1352 UART (3Mbps)
-| Signal | RP2040 | CC1352 |
-|--------|--------|--------|
-| TX | GPIO0 | DIO12 |
-| RX | GPIO1 | DIO13 |
-| RTS | GPIO2 | DIO14 |
-| CTS | GPIO3 | DIO15 |
-
-### Control & LEDs
-| Signal | RP2040 GPIO |
-|--------|-------------|
-| RESET_CC | GPIO15 |
-| LED1 | GPIO28 |
-| LED2 | GPIO27 |
-| LED3 | GPIO26 |
-
-### Notes
-- SWD not available (JTAG only on DIO16/DIO17)
-- Bootloader via UART (TI ROM BSL)
-- LEDs are active low
+- `python/feralrf/` - host API, the layer you will edit most. Pure Python, unit-testable without hardware.
+- `firmware/cc1352/` - the radio engine. C, TI-RTOS 7, TI SimpleLink SDK 8.30.01.01.
+- `firmware/rp2040/catsniffer/` - the USB bridge. C, Zephyr RTOS, board `rpi_pico`.
 
 ## Build Commands
 
+### CC1352 firmware (`firmware/cc1352/`)
+
+The TI SDK is a git submodule at `firmware/sdk/simplelink_cc13xx_cc26xx_sdk_8_30_01_01` (`git submodule update --init`). Default device variant is `CC1352P7`; `CC1352P` is also selectable via `-DDEVICE_VARIANT=`.
+
 ```bash
-# Build Docker container
-docker build -t feralrf-build -f docker/Dockerfile .
-
-# Build CC1352 firmware (requires TI SDK in firmware/sdk/)
 cd firmware/cc1352 && mkdir -p build && cd build
-cmake .. && make -j$(nproc)
+cmake .. && make -j$(nproc)   # outputs feralrf_cc1352.elf/.hex/.bin
+```
 
-# Build RP2040 firmware (Pico SDK auto-downloaded)
-cd firmware/rp2040 && mkdir -p build && cd build
-cmake .. -DPICO_SDK_PATH=../../sdk/pico-sdk && make -j$(nproc)
+Important build caveat: the open-source GitHub SDK ships only the RF core prebuilt lib. The build also links three precompiled libs (drivers, driverlib, sysbios) that come only from TI's full installer SDK. Either install that and point `-DTI_SDK_FULL=~/ti/simplelink_cc13xx_cc26xx_sdk_8_30_01_01`, or copy the three `.a`/`.lib` files into the submodule. Do NOT hardcode a machine-specific `$HOME` path in CMakeLists. The Docker image (`docker build -t feralrf-build -f docker/Dockerfile .`) provides the ARM GCC toolchain.
 
-# Build Python package
-cd python && pip install -e ".[dev]"
+Flash the `.hex` (via catnip/UART BSL). The `.bin` causes boot failures.
+
+### RP2040 firmware (`firmware/rp2040/catsniffer/`)
+
+This is a Zephyr application, NOT a Pico-SDK project. It requires an external Zephyr workspace (west + Zephyr SDK 0.17+, Zephyr ~4.1.99); there is no in-repo `west.yml`.
+
+```bash
+source ~/zephyrproject/.venv/bin/activate && export ZEPHYR_BASE=$HOME/zephyrproject/zephyr
+cd firmware/rp2040/catsniffer
+west build -b rpi_pico            # -p for a clean build; output build/zephyr/zephyr.uf2
+picotool load build/zephyr/zephyr.uf2   # or copy the uf2 to the RPI-RP2 mass-storage volume
+```
+
+### Python package (`python/`)
+
+```bash
+cd python && pip install -e ".[dev]"          # add ",killerbee" for the KillerBee integration
 ```
 
 ## Test Commands
 
 ```bash
-# Python unit tests
-cd python && source .venv/bin/activate && pytest
-
-# Python tests with coverage
+cd python && pytest                 # unit tests, no hardware (asyncio_mode=auto, testpaths=tests)
 pytest --cov=feralrf
-
-# Hardware integration tests
-pytest -m hardware
+pytest tests/test_protocol.py -k crc16    # single file / single test
+pytest -m hardware                  # requires a connected FeralRF device
 ```
 
-## Current Status
+Beyond unit tests: `python/examples/*.py` are official smoke/release-gate scripts run against real hardware; `python/examples/lab/*` are manual/OTA/soak/demo workflows. The end-to-end KillerBee-on-Linux runbook (software tests -> firmware -> KillerBee CLI -> key-capture attack) is `docs/TESTING-ON-LINUX.md`.
 
-**FASE 0: Completada ✅**
+## Python API structure (`python/feralrf/`)
 
-| Component | Status | Output |
-|-----------|--------|--------|
-| RP2040 firmware | ✅ | feralrf_rp2040.uf2 (46KB) |
-| CC1352 firmware | ✅ | feralrf_cc1352.elf (392B code) |
-| Python package | ✅ | 13/13 tests passing |
-| GitHub Actions | ✅ | build.yml, release.yml |
-| SDKs | ✅ | TI SDK 7.10.01.24, Pico SDK 2.0.0 |
+Layered; do not skip layers (rule in `docs/ARCHITECTURE.md` section 4):
 
-**Próximo: FASE 1 - BLE Sniffer MVP**
+- L1 transport: `protocol.py` (COBS + CRC16-CCITT + pyserial).
+- L2 commands: `commands.py`, `_responses.py` (frame builders / response parsing).
+- L3 core (the stable public API): `radio.py` (the `Radio` class - one big class exposing everything: `set_phy`, `start_rx`/`read_packets`, `transmit*`, `configure_prop`, TX test modes, and AES/SHA/ECDH/ECDSA crypto), plus `enums.py`, `presets.py`, `exceptions.py`. BLE PHY raw capture stays (`PHY.BLE_1M`/`BLE_2M`/`BLE_CODED_S8`/`BLE_CODED_S2`); the BLE connection/GATT protocol stack was removed 2026-07-20 (Sniffle handles BLE).
+- L4 features: `emulation/` (IEEE154, OOK, sub-1GHz device emulation), `_jamming.py`, `_spectrum.py`.
+- Integrations: `integrations/killerbee.py` - exposes a CatSniffer as a KillerBee IEEE 802.15.4 device (`killerbee` is an optional, lazily imported dependency). Note `reset_on_init` defaults to False: the reset cycle breaks `init()` on stock RP2040 passthrough firmware and is only safe with FeralRF's own RP2040 build.
 
-Ver `SESSION_STATE.md` para contexto completo de la sesión anterior.
+`feralrf/__init__.py` marks API stability tiers (STABLE / EXPERIMENTAL / PENDING command sets). Public surface is `Radio` + dataclasses; features build on L3 and never bypass to L2/L1.
 
-## Protocol
+## Wire Protocol
 
-COBS-framed binary protocol with CRC16-CCITT. See `PLAN_MAESTRO.md` section 3 for full command IDs and frame format.
+COBS-framed binary with CRC16-CCITT (poly 0x1021). The framing implemented in `python/feralrf/protocol.py` (`build_frame`, `crc16_ccitt`) is the source of truth; `docs/protocol.md` documents it. The authoritative command/response IDs are the `Command` and `Response` IntEnums in `python/feralrf/enums.py` and the firmware's `command_processor.c` - keep those two in sync when adding a command.
 
-Key response codes: `RSP_ACK (0x80)`, `RSP_ERROR (0x81)`, `RSP_RX_PACKET (0x90)`
+- Command IDs (host -> device): `0x01`-`0x62`, not contiguous. Several IDs in the `0x09`-`0x52` range were the BLE connection/GATT protocol commands (`SET_BLE_ADDR`, `SET_BLE_SCAN_MODE`, `CONNECT`, `GATT_*`, `FOLLOW_*`, `BLE_ADV_LEGACY`, etc.) and were retired when the BLE stack was removed 2026-07-20; those numeric IDs are not reused.
+- Response IDs (device -> host): `0x80`-`0xFF`. Key ones: `ACK 0x80`, `ERROR 0x81`, `RX_PACKET 0x90`.
 
-## Python Dependencies
+## CC1352 firmware layout (`firmware/cc1352/src/`)
 
-| Package | Purpose |
-|---------|---------|
-| pyserial | Serial communication |
-| pyserial-asyncio | Async serial support |
-| cobs | COBS encoding/decoding |
+Layered radio engine (full table in `docs/ARCHITECTURE.md` section 2). Notable modules: `radio_if.c`/`phy_manager.c` (PHY abstraction + SmartRF configs), `ll_manager.c` (kept RX PDU classifier - identifies ADV/SCAN/CONNECT/DATA kinds from raw BLE captures; not part of the deleted protocol stack), `host_if.c`/`protocol.c`/`command_processor.c` (UART + COBS + dispatch), `control_task.c`/`data_task.c` (TI-RTOS tasks). The BLE connection/GATT stack (`ble_conn.c`, `ble_conn_mgr.c`, `ble_conn_pdu.c`, `ll_follower.c`, `att_client.c`, `csa2.c`) was deleted 2026-07-20; BLE PHY (`smartrf_ble5_0.c`) and `crypto_engine.c` are unaffected and stay.
 
-## Development Phases
+### Critical RF invariants (load-bearing - violating these causes silent hangs)
 
-See `PLAN_MAESTRO.md` section 5. Current phase tracking maintained there.
+From `docs/ARCHITECTURE.md` section 5 (and the `ti-rtos-rf-cc1352` skill). Any change to `radio_if.c`/`phy_manager.c` must respect:
 
-- Phase 0: Setup (Docker, CMake, skeleton)
-- Phase 1: BLE Sniffer MVP
-- Phase 2: TX + Basic Jamming
-- Phase 3: Spectrum Analyzer
-- Phase 4: Zigbee + Multi-PHY
-- Phase 5: Reactive Jamming (<500µs target)
-- Phase 6: Sub-1GHz + Testing
-- Phase 7: Bootloader + Release
+- Exactly ONE `RF_Object` for the whole firmware. The RF driver has `N_MAX_CLIENTS=2`; a second object silently hangs `RF_open`. Share the existing handle.
+- `RF_open` runs ONCE at boot; NEVER call `RF_close` (it can deadlock on `SemaphoreP_pend`). A PHY switch is `RF_flush + RF_yield` then reconfigure, not close/reopen.
+- Use `RF_postCmd` for `CMD_FS`, never `RF_runCmd(FS)` (hangs under TI-RTOS). BLE sets frequency via the command's `.channel` field and must NOT issue `CMD_FS`; IEEE/Prop require `CMD_FS` but via `RF_postCmd`.
+- ADV TX must terminate: use `endTrigger=TRIG_REL_START` with a finite `endTime`, never `TRIG_NEVER` (that hangs `RF_runCmd`).
+
+## Hardware Configuration
+
+Full pinout in `hardware/PINOUT.md`. Verified essentials:
+
+- RP2040 <-> CC1352 UART: 921600 baud, hardware flow control OFF (`firmware/cc1352/include/config.h`: `UART_BAUD_RATE 921600`, `UART_HW_FLOW_CONTROL 0`). TX=DIO13, RX=DIO12; RTS/CTS pins (DIO14/15) exist but flow control is disabled in firmware.
+- CC1352 status LED: DIO24. RESET_CC driven from the RP2040 (GPIO15). SWD not available (JTAG only on DIO16/17); bootloader via UART ROM BSL.
+- RP2040 enumerates as three USB CDC-ACM ports: Cat-Bridge (transparent CC1352 passthrough @ 921600), Cat-LoRa (SX1262 stream/command), Cat-Shell (config shell @ 115200). USB VID:PID `0x1209:0xBABB`.
 
 ## Key Constraints
 
-- **Memory**: Static allocation only (no malloc) on CC1352
-- **RX Buffer**: 16KB circular buffer
-- **TX Power**: -20 to +20 dBm
-- **Reactive Jamming**: <500µs latency requirement
-- **SDK Version**: TI SimpleLink CC13xx/CC26xx SDK 7.10.01.24 (fixed)
+- CC1352 memory: static allocation only, no `malloc`. RX buffer is a 16 KB static circular buffer. FW size budget < 120 KB.
+- TX power range: -20 to +20 dBm. Reactive jamming target: < 500 us latency.
+- SDK version is fixed at TI SimpleLink CC13xx/CC26xx 8.30.01.01.
+
+## Docs map
+
+- `docs/ARCHITECTURE.md` - authoritative layered design + RF rules.
+- `docs/protocol.md` - wire-format contract.
+- `docs/PYTHON_API.md` - public API status and usage guidance.
+- `docs/VALIDATION_MATRIX.md` - baseline matrix and recommended validation flow.
+- `docs/TESTING-ON-LINUX.md` - end-to-end KillerBee integration runbook.
+- `docs/superpowers/specs/` - dated per-phase design specs (the "why" behind features).
+- `docs/PLAN_MAESTRO.md` - development phases and history.
+
+## Conventions
+
+- Output is plain ASCII: no emojis, no em/en dashes, no fancy Unicode (use `->`, `!=`, `>=`, straight quotes). Applies to code, comments, commit messages, and docs.
+- Commits are authored as the user's own work: no AI/Claude attribution, co-author trailer, or "generated with" line.
+- Branching: one branch per phase (`feature/fN-<slug>`); merge to `main` only after a human checkpoint; annotated tag `v2.0-fN` on close.

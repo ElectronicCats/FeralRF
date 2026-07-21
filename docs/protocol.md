@@ -1,6 +1,6 @@
 # FeralRF Protocol (Host <-> Firmware)
 
-Estado del contrato implementado en firmware `1.0.0` sobre CC1352, actualizado a `2026-04-07`.
+Estado del contrato implementado en firmware `1.0.0` sobre CC1352, actualizado a `2026-07-20`.
 
 Este documento describe el contrato real expuesto hoy por firmware y la API Python actual. Reemplaza el estado MVP antiguo que solo cubria `GET_INFO/SET_PHY/RX_START/RX_STOP`.
 
@@ -57,8 +57,6 @@ En firmware `1.0.0` actual: `capabilities = 0x07`.
 - `0x06` `GET_STATS`
 - `0x07` `SET_ADV_HOP`
 - `0x08` `SET_PROP_CONFIG`
-- `0x09` `SET_BLE_ADDR`
-- `0x0B` `SET_BLE_SCAN_MODE`
 - `0x10` `RX_START`
 - `0x11` `RX_STOP`
 - `0x20` `TX_RAW`
@@ -133,6 +131,11 @@ Notas:
 
 Aplica a RX BLE sobre canales de advertising.
 
+Nota: la direccion de advertising BLE (antes configurable via `SET_BLE_ADDR`,
+retirado) y el modo de scan (antes `SET_BLE_SCAN_MODE`, retirado) ya no forman
+parte del protocolo. La captura BLE actual es RX crudo por PHY, sin protocolo
+de conexion (ver seccion 9 y `docs/ARCHITECTURE.md`).
+
 ### `SET_PROP_CONFIG (0x08)`
 
 Payload de 16 bytes:
@@ -149,28 +152,6 @@ Notas:
 - `2`: OOK/ASK
 - `4`: MSK
 - OOK carga patches dedicados y deja la radio bloqueada a ese modo hasta reinicio/power cycle.
-
-### `SET_BLE_ADDR (0x09)`
-
-- Request payload: `addr_le[6]`
-- Response: `ACK` o `ERROR`
-
-Notas:
-
-- La direccion se entrega en little-endian.
-- Se usa para TX BLE advertising.
-
-### `SET_BLE_SCAN_MODE (0x0B)`
-
-- Request payload: `active_u8`
-- `0`: passive scan
-- `1`: active scan
-- Response: `ACK` o `ERROR`
-
-Notas:
-
-- Debe configurarse antes de `RX_START`.
-- En active scan el firmware usa el scanner BLE del SDK para emitir `SCAN_REQ` y capturar `SCAN_RSP`.
 
 ### `RX_START (0x10)`
 
@@ -392,14 +373,17 @@ Baseline recomendado:
 - control de sesion
 - RX/TX multi-PHY
 - configuracion propietaria
-- BLE passive/active scan
+- captura RX BLE cruda por PHY (sin scan activo/pasivo, sin protocolo de conexion)
 - recovery OOK
 
 Fuera del baseline oficial inicial:
 
 - spectrum
 - jamming reactivo/pattern
-- GATT / initiator
 - tooling ofensivo no-BLE aun no implementado
+
+Retirado permanentemente (2026-07-20): el stack de protocolo BLE (conexion, GATT,
+scan activo/pasivo) fue removido del firmware. BLE PHY se mantiene solo para
+captura cruda; el manejo de protocolo BLE lo hace Sniffle.
 
 Para la matriz de validacion y scripts sugeridos, ver `docs/VALIDATION_MATRIX.md`.

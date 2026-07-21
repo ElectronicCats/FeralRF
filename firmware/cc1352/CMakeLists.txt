@@ -109,8 +109,13 @@ file(GLOB DRIVERLIB_SOURCES
     ${TI_SDK_PATH}/source/ti/devices/${DEVICE_SUBFAMILY}/driverlib/*.c
 )
 
-# Full SDK install path (has precompiled libs)
-set(TI_SDK_FULL "$ENV{HOME}/ti/simplelink_cc13xx_cc26xx_sdk_8_30_01_01/simplelink_cc13xx_cc26xx_sdk_8_30_01_01"
+# Full SDK install path (has precompiled libs: rf, drivers, driverlib, sysbios).
+# Defaults to TI_SDK_PATH so the build is portable. NOTE: the open-source GitHub
+# SDK ships only the RF core lib; the other three prebuilt libs come from TI's
+# full installer SDK. Either run that installer and point TI_SDK_FULL at it
+# (-DTI_SDK_FULL=~/ti/simplelink_cc13xx_cc26xx_sdk_8_30_01_01), or copy the 3
+# libs into TI_SDK_PATH. Do NOT hardcode a machine-specific $HOME path here.
+set(TI_SDK_FULL "${TI_SDK_PATH}"
     CACHE PATH "Full TI SDK install with precompiled libs")
 
 # Precompiled libraries from full SDK
@@ -123,17 +128,12 @@ set(SYSBIOS_LIB ${TI_SDK_FULL}/kernel/tirtos7/packages/ti/sysbios/lib/gcc/m4f/sy
 
 set(APP_SOURCES
     ccfg.c
-    src/ble_conn.c
-    src/ble_conn_mgr.c
-    src/ble_conn_pdu.c
-    src/csa2.c
     src/command_processor.c
     src/control_task.c
     src/crypto_engine.c
     src/data_task.c
     src/host_if.c
     src/host_if_task.c
-    src/ll_follower.c
     src/ll_manager.c
     src/output_if.c
     src/packet_queue.c
@@ -143,7 +143,6 @@ set(APP_SOURCES
     src/smartrf_ble5_0.c
     src/smartrf_ieee_15_4_0.c
     src/smartrf_prop_0.c
-    src/att_client.c
     src/task_event.c
     src/tx_queue.c
 )

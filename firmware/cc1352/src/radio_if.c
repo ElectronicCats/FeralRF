@@ -161,7 +161,6 @@ static const uint8_t s_ble_adv_hop_channels[3] = {37u, 38u, 39u};
 
 /* Jam session state - maintains open RF handle for continuous transmission */
 static bool s_jam_session_active = false;
-static RF_Object s_jam_rf_object;
 static RF_Handle s_jam_rf_handle = NULL;
 static uint8_t s_jam_phy = 0u;
 static uint8_t s_jam_channel = 0u;
@@ -2661,7 +2660,7 @@ void RadioIF_bleResetRxQueue(void) {
 
 void RadioIF_bleDrainRxQueue(void) {
     /* Process any pending RX entries from CMD_BLE5_MASTER.
-     * Called from BleConnMgr_poll() — s_rx_running is false during
+     * Called during RX teardown; s_rx_running is false during
      * central mode, so RadioIF_poll() skips processing. */
     RadioIF_processBlePackets();
 }
@@ -2837,7 +2836,6 @@ int RadioIF_followDataOnce(uint8_t data_channel, uint32_t accessAddr, uint32_t c
 }
 
 bool RadioIF_startJamSession(uint8_t phy, uint8_t channel, int8_t power_dbm) {
-    RF_Params rf_params;
     RF_Mode *mode;
     RF_RadioSetup *setup_cmd;
     bool tx_ok;
@@ -2866,9 +2864,14 @@ bool RadioIF_startJamSession(uint8_t phy, uint8_t channel, int8_t power_dbm) {
         return false;
     }
 
-    /* RF_open for jam session */
-    RF_Params_init(&rf_params);
-    s_jam_rf_handle = RF_open(&s_jam_rf_object, mode, setup_cmd, &rf_params);
+    /* Reuse the single shared RF handle. Opening a 2nd RF_Object returns NULL
+     * (one-RF_Object rule, ARCHITECTURE.md §5), which is why JAM_CONTINUOUS
+     * failed. switchRfMode re-runs RadioSetup on the persistent handle, exactly
+     * like the working TX path (RadioIF_executeTxCommand). */
+    if (!RadioIF_switchRfMode(mode, setup_cmd)) {
+        return false;
+    }
+    s_jam_rf_handle = s_rf_handle;
     if (s_jam_rf_handle == NULL) {
         return false;
     }

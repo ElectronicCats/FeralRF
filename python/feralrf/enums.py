@@ -37,8 +37,6 @@ class Command(IntEnum):
     GET_STATS = 0x06
     SET_ADV_HOP = 0x07
     SET_PROP_CONFIG = 0x08
-    SET_BLE_ADDR = 0x09
-    SET_BLE_SCAN_MODE = 0x0B
 
     # RX Operations
     RX_START = 0x10
@@ -72,30 +70,6 @@ class Command(IntEnum):
     JAM_CONTINUOUS = 0x30
     JAM_STOP = 0x33
 
-    # BLE Connection
-    CONNECT = 0x40
-    DISCONNECT = 0x41
-    CONN_STATUS = 0x42
-
-    # GATT
-    GATT_DISCOVER = 0x43
-    GATT_SUBSCRIBE = 0x44
-    GATT_READ = 0x45
-    GATT_WRITE = 0x46
-    GATT_EXCHANGE_MTU = 0x4A
-    GATT_READ_BY_UUID = 0x4B
-
-    # Diagnostics
-    DEBUG_TIMING = 0x47
-    DEBUG_CONN_PARAMS = 0x48
-
-    # F21 — BLE Connectable Advertiser
-    BLE_ADV_LEGACY = 0x52
-
-    # F8b Track B — passive connection follower
-    FOLLOW_START = 0x50
-    FOLLOW_STOP = 0x51
-
 
 class Response(IntEnum):
     """Response IDs"""
@@ -116,30 +90,6 @@ class Response(IntEnum):
     RSP_ECDSA_SIG = 0x9B
     RSP_ECDSA_VERIFY = 0x9C
 
-    # BLE Connection
-    CONN_RESULT = 0xA0
-    CONN_STATUS = 0xA1
-
-    # GATT
-    GATT_SERVICE = 0xA2
-    GATT_CHAR = 0xA3
-    GATT_READ_VALUE = 0xA4
-    GATT_DONE = 0xA5
-    GATT_NOTIFY = 0xA6
-
-    # Diagnostics
-    DEBUG_TIMING = 0xA8
-    DEBUG_CONN_PARAMS = 0xA9
-
-    # F8b Track B — passive connection follower
-    LL_PACKET = 0xAB
-    FOLLOW_DONE = 0xAC
-
-    # F8c — MTU + Read by UUID + Disconnect reason
-    GATT_MTU = 0xB0
-    GATT_ATTRIBUTE = 0xB1
-    DISCONNECTED = 0xB2
-
 
 STABLE_COMMANDS = (
     Command.RADIO_INIT,
@@ -150,8 +100,6 @@ STABLE_COMMANDS = (
     Command.GET_STATS,
     Command.SET_ADV_HOP,
     Command.SET_PROP_CONFIG,
-    Command.SET_BLE_ADDR,
-    Command.SET_BLE_SCAN_MODE,
     Command.RX_START,
     Command.RX_STOP,
     Command.TX_RAW,
@@ -172,7 +120,6 @@ STABLE_COMMANDS = (
     Command.CMD_ECDH,
     Command.CMD_ECDSA_SIGN,
     Command.CMD_ECDSA_VERIFY,
-    Command.GATT_SUBSCRIBE,
 )
 
 EXPERIMENTAL_COMMANDS = (

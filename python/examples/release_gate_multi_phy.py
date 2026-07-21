@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""FeralRF - Multi-PHY release gate (BLE baseline + PHY4/BLE RX+TX matrix)."""
+"""FeralRF - Multi-PHY release gate (PHY4 RX+TX matrix + raw BLE-PHY TX frame)."""
 
 import argparse
 import subprocess
@@ -62,7 +62,6 @@ def main() -> int:
     parser.add_argument("--port", "-p", help="Serial port (auto-detect if omitted)", default=None)
     parser.add_argument("--baudrate", "-b", help="UART baudrate", type=int, default=921600)
     parser.add_argument("--retry-delay", help="Delay between retries", type=float, default=2.0)
-    parser.add_argument("--ble-attempts", help="Retries for BLE gate", type=int, default=2)
     parser.add_argument("--phy4-rx-attempts", help="Retries for PHY4 RX smoke", type=int, default=2)
     parser.add_argument("--phy4-tx-attempts", help="Retries for PHY4 TX smoke", type=int, default=2)
     parser.add_argument(
@@ -86,16 +85,6 @@ def main() -> int:
     )
 
     parser.add_argument("--ble-phy", type=int, default=0)
-    parser.add_argument("--ble-channel", type=int, default=37)
-    parser.add_argument("--ble-power", type=int, default=0)
-    parser.add_argument("--ble-soak-duration", type=int, default=60)
-    parser.add_argument("--ble-report-every", type=int, default=15)
-    parser.add_argument("--ble-stats-timeout", type=float, default=2.0)
-    parser.add_argument("--ble-stats-retries", type=int, default=3)
-    parser.add_argument("--ble-profile", choices=("lab", "ci_manual", "quiet"), default="ci_manual")
-    parser.add_argument("--ble-min-packets", type=int, default=None)
-    parser.add_argument("--ble-smoke-attempts", type=int, default=2)
-    parser.add_argument("--ble-canary-attempts", type=int, default=1)
 
     parser.add_argument("--phy4-rx-channel", type=int, default=25)
     parser.add_argument("--phy4-rx-duration", type=float, default=10.0)
@@ -121,20 +110,18 @@ def main() -> int:
         return 2
 
     examples_dir = Path(__file__).resolve().parent
-    ble_gate_script = examples_dir / "release_gate_ble.py"
     smoke_phase2_script = examples_dir / "smoke_phase2.py"
     phy4_rx_script = examples_dir / "smoke_phy4_ieee154.py"
     phy4_tx_script = examples_dir / "smoke_tx_phase1.py"
     tx_frame_script = examples_dir / "smoke_tx_frame_phase1.py"
     phy4_tx_burst_script = examples_dir / "smoke_tx_burst_phase1.py"
     phy4_tx_cont_script = examples_dir / "smoke_tx_continuous_phase1.py"
-    ble_tx_script = examples_dir / "smoke_tx_ble_phase1.py"
 
     print("FeralRF Multi-PHY Release Gate")
     print("==============================")
     print(
         f"port={args.port or 'auto'} baudrate={args.baudrate} retry_delay={args.retry_delay}s "
-        f"ble_attempts={args.ble_attempts} phy4_rx_attempts={args.phy4_rx_attempts} "
+        f"phy4_rx_attempts={args.phy4_rx_attempts} "
         f"phy4_tx_attempts={args.phy4_tx_attempts} "
         f"phy4_tx_burst_attempts={args.phy4_tx_burst_attempts} "
         f"phy4_tx_cont_attempts={args.phy4_tx_cont_attempts} "
@@ -142,55 +129,13 @@ def main() -> int:
         f"ble_tx_recovery_smoke_attempts={args.ble_tx_recovery_smoke_attempts}"
     )
     print(
-        f"ble(phy={args.ble_phy},ch={args.ble_channel},power={args.ble_power},"
-        f"soak={args.ble_soak_duration}s,profile={args.ble_profile}) "
         f"phy4_rx(ch={args.phy4_rx_channel},dur={args.phy4_rx_duration}s) "
         f"phy4_tx(ch={args.phy4_tx_channel},power={args.phy4_tx_power}) "
         f"phy4_tx_frame(ch={args.phy4_tx_channel}) "
         f"phy4_tx_burst(count={args.phy4_tx_burst_count},interval_us={args.phy4_tx_burst_interval_us}) "
         f"phy4_tx_cont(interval_us={args.phy4_tx_cont_interval_us},run={args.phy4_tx_cont_run_seconds}s) "
-        f"ble_tx_frame(ch={args.ble_tx_channel},power={args.ble_tx_power}) "
-        f"ble_tx(ch={args.ble_tx_channel},power={args.ble_tx_power})"
+        f"ble_tx_frame(ch={args.ble_tx_channel},power={args.ble_tx_power})"
     )
-    print()
-
-    step("BLE baseline gate (smoke + canary)")
-    ble_gate_cmd = [
-        sys.executable,
-        str(ble_gate_script),
-        "--baudrate",
-        str(args.baudrate),
-        "--phy",
-        str(args.ble_phy),
-        "--channel",
-        str(args.ble_channel),
-        "--power",
-        str(args.ble_power),
-        "--soak-duration",
-        str(args.ble_soak_duration),
-        "--report-every",
-        str(args.ble_report_every),
-        "--stats-timeout",
-        str(args.ble_stats_timeout),
-        "--stats-retries",
-        str(args.ble_stats_retries),
-        "--profile",
-        args.ble_profile,
-        "--smoke-attempts",
-        str(args.ble_smoke_attempts),
-        "--canary-attempts",
-        str(args.ble_canary_attempts),
-        "--retry-delay",
-        str(args.retry_delay),
-        *maybe_port_args(args.port),
-    ]
-    if args.ble_min_packets is not None:
-        ble_gate_cmd.extend(["--min-packets", str(args.ble_min_packets)])
-    rc = run_with_retries("BLE baseline gate", ble_gate_cmd, args.ble_attempts, args.retry_delay)
-    if rc != 0:
-        fail(f"BLE baseline gate failed (exit={rc})")
-        return 10
-    ok("BLE baseline gate PASS")
     print()
 
     step("PHY4 RX smoke")
@@ -390,36 +335,6 @@ def main() -> int:
         fail(f"BLE TX frame smoke failed (exit={rc})")
         return 39
     ok("BLE TX frame smoke PASS")
-    print()
-
-    step("BLE TX smoke")
-    ble_tx_cmd = [
-        sys.executable,
-        str(ble_tx_script),
-        "--baudrate",
-        str(args.baudrate),
-        "--channel",
-        str(args.ble_tx_channel),
-        "--power",
-        str(args.ble_tx_power),
-        "--payload-hex",
-        args.ble_tx_payload_hex,
-        "--tx-timeout",
-        str(args.ble_tx_timeout),
-        *maybe_port_args(args.port),
-    ]
-
-    rc = run_with_retries(
-        "BLE TX smoke",
-        ble_tx_cmd,
-        args.ble_tx_attempts,
-        args.retry_delay,
-        on_retry=ble_tx_retry_hook,
-    )
-    if rc != 0:
-        fail(f"BLE TX smoke failed (exit={rc})")
-        return 40
-    ok("BLE TX smoke PASS")
     print()
 
     ok("MULTI-PHY RELEASE GATE PASS")

@@ -1,10 +1,10 @@
 # FeralRF
 
-Universal firmware for CatSniffer (CC1352P + RP2040) providing RF capabilities: sniffing, TX/RX, jamming, and spectrum analysis for BLE, Zigbee, and Sub-1GHz.
+Universal firmware for CatSniffer (CC1352P + RP2040) providing RF capabilities: sniffing, TX/RX, jamming, and spectrum analysis for BLE-PHY, Zigbee, and Sub-1GHz.
 
 ## Features
 
-- **Multi-protocol support**: BLE 5.x, IEEE 802.15.4 (Zigbee), Sub-1GHz (868/915 MHz)
+- **Multi-protocol support**: raw BLE-PHY capture (protocol handling via Sniffle), IEEE 802.15.4 (Zigbee), Sub-1GHz (868/915 MHz)
 - **Sniffing**: Promiscuous mode packet capture
 - **TX/RX**: Raw packet transmission and reception
 - **Jamming**: Continuous wave and reactive jamming (<500µs latency)
@@ -58,17 +58,13 @@ cmake .. && make
 
 Official entrypoints in `python/examples/`:
 
-- `ble_sniffer.py`
 - `smoke_phase2.py`
-- `smoke_ble_scan_mode.py`
 - `smoke_phy4_ieee154.py`
 - `smoke_prop_phase1.py`
 - `smoke_tx_phase1.py`
 - `smoke_tx_frame_phase1.py`
 - `smoke_tx_burst_phase1.py`
 - `smoke_tx_continuous_phase1.py`
-- `smoke_tx_ble_phase1.py`
-- `release_gate_ble.py`
 - `release_gate_multi_phy.py`
 - `run_validation_baseline.sh`
 

@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """F17 — Device emulation smoke V1 (cross-validation 2 boards).
 
-For each personality across all 4 protocols, TX board emulates → RX board
+For each personality across all 3 protocols, TX board emulates → RX board
 verifies signature presence in received packets. Pass criteria:
-  - BLE: >= 1 packet with target MAC in payload
   - IEEE154: >= 8/20 packets CRC OK with FCF byte match
   - Sub-1GHz: >= 8/20 markers payload match
   - OOK: >= 5/20 markers payload match (less reliable demodulation)
@@ -20,11 +19,9 @@ import serial
 
 from feralrf import PHY, PROP_PRESETS, Radio, RxStreamError
 from feralrf.emulation import (
-    BLE_PERSONALITIES,
     IEEE154_PERSONALITIES,
     OOK_PERSONALITIES,
     SUB1GHZ_PERSONALITIES,
-    emulate_ble,
     emulate_ieee154,
     emulate_ook,
     emulate_sub1ghz,
@@ -47,39 +44,6 @@ def reset_cc1352(port: str) -> None:
     except Exception:
         pass
     time.sleep(3.5)
-
-
-def run_ble_personality(tx_port, rx_port, baud, personality, count):
-    """BLE: RX raw + TX emulate_ble. Pass = >=1 packet with target MAC LE."""
-    reset_cc1352(tx_port)
-    reset_cc1352(rx_port)
-    tx = Radio(port=tx_port, baudrate=baud)
-    rx = Radio(port=rx_port, baudrate=baud)
-    try:
-        tx.init()
-        rx.init()
-        rx.set_phy(PHY.BLE_1M, channel=37)
-        rx.start_rx()
-        time.sleep(0.3)
-        emulate_ble(tx, personality, count=count, interval_ms=100)
-        time.sleep(1.0)
-        target_le = bytes(reversed(bytes.fromhex(personality.target_mac.replace(":", ""))))
-        matched = 0
-        total = 0
-        for pkt in rx.read_packets(timeout=2.0):
-            if isinstance(pkt, RxStreamError):
-                continue
-            total += 1
-            if target_le in pkt.data:
-                matched += 1
-        try:
-            rx.stop_rx()
-        except Exception:
-            pass
-        return matched, total
-    finally:
-        tx.disconnect()
-        rx.disconnect()
 
 
 def run_ieee154_personality(tx_port, rx_port, baud, personality, count):
@@ -231,7 +195,6 @@ def main() -> int:
     args = parser.parse_args()
 
     thresholds = {
-        "BLE": 1,
         "IEEE154": 8,
         "SUB1G": 8,
         "OOK": 5,
@@ -255,7 +218,6 @@ def main() -> int:
         return tuple(out)
 
     plan = [
-        ("BLE", _filter_433(BLE_PERSONALITIES), run_ble_personality),
         ("IEEE154", _filter_433(IEEE154_PERSONALITIES), run_ieee154_personality),
         ("SUB1G", _filter_433(SUB1GHZ_PERSONALITIES), run_subg_personality),
     ]

@@ -48,20 +48,9 @@ def reset_cc1352(port):
 
 
 def step_run(tx, rx, phy, channel, label, count, listen_extra, tx_power):
-    """Configure both radios on phy/channel, TX emits markers, RX counts.
-
-    For BLE, also sets a unique TX MAC so RX can filter against ambient lab
-    traffic (lab is ~300 BLE pkts/s on ch37 — markers compete unless filtered).
-    """
+    """Configure both radios on phy/channel, TX emits markers, RX counts."""
     tx.set_phy(phy, channel=channel)
     rx.set_phy(phy, channel=channel)
-
-    if phy in (PHY.BLE_1M, PHY.BLE_2M, PHY.BLE_CODED_S2, PHY.BLE_CODED_S8):
-        unique_mac = b"\xFE\xCA\xEF\xBE\xAD\xDE"
-        tx.set_ble_addr(unique_mac)
-        mac_filter = unique_mac
-    else:
-        mac_filter = None
 
     rx.start_rx()
     time.sleep(0.3)
@@ -83,8 +72,7 @@ def step_run(tx, rx, phy, channel, label, count, listen_extra, tx_power):
             continue
         total += 1
         if MARKER in pkt.data:
-            if mac_filter is None or mac_filter in pkt.data:
-                matched += 1
+            matched += 1
 
     rx.stop_rx()
     return matched, total

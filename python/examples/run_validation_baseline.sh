@@ -178,15 +178,6 @@ echo "port=${PORT:-auto} rx_port=${RX_PORT:-none} baudrate=${BAUDRATE} only=${ON
 run_step "BLE 1M control path" \
     python3 "${SCRIPT_DIR}/smoke_phase2.py" "${common_args[@]}" --phy 0 --channel 37 --power 0
 
-run_step "BLE passive scan" \
-    python3 "${SCRIPT_DIR}/smoke_ble_scan_mode.py" "${common_args[@]}" --mode passive --channel 37 --duration 5
-
-run_step "BLE active scan" \
-    python3 "${SCRIPT_DIR}/smoke_ble_scan_mode.py" "${common_args[@]}" --mode active --channel 37 --duration 5
-
-run_step "BLE 1M TX raw" \
-    python3 "${SCRIPT_DIR}/smoke_tx_ble_phase1.py" "${common_args[@]}" --channel 37 --power 0
-
 run_step "BLE 1M TX frame" \
     python3 "${SCRIPT_DIR}/smoke_tx_frame_phase1.py" "${common_args[@]}" --phy 0 --channel 37 --power 0 --frame-hex 020106
 

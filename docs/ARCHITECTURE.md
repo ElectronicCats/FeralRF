@@ -48,8 +48,8 @@ No existe capa HAL formal. Los services llaman directamente al TI SDK 8.30 (deci
 
 BLE PHY retained for raw capture; BLE protocol stack removed 2026-07-20 (Sniffle handles BLE).
 `ll_manager.c` is the shared RX PDU classifier (ADV/SCAN/CONNECT/DATA) and is kept; the BLE
-connection/GATT stack (`ble_conn.c`, `ble_conn_mgr.c`, `att_client.c`, `csa2.c`, `ll_follower.c`)
-was deleted.
+connection/GATT stack (`ble_conn.c`, `ble_conn_mgr.c`, `ble_conn_pdu.c`, `att_client.c`, `csa2.c`,
+`ll_follower.c`) was deleted.
 
 ---
 

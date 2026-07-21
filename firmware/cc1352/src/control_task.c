@@ -15,9 +15,7 @@
 #include DeviceFamily_constructPath(driverlib/systick.h)
 /* clang-format on */
 
-#include "ble_conn.h"
 #include "config.h"
-#include "ll_follower.h"
 #include "ll_manager.h"
 #include "phy_manager.h"
 #include "protocol.h"
@@ -208,8 +206,6 @@ void ControlTask_init(void) {
     ControlTask_resetTxJamState(false);
     ControlTask_resetTxPowerState();
     memset(s_jam_payload, 0xFF, sizeof(s_jam_payload));
-    BleConn_init();
-    LlFollower_init();
 }
 
 void ControlTask_onRadioInit(void) {
@@ -224,7 +220,6 @@ void ControlTask_onRadioInit(void) {
     RadioIF_stopRx();
     RadioIF_resetMetrics();
     LLManager_resetStats();
-    BleConn_init();
 }
 
 bool ControlTask_onSetPhy(uint8_t phy, uint16_t channel, uint32_t frequency_hz) {
@@ -457,9 +452,7 @@ bool ControlTask_isRxEnabled(void) {
 }
 
 void ControlTask_poll(void) {
-    if (LlFollower_isRunning()) {
-        LlFollower_poll();
-    }
+    /* BLE connection follower removed; nothing to pump here. */
 }
 
 void ControlTask_getInfoPayload(uint8_t *payload, uint16_t payload_len) {

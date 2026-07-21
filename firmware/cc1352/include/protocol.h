@@ -67,8 +67,6 @@
 #define CMD_GET_STATS 0x06u
 #define CMD_SET_ADV_HOP 0x07u
 #define CMD_SET_PROP_CONFIG 0x08u
-#define CMD_SET_BLE_ADDR 0x09u
-#define CMD_SET_BLE_SCAN_MODE 0x0Bu
 
 /* RX */
 #define CMD_RX_START 0x10u
@@ -85,29 +83,8 @@
 #define CMD_JAM_CONTINUOUS 0x30u
 #define CMD_JAM_STOP 0x33u
 
-/* BLE Connection */
-#define CMD_CONNECT 0x40u
-#define CMD_DISCONNECT 0x41u
-#define CMD_CONN_STATUS 0x42u
-
-/* GATT */
-#define CMD_GATT_DISCOVER 0x43u
-#define CMD_GATT_SUBSCRIBE 0x44u
-#define CMD_GATT_READ 0x45u
-#define CMD_GATT_WRITE 0x46u
-#define CMD_GATT_EXCHANGE_MTU 0x4Au
-#define CMD_GATT_READ_BY_UUID 0x4Bu
-
-/* Diagnostics */
-#define CMD_DEBUG_TIMING 0x47u
-#define CMD_DEBUG_CONN_PARAMS 0x48u
-#define CMD_ATT_DEBUG 0x49u
-
-/* F8b Track B follower */
-#define CMD_FOLLOW_START 0x50u
-#define CMD_FOLLOW_STOP 0x51u
-#define CMD_BLE_ADV_LEGACY 0x52u
-#define CMD_FOLLOW_DEBUG 0x54u
+/* 0x09,0x0B,0x40-0x54 and RSP 0xA0-0xB2 retired: BLE protocol stack removed.
+ * Do not reuse these IDs. BLE PHY raw capture remains via SET_PHY + RX_START. */
 
 /* Test modes (F22) */
 #define CMD_TX_CW 0x55u
@@ -128,32 +105,6 @@
 #define RSP_INFO 0x94u
 
 /* Crypto HW (F25) — already defined above as 0x95-0x9C */
-
-/* BLE Connection */
-#define RSP_CONN_RESULT 0xA0u
-#define RSP_CONN_STATUS_R 0xA1u
-
-/* GATT */
-#define RSP_GATT_SERVICE 0xA2u
-#define RSP_GATT_CHAR 0xA3u
-#define RSP_GATT_READ_R 0xA4u
-#define RSP_GATT_DONE 0xA5u
-#define RSP_GATT_NOTIFY 0xA6u
-
-/* Diagnostics */
-#define RSP_DEBUG_TIMING 0xA8u
-#define RSP_DEBUG_CONN_PARAMS 0xA9u
-#define RSP_ATT_DEBUG 0xAAu
-
-/* F8b Track B */
-#define RSP_LL_PACKET 0xABu
-#define RSP_FOLLOW_DONE 0xACu
-#define RSP_FOLLOW_DEBUG 0xAFu
-
-/* F8c — MTU + Read by UUID + Disconnect reason */
-#define RSP_GATT_MTU 0xB0u
-#define RSP_GATT_ATTRIBUTE 0xB1u
-#define RSP_DISCONNECTED 0xB2u
 
 /* -------------------------------------------------------------------------
  * Error codes (consolidated F8f #10).

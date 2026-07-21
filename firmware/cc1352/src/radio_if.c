@@ -2660,7 +2660,7 @@ void RadioIF_bleResetRxQueue(void) {
 
 void RadioIF_bleDrainRxQueue(void) {
     /* Process any pending RX entries from CMD_BLE5_MASTER.
-     * Called from BleConnMgr_poll() — s_rx_running is false during
+     * Called during RX teardown; s_rx_running is false during
      * central mode, so RadioIF_poll() skips processing. */
     RadioIF_processBlePackets();
 }

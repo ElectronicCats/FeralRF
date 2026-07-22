@@ -9,7 +9,7 @@
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │  HOST (Python) — feralrf package                             │
-│  L5 apps     examples/, demos/, attacks/...                  │
+│  L5 apps     examples/, examples/lab/                        │
 │  L4 features _jamming.py, _spectrum.py, emul/...             │
 │  L3 core     radio.py (Radio class), presets.py, enums       │
 │  L2 cmds     commands.py, _responses.py                      │
@@ -17,7 +17,7 @@
 └──────────────────┬───────────────────────────────────────────┘
                    │ USB-CDC 921600 baud
 ┌──────────────────▼───────────────────────────────────────────┐
-│  RP2040 bridge (transparente, fuera de scope del plan v2)    │
+│  RP2040 bridge (transparente, firmware stock del CatSniffer) │
 └──────────────────┬───────────────────────────────────────────┘
                    │ UART 921600 (GPIO0/1 ↔ DIO12/13)
 ┌──────────────────▼───────────────────────────────────────────┐
@@ -59,7 +59,7 @@ connection/GATT stack (`ble_conn.c`, `ble_conn_mgr.c`, `ble_conn_pdu.c`, `att_cl
 | L1 transport | COBS + CRC16 + pyserial | `protocol.py` |
 | L2 commands | Command IDs + frame builders | `commands.py`, `_responses.py` |
 | L3 core | API pública (`Radio` class, presets, enums) | `radio.py`, `presets.py`, `enums.py`, `exceptions.py` |
-| L4 features | Módulos de ataque / spectrum / jamming | `_jamming.py`, `_spectrum.py` |
+| L4 features | Spectrum / jamming (experimental, stub) | `_jamming.py`, `_spectrum.py` |
 | L5 apps | Ejemplos / demos / tools | `python/examples/` |
 
 ---

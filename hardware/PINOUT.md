@@ -2,7 +2,7 @@
 
 ## RP2040 ↔ CC1352 Connections
 
-### UART (3Mbps with Flow Control)
+### UART (921600 baud, flow control disabled)
 | Signal | RP2040 | CC1352 | Direction |
 |--------|--------|--------|-----------|
 | TXD | UART0_TX | DIO12 | RP2040 → CC1352 |
@@ -44,7 +44,8 @@
 #define UART_RTS_PIN     DIO14
 #define UART_CTS_PIN     DIO15
 
-#define UART_BAUD_RATE   3000000
+#define UART_BAUD_RATE   921600
+#define UART_HW_FLOW_CONTROL 0
 ```
 
 ### RP2040 UART Setup
@@ -61,12 +62,12 @@
 #define LED2_PIN         27  // GPIO27
 #define LED3_PIN         26  // GPIO26
 
-#define UART_BAUD_RATE   3000000
+#define UART_BAUD_RATE   921600
 ```
 
 ## Notes
 
-- UART flow control (RTS/CTS) is required for 3Mbps reliable communication
+- UART runs at 921600 baud with hardware flow control disabled (RTS/CTS pins are wired but unused)
 - RESET_CC allows RP2040 to recover CC1352 from RF Core crashes
 - LEDs are active low (write 0 to turn on)
 - CC1352 DIO pins are configurable in software, defaults shown above

@@ -76,14 +76,14 @@ COBS-framed binary with CRC16-CCITT (poly 0x1021). The framing implemented in `p
 
 Layered radio engine (full table in `docs/ARCHITECTURE.md` section 2). Notable modules: `radio_if.c`/`phy_manager.c` (PHY abstraction + SmartRF configs), `ll_manager.c` (kept RX PDU classifier - identifies ADV/SCAN/CONNECT/DATA kinds from raw BLE captures; not part of the deleted protocol stack), `host_if.c`/`protocol.c`/`command_processor.c` (UART + COBS + dispatch), `control_task.c`/`data_task.c` (TI-RTOS tasks). The BLE connection/GATT stack (`ble_conn.c`, `ble_conn_mgr.c`, `ble_conn_pdu.c`, `ll_follower.c`, `att_client.c`, `csa2.c`) was deleted 2026-07-20; BLE PHY (`smartrf_ble5_0.c`) and `crypto_engine.c` are unaffected and stay.
 
-### Critical RF invariants (load-bearing - violating these causes silent hangs)
+### RF invariants (verified against `radio_if.c`, not folklore)
 
-From `docs/ARCHITECTURE.md` section 5 (and the `ti-rtos-rf-cc1352` skill). Any change to `radio_if.c`/`phy_manager.c` must respect:
+From `docs/ARCHITECTURE.md` section 5 (and the `ti-rtos-rf-cc1352` skill). The one hard, code-confirmed hazard is the first; the rest are patterns the firmware follows, each with documented exceptions. When in doubt, match what `radio_if.c` actually does over any prose rule.
 
-- Exactly ONE `RF_Object` for the whole firmware. The RF driver has `N_MAX_CLIENTS=2`; a second object silently hangs `RF_open`. Share the existing handle.
-- `RF_open` runs ONCE at boot; NEVER call `RF_close` (it can deadlock on `SemaphoreP_pend`). A PHY switch is `RF_flush + RF_yield` then reconfigure, not close/reopen.
-- Use `RF_postCmd` for `CMD_FS`, never `RF_runCmd(FS)` (hangs under TI-RTOS). BLE sets frequency via the command's `.channel` field and must NOT issue `CMD_FS`; IEEE/Prop require `CMD_FS` but via `RF_postCmd`.
-- ADV TX must terminate: use `endTrigger=TRIG_REL_START` with a finite `endTime`, never `TRIG_NEVER` (that hangs `RF_runCmd`).
+- **THE load-bearing one: `CMD_FS` must go via `RF_postCmd`, never `RF_runCmd(FS)`** (the latter hangs under TI-RTOS; `loDivider=0x0A` makes it worse). This holds for every PHY. Note BLE *does* issue `CMD_FS` here (`radio_if.c:453,1115`, via `RF_postCmd`) - the old "BLE never issues CMD_FS" rule is wrong for this firmware.
+- **One RF client open at a time.** There are per-mode `RF_Object`s (`s_rf_object`, `s_433_rf_object`, `s_rf_tx_session_object`) but only one is open/registered at once; the RF driver's `N_MAX_CLIENTS=2` means a concurrent second `RF_open` returns NULL (see the comment at `radio_if.c:2867`). Share the active handle, don't open a second concurrently.
+- **`RF_open` is lazy, not at boot** (`radio_if.c:1889` "No RF_open at init"; first `set_phy`/TX opens it). A normal PHY switch is `RF_flush + RF_yield` + reconfigure (no close/reopen). `RF_close` is avoided because it can deadlock on `SemaphoreP_pend`, but there ARE deliberate guarded exceptions - mid-session `RADIO_INIT` re-init (`radio_if.c:1853`) and OOK teardown - so "NEVER RF_close" is a guideline, not an absolute.
+- **A one-shot TX op must terminate on its own.** The validated ADV TX path issues one PDU per `RF_runCmd` with `startTrigger=TRIG_NOW` + `condition.rule=COND_NEVER` (`radio_if.c:742-751`); don't configure a TX op to run forever.
 
 ## Hardware Configuration
 

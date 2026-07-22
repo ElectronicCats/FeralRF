@@ -76,23 +76,25 @@ connection/GATT stack (`ble_conn.c`, `ble_conn_mgr.c`, `ble_conn_pdu.c`, `att_cl
 
 ## 5. Reglas RF (resumen — full skill en `ti-rtos-rf-cc1352`)
 
+Estas reglas estan verificadas contra `radio_if.c`. La primera es un hazard duro
+(cuelga el firmware); las demas son patrones con excepciones documentadas. Ante la
+duda, lo que hace `radio_if.c` gana sobre cualquier regla en prosa.
+
 ### Driver lifecycle
 
-| Regla | Por qué |
-|-------|---------|
-| **Un solo `RF_Object`** | RF driver `N_MAX_CLIENTS=2`. Multiple objects → silent hangs en `RF_open` |
-| **`RF_open` UNA vez al boot** | Re-open después de close → deadlocks con TI-RTOS `SemaphoreP` |
-| **NUNCA `RF_close`** | `RF_close` triggers `SemaphoreP_pend` que puede no completar |
-| **`RF_postCmd` para `CMD_FS`** | `RF_runCmd(FS)` cuelga en TI-RTOS |
-| **No `CMD_FS` para BLE** | BLE commands manejan freq vía `.channel` field |
-| **`CMD_FS` requerido para IEEE/Prop** | Pero `RF_postCmd`, no `RF_runCmd` |
+| Regla | Realidad / por que |
+|-------|--------------------|
+| **`CMD_FS` SIEMPRE via `RF_postCmd`, nunca `RF_runCmd(FS)`** | `RF_runCmd(FS)` cuelga en TI-RTOS (`loDivider=0x0A` lo agrava). Aplica a TODO PHY, BLE incluido: el firmware SI emite `CMD_FS` para BLE (`radio_if.c:453,1115`) via `RF_postCmd`. La vieja regla "BLE no emite CMD_FS" es falsa aqui |
+| **Un cliente RF abierto a la vez** | Hay `RF_Object` por modo (`s_rf_object`, `s_433_rf_object`, `s_rf_tx_session_object`) pero solo uno abierto/registrado a la vez; `N_MAX_CLIENTS=2` hace que un 2do `RF_open` concurrente devuelva NULL (`radio_if.c:2867`). Comparte el handle activo |
+| **`RF_open` es lazy, no en boot** | `radio_if.c:1889` "No RF_open at init"; abre en el primer `set_phy`/TX. Un PHY switch normal es `RF_flush + RF_yield` + reconfigurar |
+| **`RF_close` se evita, con excepciones guardadas** | Puede deadlock en `SemaphoreP_pend`, por eso el PHY switch no cierra. Pero hay `RF_close` deliberados y guardados: re-init de `RADIO_INIT` a media sesion (`radio_if.c:1853`) y teardown de OOK. "NUNCA RF_close" es guia, no absoluto |
 
 ### RX configuration BLE
 
 | Setting | Valor | Por qué |
 |---------|-------|---------|
 | `endTrigger.triggerType` | `TRIG_NEVER` | Continuous RX |
-| `endTime` | `0` | Sin timeout |
+| `endTime` | `1` | Sin timeout efectivo (`smartrf_ble5_0.c:193`) |
 | `bRepeat` | `1` | Multiple packets |
 | `accessAddress` | `0x8E89BED6` | BLE adv standard |
 | `crcInit` | `0x555555` | BLE adv standard |
@@ -100,13 +102,15 @@ connection/GATT stack (`ble_conn.c`, `ble_conn_mgr.c`, `ble_conn_pdu.c`, `att_cl
 
 ### TX configuration BLE ADV
 
+El path ADV TX validado (`radio_if.c:742-751`) emite una PDU por `RF_runCmd`:
+
 | Setting | Valor | Por qué |
 |---------|-------|---------|
-| `endTrigger.triggerType` | `TRIG_REL_START` | One-shot — debe terminar |
-| `endTime` | `40000` (10 ms @ 4 MHz RAT) | Suficiente para una ADV PDU |
-| `condition.rule` | `COND_NEVER` | Don't chain to next command |
+| `startTrigger.triggerType` | `TRIG_NOW` | Dispara al postear |
+| `condition.rule` | `COND_NEVER` | No encadena al siguiente comando; termina tras la PDU |
 
-⚠️ NUNCA `endTrigger=TRIG_NEVER` en ADV TX — `RF_runCmd` cuelga.
+⚠️ Principio: una operacion TX one-shot debe terminar sola. No configures un comando
+TX para correr indefinidamente (eso cuelga `RF_runCmd`).
 
 ---
 

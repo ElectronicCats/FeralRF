@@ -69,7 +69,7 @@ connection/GATT stack (`ble_conn.c`, `ble_conn_mgr.c`, `ble_conn_pdu.c`, `att_cl
 1. **No saltar capas.** L4 no toca L1 directo. Lo que falta se expone desde L3/L2.
 2. **L1 platform no conoce nada de FeralRF.** Startup, ccfg y linker son intercambiables entre boards CC1352P7 si cambias config.
 3. **L4 services no conoce transporte.** `ll_manager` no sabe que hay UART; emite eventos al protocol layer.
-4. **Reglas RF validadas son invariante de L4/radio** (skill `ti-rtos-rf-cc1352`): un solo `RF_Object`, `RF_open` una vez al boot y NUNCA `RF_close`, PHY switch = `RF_flush + RF_yield` + reconfigurar (no close/reopen), precompiled libs obligatorias, etc.
+4. **Reglas RF de L4/radio** (skill `ti-rtos-rf-cc1352`, detalle en seccion 5): `CMD_FS` siempre via `RF_postCmd` (nunca `RF_runCmd`, todo PHY incl. BLE), un cliente RF abierto a la vez, `RF_open` lazy en primer uso, `RF_close` evitado salvo excepciones guardadas, PHY switch = `RF_flush + RF_yield` + reconfigurar. Ante la duda, gana lo que hace `radio_if.c`.
 5. **Python L3 es la API pública estable.** L4 features construyen sobre L3, nunca bypass a L2/L1.
 
 ---

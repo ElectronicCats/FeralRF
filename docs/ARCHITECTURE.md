@@ -30,7 +30,7 @@
 └──────────────────────────────────────────────────────────────┘
 ```
 
-No existe capa HAL formal. Los services llaman directamente al TI SDK 8.30 (decisión #21 del spec maestro).
+No existe capa HAL formal. Los services llaman directamente al TI SDK 8.30.
 
 ---
 
@@ -69,7 +69,7 @@ connection/GATT stack (`ble_conn.c`, `ble_conn_mgr.c`, `ble_conn_pdu.c`, `att_cl
 1. **No saltar capas.** L4 no toca L1 directo. Lo que falta se expone desde L3/L2.
 2. **L1 platform no conoce nada de FeralRF.** Startup, ccfg y linker son intercambiables entre boards CC1352P7 si cambias config.
 3. **L4 services no conoce transporte.** `ll_manager` no sabe que hay UART; emite eventos al protocol layer.
-4. **Reglas RF validadas son invariante de L4/radio** (skill `ti-rtos-rf-cc1352`): single RF_Object, PHY switch = `RF_flush + RF_yield + RF_close + RF_open`, precompiled libs obligatorias, etc.
+4. **Reglas RF validadas son invariante de L4/radio** (skill `ti-rtos-rf-cc1352`): un solo `RF_Object`, `RF_open` una vez al boot y NUNCA `RF_close`, PHY switch = `RF_flush + RF_yield` + reconfigurar (no close/reopen), precompiled libs obligatorias, etc.
 5. **Python L3 es la API pública estable.** L4 features construyen sobre L3, nunca bypass a L2/L1.
 
 ---
@@ -112,7 +112,7 @@ connection/GATT stack (`ble_conn.c`, `ble_conn_mgr.c`, `ble_conn_pdu.c`, `att_cl
 
 ## 6. Hardware target
 
-- **MCU radio:** CC1352P7 (decisión #1)
+- **MCU radio:** CC1352P7
 - **CatSniffer:** `frontEndMode=0x0` (differential), `biasMode=0x1` (external bias)
 - **Antenna switch:** DIO28 (2.4 GHz), DIO29 (High PA — no configurado), DIO30 (Sub-1GHz)
 - **UART CC1352↔RP2040:** DIO12 (RX), DIO13 (TX), 921600, no flow control
@@ -137,7 +137,7 @@ calculado sobre CMD/RSP + SEQ + LEN + PAYLOAD. Fuente de verdad:
 
 | ID range | Tipo |
 |----------|------|
-| `0x01–0x4F` | Commands (host → device) |
+| `0x01–0x62` | Commands (host → device) |
 | `0x80–0xFF` | Responses (device → host) |
 
 Single CDC, 921600 baud, no composite USB.
@@ -146,7 +146,7 @@ Single CDC, 921600 baud, no composite USB.
 
 ## 8. Memory model
 
-- **CC1352:** allocación estática únicamente (decisión #7). No `malloc`.
+- **CC1352:** allocación estática únicamente. No `malloc`.
 - **RX buffer:** 16 KB circular estático.
 - **TX queue (`tx_queue.c`):** 32 frames (commit `5c8b561` post-F8A growth). Originally sized for
   the BLE central/follow role; that role was removed 2026-07-20, no current caller remains.

@@ -58,21 +58,21 @@ Proves the adapter, the `read_one_packet` bridge, the `pnext` contract, capabili
 
 ```bash
 cd FeralRF/python
-pytest -q -m "not hardware and not hardware_ble"
+pytest -q -m "not hardware"
 ```
-**Expect:** `603 passed, 1 skipped` (the 1 skip is a hardware-only case).
+**Expect:** `422 passed, 1 skipped` (the 1 skip is a hardware-only case).
 
 Run just the KillerBee-facing tests and see them by name:
 
 ```bash
 pytest tests/test_killerbee_integration.py tests/test_killerbee_dispatch.py -v
 ```
-**Expect:** 18 passed, including:
+**Expect:** 14 passed, 1 skipped, including:
 - `test_adapter_uses_real_kbcapabilities` — adapter works with the *real* `killerbee.kbutils.KBCapabilities`.
 - `test_shim_reexports_adapter` — `killerbee.dev_feralcat.FERALCAT is KillerBeeFeralRF`.
 - `test_iscatsniffer_and_devlist` — detection probe + `devlist()` list the CatSniffer.
 - `test_killerbee_forced_dispatch` — `KillerBee(hardware="feralcat")` constructs our driver.
-- `test_reset_on_init_*` — the power-cycle-on-init guard (runs by default, skippable, failure-tolerant).
+- `test_reset_on_init_*` — the power-cycle-on-init guard (opt-in, off by default, skippable, failure-tolerant).
 
 Lint (optional):
 ```bash
@@ -188,7 +188,7 @@ Goal: capture a *fresh* join so the Trust Center's key transport is on the air, 
 |---|---|
 | `zbid` → `NoBackendError` | `sudo apt-get install libusb-1.0-0` (Phase 0). |
 | `zbid` doesn't list the CatSniffer | Confirm `python -c "from feralrf import Radio; print(Radio.list_devices())"` shows the Bridge port; the probe matches VID `0x1209` + "Bridge". |
-| First IEEE session hangs / 0 packets after using BLE | Stale PHY state. The adapter power-cycles on init by default; if your shell port isn't `bridge+2`, reset manually (unplug/replug) or pass `reset_on_init=False` and reset yourself. |
+| First IEEE session hangs / 0 packets after using BLE | Stale PHY state. Reset the CC1352 between modes: unplug/replug, or construct the adapter with `reset_on_init=True` (off by default) when your shell port is at `bridge+2`. |
 | Steady `8E 89 BE` packets | RF init failed → synthetic fallback. Power-cycle. |
 | Wireshark shows bad FCS on every frame | Wrong pcap link type; use DLT_IEEE802_15_4_WITHFCS (KillerBee sets this). |
 | Transport-Key won't decrypt | Device used an install code, not the default link key — supply the install code. |

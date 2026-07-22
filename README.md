@@ -21,11 +21,11 @@ Coverage below is scoped to the CC1352P7. Status legend:
 | Protocol | Status | Notes |
 |---|---|---|
 | IEEE 802.15.4 | Stable | 2.4 GHz O-QPSK, channels 11-26 |
-| Zigbee / Thread / Matter / 6LoWPAN | Stable | ride on the 802.15.4 PHY (stack crafted in Python) |
+| Zigbee / Thread / Matter / 6LoWPAN | Stable | ride on the 802.15.4 PHY (raw frames only; bring your own parsing) |
 | Proprietary Sub-1GHz | Stable | 868 / 915 MHz |
 | Wireless M-Bus | Stable | S / T / C modes at 868 MHz |
-| Wi-SUN | Experimental | FSK presets; baseline validation pending |
-| Amazon Sidewalk | Experimental | Sub-GHz FSK layer only (LR uses LoRa, out of scope) |
+| Wi-SUN | Experimental | FSK carrier OTA-validated; full FAN stack not implemented |
+| Amazon Sidewalk | Experimental | Sub-GHz FSK carrier OTA-validated; LR (LoRa) out of scope |
 | Proprietary 2.4 GHz | Experimental | CW works; modulated GFSK round-trip pending |
 | MIOTY | Planned | TS-UNB not natively supported without a custom CPE patch |
 
@@ -36,7 +36,7 @@ Coverage below is scoped to the CC1352P7. Status legend:
 | 2(G)FSK | Stable | multiple bands |
 | 4(G)FSK | Stable | 868 validated; 433 experimental |
 | (G)MSK | Stable | 868 validated; 433 marginal |
-| OOK / ASK | Stable | 868 validated; 433 marginal (antenna-limited) |
+| OOK / ASK | Stable | 868 validated; 433 fails OTA (0/10, antenna/sensitivity-limited) |
 
 ### Cryptographic accelerators
 
@@ -92,8 +92,8 @@ Electronic Cats CatSniffer flashing tool
 handles bootloader entry, erase, write, verify and reset over the RP2040 shell port.
 
 ```bash
-catnip devices                                              # list connected CatSniffers
-catnip -p /dev/ttyACM0 flash firmware/cc1352/build/feralrf_cc1352.hex
+catnip devices                                              # list connected CatSniffers, note the device id
+catnip flash --device 1 firmware/cc1352/build/feralrf_cc1352.hex
 ```
 
 ### 3. Install the Python package
@@ -101,6 +101,12 @@ catnip -p /dev/ttyACM0 flash firmware/cc1352/build/feralrf_cc1352.hex
 ```bash
 cd python
 pip install -e ".[dev]"              # add the killerbee extra: pip install -e ".[dev,killerbee]"
+```
+
+### 4. Run the tests (no hardware needed)
+
+```bash
+cd python && pytest          # unit tests; add -m hardware for on-device tests
 ```
 
 ## Quick Start
@@ -156,7 +162,7 @@ Chip protocols we want to fully expose but that are not ready yet:
 ### Python
 
 - Python 3.9+
-- pyserial, pyserial-asyncio
+- pyserial, pyserial-asyncio, cobs
 - Optional: `killerbee` >= 3.0.0 (KillerBee integration)
 
 ## License
@@ -165,7 +171,7 @@ GPL-3.0 - see [LICENSE](LICENSE).
 
 ## Warning
 
-RF transmission (including test modes and jamming) may be regulated in your
+RF transmission (including TX test modes) may be regulated in your
 jurisdiction. Use only in authorized environments for research, security
 testing, and educational purposes.
 

@@ -50,6 +50,8 @@ Metodos estables de `Radio`:
 - `get_stats()`
 - `configure_prop()`
 - `set_adv_hop()`
+- `tx_cw()`, `tx_prbs()`, `tx_test_stop()`
+- `random_bytes()`, `aes_encrypt()`/`aes_decrypt()`, `aes_ccm_encrypt()`/`aes_ccm_decrypt()`, `aes_gcm_encrypt()`/`aes_gcm_decrypt()`, `sha256()`, `ecdh()`, `ecdsa_sign()`, `ecdsa_verify()`
 - `reset_device()`
 
 ## 2. API experimental
@@ -80,9 +82,9 @@ Comandos reservados o pendientes hoy:
 
 - `JAM_REACTIVE = 0x31`
 - `JAM_PATTERN = 0x32`
-- `SPECTRUM_SCAN = 0x40`
-- `SPECTRUM_MONITOR = 0x41`
-- `SPECTRUM_STOP = 0x42`
+
+Los IDs de spectrum aun no estan asignados; el rango `0x40-0x54` esta retirado
+del stack BLE y no se reusa (ver `firmware/cc1352/include/protocol.h`).
 
 ## 4. Reglas de uso recomendadas
 
@@ -122,6 +124,14 @@ Comandos reservados o pendientes hoy:
 | `4gfsk_868_50k` | 868 MHz | 4-GFSK | 50k | 10/10 |
 | `4fsk_433_50k` | 433.92 MHz | 4-FSK | 50k | — (hw lim) |
 | `4gfsk_433_50k` | 433.92 MHz | 4-GFSK | 50k | — (hw lim) |
+| `sidewalk_915_fsk_50k` | 915 MHz | FSK | 50k | 10/10 (F29) |
+| `sidewalk_915_fsk_250k` | 915 MHz | FSK | 250k | 10/10 (F29) |
+| `wisun_915_fsk_50k` | 902.2 MHz | FSK | 50k | 10/10 (F29) |
+| `wisun_915_fsk_100k` | 902.2 MHz | FSK | 100k | 10/10 (F29) |
+| `wisun_915_fsk_150k` | 902.2 MHz | FSK | 150k | 10/10 (F29) |
+| `wisun_915_fsk_200k` | 902.2 MHz | FSK | 200k | 10/10 (F29) |
+| `wisun_915_fsk_300k` | 902.2 MHz | FSK | 300k | 10/10 (F29) |
+| `mioty_868_tsunb` | 868 MHz | FSK | 396 | 0/10 (FAIL) |
 
 ### BLE 2M TX
 
@@ -244,7 +254,7 @@ from feralrf.integrations.killerbee import KillerBeeFeralRF as FERALCAT
 
 y se agrega un arm de sondeo serial en `killerbee/__init__.py` que construye
 `KillerBeeFeralRF(dev)` cuando `KillerBeeFeralRF.list_devices()` reporta ese
-puerto. El registro upstream completo queda fuera del alcance v1 (ver spec).
+puerto. El registro upstream completo queda fuera del alcance v1.
 
 ### Ejemplo
 

@@ -4,14 +4,14 @@ This wires the CatSniffer (CC1352, via FeralRF) into the [KillerBee](https://git
 
 ## What was built
 
-- **Adapter** `feralrf.integrations.killerbee.KillerBeeFeralRF` — a KillerBee device driver that wraps `feralrf.Radio` (sniff, inject, jam, `pnext`, capabilities, discovery). Ships in the FeralRF package. On init it **best-effort power-cycles the CC1352** (via the RP2040 shell reset) to guarantee a clean IEEE PHY state — FeralRF's IEEE↔BLE PHY switch is unreliable without a reset between modes. If the shell port is unavailable the reset is skipped and a plain init runs; disable entirely with `KillerBeeFeralRF(dev, reset_on_init=False)`.
+- **Adapter** `feralrf.integrations.killerbee.KillerBeeFeralRF` — a KillerBee device driver that wraps `feralrf.Radio` (sniff, inject, jam, `pnext`, capabilities, discovery). Ships in the FeralRF package. The optional `reset_on_init` guard (default **off**) power-cycles the CC1352 via the RP2040 shell for a clean IEEE PHY state - FeralRF's IEEE/BLE PHY switch is unreliable without a reset between modes. It defaults off because the reset breaks `init()` on stock RP2040 passthrough firmware; enable it with `KillerBeeFeralRF(dev, reset_on_init=True)` when your bridge supports it.
 - **KillerBee hooks** (small, in `docs/killerbee-catsniffer.patch`): a `dev_feralcat.py` shim (`FERALCAT = KillerBeeFeralRF`), an `iscatsniffer()` probe + `devlist()` branch in `kbutils.py`, a `DEV_ENABLE_CATSNIFFER` flag in `config.py`, and two dispatch branches in `__init__.py` (forced `hardware="feralcat"` and serial auto-detect).
 
 Capabilities advertised: SNIFF, SETCHAN, INJECT, FREQ_2400, PHYJAM. Channels 11–26.
 
 ## Status: proven vs. needs hardware
 
-- **Proven here (no hardware):** `feralrf` unit + integration suite is green (600 passed, 1 skipped). `test_killerbee_dispatch.py` verifies the adapter against the *real* `KBCapabilities`, the shim, `iscatsniffer`/`devlist` detection, and that `KillerBee(hardware="feralcat")` constructs our driver. `zbdump --help` loads through the integrated KillerBee.
+- **Proven here (no hardware):** `feralrf` unit + integration suite is green (422 passed, 1 skipped). `test_killerbee_dispatch.py` verifies the adapter against the *real* `KBCapabilities`, the shim, `iscatsniffer`/`devlist` detection, and that `KillerBee(hardware="feralcat")` constructs our driver. `zbdump --help` loads through the integrated KillerBee.
 - **Needs the bench (CatSniffer + your own network):** the actual RF — live sniff, injection on air, and the forced-rejoin/key-capture. That is the runbook below.
 
 ## Install on the Linux host

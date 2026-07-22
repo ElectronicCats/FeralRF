@@ -96,7 +96,7 @@ Full pinout in `hardware/PINOUT.md`. Verified essentials:
 ## Key Constraints
 
 - CC1352 memory: static allocation only, no `malloc`. RX buffer is a 16 KB static circular buffer. FW size budget < 120 KB.
-- TX power range: -20 to +20 dBm. Reactive jamming target: < 500 us latency.
+- TX power range: -20 to +20 dBm (chip spec). High-PA (+15 to +20 dBm) is not routed on this hardware (DIO29), so the usable range is -20 to +14 dBm (see VALIDATION_MATRIX section 13). Reactive jamming is planned (not implemented); design target < 500 us latency.
 - SDK version is fixed at TI SimpleLink CC13xx/CC26xx 8.30.01.01.
 
 ## Docs map

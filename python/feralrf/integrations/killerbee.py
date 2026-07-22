@@ -35,7 +35,7 @@ class KillerBeeFeralRF:
         # DEFAULT OFF: on real hardware (2026-07-02 bench, stock RP2040 passthrough)
         # the reset_device() boot/exit cycle disrupts the CC1352 and the following
         # init() times out — verified that a plain init works reliably while the
-        # reset breaks it. Enable only with FeralRF's own RP2040 firmware, or
+        # reset breaks it. Enable only where the reset is safe on your bridge firmware, or
         # power-cycle the stick manually if you need a guaranteed-clean PHY.
         if reset_on_init:
             try:

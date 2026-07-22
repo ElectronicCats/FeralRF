@@ -113,7 +113,7 @@ connection/GATT stack (`ble_conn.c`, `ble_conn_mgr.c`, `ble_conn_pdu.c`, `att_cl
 ## 6. Hardware target
 
 - **MCU radio:** CC1352P7
-- **CatSniffer:** `frontEndMode=0x0` (differential), `biasMode=0x1` (external bias)
+- **CatSniffer:** `frontEndMode=0x0` (differential), `biasMode=0x1` (external; `0x0` en IEEE 802.15.4)
 - **Antenna switch:** DIO28 (2.4 GHz), DIO29 (High PA — no configurado), DIO30 (Sub-1GHz)
 - **UART CC1352↔RP2040:** DIO12 (RX), DIO13 (TX), 921600, no flow control
 - **LEDs:** DIO24 (status, en main loop counter — no Clock module)
@@ -140,7 +140,7 @@ calculado sobre CMD/RSP + SEQ + LEN + PAYLOAD. Fuente de verdad:
 | `0x01–0x62` | Commands (host → device) |
 | `0x80–0xFF` | Responses (device → host) |
 
-Single CDC, 921600 baud, no composite USB.
+El RP2040 expone 3 puertos USB CDC (Cat-Bridge / Cat-LoRa / Cat-Shell); el enlace de radio es Cat-Bridge @ 921600.
 
 ---
 
@@ -148,8 +148,8 @@ Single CDC, 921600 baud, no composite USB.
 
 - **CC1352:** allocación estática únicamente. No `malloc`.
 - **RX buffer:** 16 KB circular estático.
-- **TX queue (`tx_queue.c`):** 32 frames (commit `5c8b561` post-F8A growth). Originally sized for
-  the BLE central/follow role; that role was removed 2026-07-20, no current caller remains.
+- **Host output queue (`packet_queue.c`, `PACKET_QUEUE_DEPTH`):** 32 entries (commit `5c8b561`, F8A growth). Still live.
+- **RF data-channel queue (`tx_queue.c`, `TX_QUEUE_SIZE`):** 8, unchanged. Originally sized for the BLE central/follow role; that role was removed 2026-07-20, no current caller remains.
 - **FW size budget:** <120 KB (actual: ~91 KB post-F10).
 
 ---

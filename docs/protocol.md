@@ -74,9 +74,9 @@ En firmware `1.0.0` actual: `capabilities = 0x07`.
 
 - `0x31` `JAM_REACTIVE`
 - `0x32` `JAM_PATTERN`
-- `0x40` `SPECTRUM_SCAN`
-- `0x41` `SPECTRUM_MONITOR`
-- `0x42` `SPECTRUM_STOP`
+
+Spectrum / RSSI scan aun no tiene IDs asignados: el rango `0x40-0x54` esta
+retirado del stack BLE (removido 2026-07-20) y no se reusa.
 
 Regla general:
 
@@ -138,11 +138,13 @@ de conexion (ver seccion 9 y `docs/ARCHITECTURE.md`).
 
 ### `SET_PROP_CONFIG (0x08)`
 
-Payload de 16 bytes:
+Payload de 18 bytes:
 
 ```text
-freq_hz_u32 | mod_type_u8 | symbol_rate_u32 | deviation_u16 | rx_bw_u8 | sync_word_u32
+freq_hz_u32 | mod_type_u8 | symbol_rate_u32 | deviation_u16 | rx_bw_u8 | sync_word_u32 | format_conf_u16
 ```
+
+(`format_conf` es un bitfield para 4-FSK/4-GFSK; `0` = defaults SysConfig. Un payload de 16 bytes sin `format_conf` se acepta por compatibilidad.)
 
 Notas:
 

@@ -39,10 +39,10 @@
 ### CC1352 UART Setup
 ```c
 // firmware/cc1352/include/config.h
-#define UART_TX_PIN      DIO12
-#define UART_RX_PIN      DIO13
-#define UART_RTS_PIN     DIO14
-#define UART_CTS_PIN     DIO15
+#define UART_TX_PIN      DIO13
+#define UART_RX_PIN      DIO12
+#define UART_RTS_PIN     DIO15
+#define UART_CTS_PIN     DIO14
 
 #define UART_BAUD_RATE   921600
 #define UART_HW_FLOW_CONTROL 0

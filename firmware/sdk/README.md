@@ -1,59 +1,38 @@
 # TI SDK Setup
 
-## Git Submodule (Automated)
+The CC1352 firmware links against the TI SimpleLink Low Power F2 SDK, included
+here as a git submodule.
 
-The TI SimpleLink SDK is included as a git submodule:
+## Get the submodule
 
 ```bash
 # Clone with submodules
-git clone --recurse-submodules https://github.com/user/FeralRF.git
+git clone --recurse-submodules https://github.com/ElectronicCats/FeralRF.git
 
 # Or initialize after clone
 git submodule update --init --recursive
 ```
 
-## SDK Version
+## SDK
 
-- **SDK**: SimpleLink Low Power F2 SDK
-- **Version**: 7.10.01.24
-- **Source**: https://github.com/TexasInstruments/simplelink-lowpower-f2-sdk
-- **Tag**: `cc13xx_cc26xx_sdk_7_10_01_24`
+- **SDK:** SimpleLink Low Power F2 SDK
+- **Version:** 8.30.01.01
+- **Source:** https://github.com/TexasInstruments/simplelink-lowpower-f2-sdk
+- **Tag:** `lpf2-8.30.01.01`
+- **Path:** `firmware/sdk/simplelink_cc13xx_cc26xx_sdk_8_30_01_01/`
 
-## Manual Update (if needed)
+## Build caveat
 
-```bash
-cd firmware/sdk/simplelink_cc13xx_cc26xx_sdk_7_10_01_24
-git fetch origin
-git checkout cc13xx_cc26xx_sdk_7_10_01_24
-```
-
-## Structure
-
-```
-firmware/sdk/
-├── README.md (this file)
-├── pico-sdk/                    # Pico SDK (submodule)
-└── simplelink_cc13xx_cc26xx_sdk_7_10_01_24/  # TI SDK (submodule)
-    ├── source/
-    │   ├── ti/
-    │   │   ├── drivers/
-    │   │   ├── devices/
-    │   │   └── ble5stack/
-    │   ├── kernel/
-    │   └── third_party/
-    ├── tools/
-    └── examples/
-```
+The open-source GitHub SDK ships only the RF-core prebuilt lib. The CC1352
+build also links three precompiled libs (drivers, driverlib, sysbios) that come
+only from TI's full installer SDK. Either install that and pass
+`-DTI_SDK_FULL=~/ti/simplelink_cc13xx_cc26xx_sdk_8_30_01_01`, or copy those
+three `.a`/`.lib` files into the submodule (see the repo `README.md` build
+section).
 
 ## Verify
 
 ```bash
-ls firmware/sdk/simplelink_cc13xx_cc26xx_sdk_7_10_01_24/source/ti/drivers/rf/
+ls firmware/sdk/simplelink_cc13xx_cc26xx_sdk_8_30_01_01/source/ti/drivers/rf/
 ```
-Should show: `RF.h`, `RFCC26XX_multiMode.h`, etc.
-
-## Notes
-
-- The GitHub SDK omits full documentation and some examples
-- Documentation available at: https://dev.ti.com/tirex/
-- For full SDK with all examples, download from TI website
+Should show `RF.h`, `RFCC26X2_multiMode.h`, etc.

@@ -1,7 +1,6 @@
 # FeralRF — Architecture
 
-> **Authoritative source for the layered design.** For phase tracking and decisions, see
-> [`superpowers/specs/2026-04-24-feralrf-plan-v2-design.md`](superpowers/specs/2026-04-24-feralrf-plan-v2-design.md).
+> **Authoritative source for the layered design.**
 
 ---
 
@@ -174,4 +173,4 @@ Single CDC, 921600 baud, no composite USB.
 | Firmware OTA | `python/examples/run_validation_baseline.sh --rx-port` | 2 boards |
 | End-to-end attack | Demos en `python/examples/lab/` (interactivos) | 2 boards + phone/peripheral |
 
-CI corre Python unit + lint + RP2040 build automáticamente. CC1352 build no está en CI (TI SDK no es licencia open).
+CI corre Python unit + lint automáticamente; el build de CC1352 es best-effort (requiere las libs del installer completo de TI, no disponibles en CI).

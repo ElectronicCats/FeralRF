@@ -4,21 +4,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-FeralRF is universal firmware plus a Python host API for CatSniffer hardware (CC1352P7 + RP2040). It provides RF sniffing, TX/RX, jamming, spectrum work, and crypto helpers across raw BLE PHY capture (BLE 5.x; protocol/connection handling is out of scope here - Sniffle covers that), IEEE 802.15.4 (Zigbee/Thread), and Sub-1GHz (868/915 MHz), plus SX1262 LoRa on the RP2040 side.
+FeralRF is universal firmware plus a Python host API for the CatSniffer's CC1352P7 radio. It exposes the chip's RF surface - sniffing, TX/RX, TX test modes, and on-chip crypto - across IEEE 802.15.4 (Zigbee/Thread) and Sub-1GHz (868/915 MHz, including Wireless M-Bus), plus a KillerBee integration. Raw BLE PHY capture still exists in firmware but is de-emphasized and not a headline feature (BLE protocol/connection handling is out of scope - Sniffle covers that). LoRa/SX1262 and the RP2040 USB bridge are provided by the stock CatSniffer firmware and are not maintained in this repo.
 
 License: GPL-3.0. Authoritative design doc: `docs/ARCHITECTURE.md` (read it before touching firmware or the wire protocol).
 
-## The three build targets
+## The two build targets
 
 ```
-HOST (Python: feralrf)  <->  RP2040 (Zephyr USB bridge)  <->  CC1352P7 (TI-RTOS 7 radio engine)
+HOST (Python: feralrf)  <->  RP2040 USB bridge (stock CatSniffer firmware)  <->  CC1352P7 (TI-RTOS 7 radio engine)
 ```
 
 Each target has its own toolchain and lives in its own tree. They rarely change together.
 
 - `python/feralrf/` - host API, the layer you will edit most. Pure Python, unit-testable without hardware.
 - `firmware/cc1352/` - the radio engine. C, TI-RTOS 7, TI SimpleLink SDK 8.30.01.01.
-- `firmware/rp2040/catsniffer/` - the USB bridge. C, Zephyr RTOS, board `rpi_pico`.
+
+The RP2040 USB bridge runs the stock CatSniffer firmware (transparent Cat-Bridge passthrough); it is not built or maintained in this repo.
 
 ## Build Commands
 
@@ -34,17 +35,6 @@ cmake .. && make -j$(nproc)   # outputs feralrf_cc1352.elf/.hex/.bin
 Important build caveat: the open-source GitHub SDK ships only the RF core prebuilt lib. The build also links three precompiled libs (drivers, driverlib, sysbios) that come only from TI's full installer SDK. Either install that and point `-DTI_SDK_FULL=~/ti/simplelink_cc13xx_cc26xx_sdk_8_30_01_01`, or copy the three `.a`/`.lib` files into the submodule. Do NOT hardcode a machine-specific `$HOME` path in CMakeLists. The Docker image (`docker build -t feralrf-build -f docker/Dockerfile .`) provides the ARM GCC toolchain.
 
 Flash the `.hex` (via catnip/UART BSL). The `.bin` causes boot failures.
-
-### RP2040 firmware (`firmware/rp2040/catsniffer/`)
-
-This is a Zephyr application, NOT a Pico-SDK project. It requires an external Zephyr workspace (west + Zephyr SDK 0.17+, Zephyr ~4.1.99); there is no in-repo `west.yml`.
-
-```bash
-source ~/zephyrproject/.venv/bin/activate && export ZEPHYR_BASE=$HOME/zephyrproject/zephyr
-cd firmware/rp2040/catsniffer
-west build -b rpi_pico            # -p for a clean build; output build/zephyr/zephyr.uf2
-picotool load build/zephyr/zephyr.uf2   # or copy the uf2 to the RPI-RP2 mass-storage volume
-```
 
 ### Python package (`python/`)
 
@@ -71,7 +61,7 @@ Layered; do not skip layers (rule in `docs/ARCHITECTURE.md` section 4):
 - L2 commands: `commands.py`, `_responses.py` (frame builders / response parsing).
 - L3 core (the stable public API): `radio.py` (the `Radio` class - one big class exposing everything: `set_phy`, `start_rx`/`read_packets`, `transmit*`, `configure_prop`, TX test modes, and AES/SHA/ECDH/ECDSA crypto), plus `enums.py`, `presets.py`, `exceptions.py`. BLE PHY raw capture stays (`PHY.BLE_1M`/`BLE_2M`/`BLE_CODED_S8`/`BLE_CODED_S2`); the BLE connection/GATT protocol stack was removed 2026-07-20 (Sniffle handles BLE).
 - L4 features: `emulation/` (IEEE154, OOK, sub-1GHz device emulation), `_jamming.py`, `_spectrum.py`.
-- Integrations: `integrations/killerbee.py` - exposes a CatSniffer as a KillerBee IEEE 802.15.4 device (`killerbee` is an optional, lazily imported dependency). Note `reset_on_init` defaults to False: the reset cycle breaks `init()` on stock RP2040 passthrough firmware and is only safe with FeralRF's own RP2040 build.
+- Integrations: `integrations/killerbee.py` - exposes a CatSniffer as a KillerBee IEEE 802.15.4 device (`killerbee` is an optional, lazily imported dependency). Note `reset_on_init` defaults to False: on the stock RP2040 passthrough firmware the reset cycle can break `init()`, so it stays opt-in.
 
 `feralrf/__init__.py` marks API stability tiers (STABLE / EXPERIMENTAL / PENDING command sets). Public surface is `Radio` + dataclasses; features build on L3 and never bypass to L2/L1.
 
@@ -116,8 +106,6 @@ Full pinout in `hardware/PINOUT.md`. Verified essentials:
 - `docs/PYTHON_API.md` - public API status and usage guidance.
 - `docs/VALIDATION_MATRIX.md` - baseline matrix and recommended validation flow.
 - `docs/TESTING-ON-LINUX.md` - end-to-end KillerBee integration runbook.
-- `docs/superpowers/specs/` - dated per-phase design specs (the "why" behind features).
-- `docs/PLAN_MAESTRO.md` - development phases and history.
 
 ## Conventions
 

@@ -49,7 +49,7 @@
 
 ### RP2040 UART Setup
 ```c
-// firmware/rp2040/include/config.h
+// RP2040 side (stock CatSniffer firmware)
 #define UART_TX_PIN      0   // GPIO0
 #define UART_RX_PIN      1   // GPIO1
 #define UART_RTS_PIN     2   // GPIO2

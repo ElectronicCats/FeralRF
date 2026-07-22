@@ -2,7 +2,7 @@
 # Install: pip install pre-commit && pre-commit install
 # Run manually: pre-commit run --all-files
 
-exclude: ^(docs/|firmware/rp2040/)
+exclude: ^(docs/)
 
 repos:
 

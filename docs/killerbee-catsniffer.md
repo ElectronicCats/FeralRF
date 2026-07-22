@@ -4,7 +4,7 @@ This wires the CatSniffer (CC1352, via FeralRF) into the [KillerBee](https://git
 
 ## What was built
 
-- **Adapter** `feralrf.integrations.killerbee.KillerBeeFeralRF` — a KillerBee device driver that wraps `feralrf.Radio` (sniff, inject, jam, `pnext`, capabilities, discovery). Ships in the FeralRF package. On init it **best-effort power-cycles the CC1352** (via the RP2040 shell reset) to guarantee a clean IEEE PHY state — FeralRF's IEEE↔BLE PHY switch is unreliable without a reset between modes (`docs/investigations/2026-04-28-f9-partial.md`). If the shell port is unavailable the reset is skipped and a plain init runs; disable entirely with `KillerBeeFeralRF(dev, reset_on_init=False)`.
+- **Adapter** `feralrf.integrations.killerbee.KillerBeeFeralRF` — a KillerBee device driver that wraps `feralrf.Radio` (sniff, inject, jam, `pnext`, capabilities, discovery). Ships in the FeralRF package. On init it **best-effort power-cycles the CC1352** (via the RP2040 shell reset) to guarantee a clean IEEE PHY state — FeralRF's IEEE↔BLE PHY switch is unreliable without a reset between modes. If the shell port is unavailable the reset is skipped and a plain init runs; disable entirely with `KillerBeeFeralRF(dev, reset_on_init=False)`.
 - **KillerBee hooks** (small, in `docs/killerbee-catsniffer.patch`): a `dev_feralcat.py` shim (`FERALCAT = KillerBeeFeralRF`), an `iscatsniffer()` probe + `devlist()` branch in `kbutils.py`, a `DEV_ENABLE_CATSNIFFER` flag in `config.py`, and two dispatch branches in `__init__.py` (forced `hardware="feralcat"` and serial auto-detect).
 
 Capabilities advertised: SNIFF, SETCHAN, INJECT, FREQ_2400, PHYJAM. Channels 11–26.

@@ -39,46 +39,26 @@ jobs:
         with:
           files: python/coverage.xml
 
-  # Firmware build (requires SDK)
+  # CC1352 firmware build (best-effort; full TI installer libs are not available in CI)
   firmware:
     runs-on: ubuntu-latest
-    continue-on-error: true  # SDK may not be available
+    continue-on-error: true  # TI full-installer libs (drivers/driverlib/sysbios) may be missing
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Install ARM GCC
         run: |
           sudo apt-get update
           sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi cmake ninja-build
 
-      - name: Cache Pico SDK
-        uses: actions/cache@v4
-        with:
-          path: firmware/sdk/pico-sdk
-          key: pico-sdk-2.0.0
-
-      - name: Download Pico SDK
-        run: |
-          if [ ! -d "firmware/sdk/pico-sdk" ]; then
-            git clone --depth 1 --branch 2.0.0 https://github.com/raspberrypi/pico-sdk.git firmware/sdk/pico-sdk
-            cd firmware/sdk/pico-sdk && git submodule update --init
-          fi
-
-      - name: Build RP2040 firmware
-        working-directory: firmware/rp2040
+      - name: Configure CC1352 build
+        working-directory: firmware/cc1352
         run: |
           mkdir -p build && cd build
-          cmake .. -DPICO_SDK_PATH=../../sdk/pico-sdk
-          make -j$(nproc) || echo "RP2040 build requires SDK setup"
-
-      # Note: CC1352 build requires TI SDK which must be downloaded manually
-      - name: Check CC1352 SDK
-        run: |
-          if [ ! -d "firmware/sdk/simplelink_cc13xx_cc26xx_sdk_7_10_01_24" ]; then
-            echo "TI SDK not available - CC1352 build skipped"
-            echo "Download from: https://www.ti.com/tool/download/SIMPLELINK-CC13XX-CC26XX-SDK"
-          fi
+          cmake .. || echo "CC1352 build requires the TI full-installer libs (SDK 8.30.01.01)"
 
   # Lint and format check
   lint:
@@ -111,11 +91,3 @@ jobs:
         working-directory: python
         run: |
           flake8 feralrf tests examples --max-line-length=100 --ignore=E501,W503
-
-      - name: Validate BLE release gate scripts
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e ./python
-          PYTHONPATH=python python3 python/examples/smoke_phase2.py --help
-          PYTHONPATH=python python3 python/examples/canary_regression.py --help
-          PYTHONPATH=python python3 python/examples/release_gate_ble.py --help

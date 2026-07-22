@@ -168,8 +168,8 @@ El objetivo de compatibilidad del paquete es:
 El CatSniffer puede exponerse como un dispositivo de
 [KillerBee](https://github.com/riverloopsec/killerbee) (framework de seguridad
 IEEE 802.15.4/Zigbee: `zbwireshark`, `zbdump`, `zbstumbler`, `zbreplay`,
-`zbassocflood`, `zbid`) sin ningun cambio de firmware. Diseño completo:
-`docs/superpowers/specs/2026-07-01-killerbee-integration-design.md`.
+`zbassocflood`, `zbid`) sin ningun cambio de firmware. Runbook end-to-end:
+`docs/TESTING-ON-LINUX.md` (y `docs/killerbee-catsniffer.md`).
 
 ### Adapter
 

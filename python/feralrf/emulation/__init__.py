@@ -2,8 +2,7 @@
 
 NOT a stack emulator (no auth, no framing, no encryption). Each personality
 transmits canonical payload bytes via burst (count + interval_ms) so a sniffer
-on a separate board can detect the device signature. See:
-  - docs/superpowers/specs/2026-05-04-f17-device-emulation-design.md
+on a separate board can detect the device signature.
 """
 
 from feralrf.emulation.ieee154_device import (

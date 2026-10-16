@@ -1,0 +1,188 @@
+# VALIDATION_MATRIX — Campaña OTA Sub-GHz, 15–16 de octubre de 2026
+
+> Matriz complementaria de la campaña actual. Sigue la organización conceptual del archivo `docs/VALIDATION_MATRIX.md` del repositorio ElectronicCats/FeralRF.
+>
+> No sustituye la matriz general del repositorio ni modifica sus resultados históricos. Los estados aquí registrados se refieren exclusivamente a las ejecuciones documentadas en `Experimentos FeralRF OTA SubGHz.txt`.
+
+## 1. Leyenda
+
+| Estado          | Significado                                             |
+| --------------- | ------------------------------------------------------- |
+| `PASS-RF`       | Intercambio funcional de paquetes cumplido              |
+| `PASS-CTRL`     | Control o comando confirmado sin validar por sí solo RF |
+| `PARTIAL`       | Resultado incompleto en una ejecución evaluable         |
+| `FAIL-RF`       | Prueba RF completa con criterio incumplido              |
+| `BLOCKED`       | Ejecución impedida o interrumpida                       |
+| `NOT VALIDATED` | Fuera del alcance o sin evidencia suficiente            |
+| `DEFERRED`      | Evaluación aplazada                                     |
+
+### Niveles de evidencia
+
+| Nivel | Evidencia                                            |
+| ----- | ---------------------------------------------------- |
+| A     | Medición RF física independiente                     |
+| B     | Comportamiento observado mediante dispositivos y API |
+| C     | Control/API, ACK o estado Shell                      |
+| D     | Código o configuración inspeccionada                 |
+| E     | Inferencia o hipótesis                               |
+| F     | No evaluado                                          |
+
+La campaña actual proporciona principalmente evidencia **B/C/D**.
+
+No se dispone de evidencia instrumental de nivel A para frecuencia, potencia, modulación o selección eléctrica del RF switch.
+
+## 2. Baseline de comandos
+
+| Comando / API            | Procesador o interfaz de control | Componente / función             | Estado                             |
+| ------------------------ | -------------------------------- | -------------------------------- | ---------------------------------- |
+| `status`                 | Shell RP2040                     | Consultar estado lógico          | PASS-CTRL                          |
+| `boot`                   | Shell RP2040                     | Preparar reinicio/control CC1352 | PASS-CTRL                          |
+| `exit`                   | Shell RP2040                     | Regresar a passthrough           | PASS-CTRL                          |
+| `band2`                  | Shell RP2040                     | Solicitar ruta Sub-GHz           | PASS-CTRL                          |
+| `Radio.init()`           | Python → Cat-Bridge              | Inicialización FeralRF           | PASS-CTRL                          |
+| `Radio.set_phy()`        | Python → CC1352                  | Selección PHY                    | PASS-CTRL                          |
+| `Radio.configure_prop()` | Python → CC1352                  | Parámetros propietarios          | PASS-CTRL                          |
+| `Radio.set_power()`      | Python → CC1352                  | Potencia solicitada              | PASS-CTRL                          |
+| `Radio.get_stats()`      | Python → CC1352                  | Estadísticas                     | PASS-CTRL con incidencias          |
+| `Radio.start_rx()`       | Python → CC1352                  | Activación RX                    | PASS-CTRL                          |
+| `Radio.transmit()`       | Python → CC1352                  | Solicitud TX                     | PASS-CTRL                          |
+| `Radio.read_packets()`   | Python → Cat-Bridge              | Obtención de paquetes            | PASS-RF funcional                  |
+| `Radio.stop_rx()`        | Python → CC1352                  | Detención RX                     | PASS-CTRL en ejecuciones completas |
+| `Radio.disconnect()`     | Python → USB serial              | Cierre de sesión                 | PASS-CTRL en ejecuciones completas |
+
+Los ACK de configuración no constituyen validación de parámetros físicos.
+
+## 3. Matriz OTA por preset
+
+| Test ID | Preset                  | Frecuencia MHz | Modulación solicitada | Marcador   | TX ACK | RX con marcador y crc_ok reportado | Resultado   |
+| ------- | ----------------------- | -------------: | --------------------- | ---------- | -----: | ---------------------: | ----------- |
+| P01     | `gfsk_902_50k`          |          902.2 | GFSK                  | `A5010001` |  10/10 |                  10/10 | **PASS-RF** |
+| P02     | `wisun_915_fsk_100k`    |          902.2 | FSK                   | `A5020001` |  10/10 |                  10/10 | **PASS-RF** |
+| P03     | `wisun_915_fsk_150k`    |          902.2 | FSK                   | `A5030001` |  10/10 |                  10/10 | **PASS-RF** |
+| P04     | `wisun_915_fsk_200k`    |          902.2 | FSK                   | `A5040001` |  10/10 |                  10/10 | **PASS-RF** |
+| P05     | `wisun_915_fsk_300k`    |          902.2 | FSK                   | `A5050001` |  10/10 |                  10/10 | **PASS-RF** |
+| P06     | `gfsk_915_50k`          |          915.0 | GFSK                  | `A5060001` |  10/10 |                  10/10 | **PASS-RF** |
+| P07     | `sidewalk_915_fsk_50k`  |          915.0 | FSK                   | `A5070001` |  10/10 |                  10/10 | **PASS-RF** |
+| P08     | `sidewalk_915_fsk_250k` |          915.0 | FSK                   | `A5080001` |  10/10 |                  10/10 | **PASS-RF** |
+| P09     | `gfsk_868_50k`          |          868.0 | GFSK                  | `A5090001` |  10/10 |                  10/10 | **PASS-RF** |
+| P10     | `gfsk_868_100k`         |          868.0 | GFSK                  | `A50A0001` |  10/10 |                  10/10 | **PASS-RF** |
+| P11     | `wireless_mbus_s_868`   |          868.3 | GFSK                  | `A50B0001` |  10/10 |                  10/10 | **PASS-RF** |
+| P12     | `wireless_mbus_t_868`   |         868.95 | GFSK                  | `A50C0001` |  10/10 |                  10/10 | **PASS-RF** |
+| P13     | `wireless_mbus_c_868`   |         868.95 | GFSK                  | `A50D0001` |  10/10 |                  10/10 | **PASS-RF** |
+
+**Alcance:** recepción de paquetes propietarios FeralRF, no conformidad de protocolo.
+
+## 4. Registro cronológico completo de ejecuciones
+
+Todos los timestamps corresponden a UTC.
+
+| ID  | Inicio UTC      | Tipo            | Preset / identificador abreviado                 | TX ACK |    RX válido | Estado           |
+| --- | --------------- | --------------- | ------------------------------------------------ | -----: | -----------: | ---------------- |
+| E01 | 15-oct 21:08:08 | Control inicial | `wisun_915_fsk_50k` / Checkpoint 3A              |     10 |           10 | PASS-RF          |
+| E02 | 15-oct 22:11:27 | P01             | `gfsk_902_50k` / run-01                          |     10 |           10 | PASS-RF          |
+| E03 | 15-oct 22:14:21 | P02             | `wisun_915_fsk_100k` / run-01                    |     10 |           10 | PASS-RF          |
+| E04 | 15-oct 22:16:36 | P03             | `wisun_915_fsk_150k` / run-01                    |     10 |           10 | PASS-RF          |
+| E05 | 15-oct 22:21:16 | Control         | `control-after-3-presets-run-01`                 |     10 |           10 | PASS-RF          |
+| E06 | 15-oct 22:23:13 | P04             | `wisun_915_fsk_200k` / run-01                    |     10 |           10 | PASS-RF          |
+| E07 | 15-oct 22:24:23 | P05             | `wisun_915_fsk_300k` / run-01                    |     10 |           10 | PASS-RF          |
+| E08 | 15-oct 22:35:46 | P06             | `gfsk_915_50k` / run-01                          |     10 |           10 | PASS-RF          |
+| E09 | 15-oct 22:36:43 | Control         | `control-after-6-presets-run-01`                 |      0 |            0 | BLOCKED          |
+| E10 | 15-oct 22:41:11 | Control         | `control-after-6-presets-run-02`                 |     10 |           10 | PASS-RF          |
+| E11 | 15-oct 22:43:01 | P07             | `sidewalk_915_fsk_50k` / run-01                  |     10 |           10 | PASS-RF          |
+| E12 | 15-oct 22:46:04 | P08             | `sidewalk_915_fsk_250k` / run-01                 |     10 |           10 | PASS-RF          |
+| E13 | 15-oct 22:49:50 | P09             | `gfsk_868_50k` / run-01                          |     10 |           10 | PASS-RF          |
+| E14 | 15-oct 22:53:00 | P10             | `gfsk_868_100k` / run-01                         |     10 |           10 | PASS-RF          |
+| E15 | 15-oct 22:54:05 | Repetición      | `gfsk_868_100k` / run-01 reutilizado             |      0 |            0 | BLOCKED          |
+| E16 | 15-oct 22:54:12 | Repetición      | `gfsk_868_100k` / run-01 reutilizado             |     10 |           10 | PASS-RF          |
+| E17 | 15-oct 22:56:29 | Control         | `control-after-10-presets-post-reconnect-run-01` |     10 |           10 | PASS-RF          |
+| E18 | 15-oct 22:58:27 | P11, intento 1  | `wireless_mbus_s_868` / run-01                   |      0 |            0 | BLOCKED          |
+| E19 | 15-oct 23:00:14 | P11, intento 2  | `wireless_mbus_s_868` / run-02                   |     10 |           10 | PASS-RF          |
+| E20 | 16-oct 14:52:01 | P12             | `wireless_mbus_t_868` / run-01                   |     10 |           10 | PASS-RF          |
+| E21 | 16-oct 14:54:19 | P13             | `wireless_mbus_c_868` / run-01                   |     10 |           10 | PASS-RF          |
+| E22 | 16-oct 14:54:52 | RESET RX        | `wireless_mbus_c_868` / run-01 reutilizado       |     10 | 0 observados | BLOCKED inducido |
+| E23 | 16-oct 14:55:05 | RESET TX        | `wireless_mbus_c_868` / run-01 reutilizado       |      5 |            5 | BLOCKED inducido |
+| E24 | 16-oct 15:01:00 | Control final   | `control-after-13-presets-post-reset-run-01`     |     10 |           10 | PASS-RF          |
+
+**Nota:** los valores cero de E09, E15 y E18 corresponden a ejecuciones que no llegaron a transmitir. En E22, la lectura del RX fue interrumpida; cero eventos entregados no significa cero paquetes recibidos físicamente.
+
+## 5. Matriz de incidencias
+
+| Incidente                | Test ID | Interfaz afectada | Error observado   | Recuperación posterior |
+| ------------------------ | ------- | ----------------- | ----------------- | ---------------------- |
+| Timeout `get_stats()` TX | E09     | `COM33`           | `TimeoutError`    | E10 PASS-RF            |
+| Puerto TX no disponible  | E15     | `COM33`           | `ConnectionError` | E16 PASS-RF            |
+| Timeout `get_stats()` RX | E18     | `COM88`           | `TimeoutError`    | E19 PASS-RF            |
+| RESET físico RX          | E22     | `COM88`           | `SerialException` | E24 PASS-RF            |
+| RESET físico TX          | E23     | `COM33`           | `SerialException` | E24 PASS-RF            |
+
+Las recuperaciones posteriores no identifican las causas raíz de los incidentes originales.
+
+## 6. Matriz por PHY
+
+| PHY / categoría             | Control                     | OTA                        | Estado            |
+| --------------------------- | --------------------------- | -------------------------- | ----------------- |
+| `PROPRIETARY_GFSK` con FSK  | PASS-CTRL                   | 10/10 en presets ensayados | PASS-RF funcional |
+| `PROPRIETARY_GFSK` con GFSK | PASS-CTRL                   | 10/10 en presets ensayados | PASS-RF funcional |
+| IEEE 802.15.4               | No evaluado en esta campaña | No evaluado                | NOT VALIDATED     |
+| BLE PHY                     | No evaluado en esta campaña | No evaluado                | NOT VALIDATED     |
+| LoRa/SX1262                 | No evaluado                 | No evaluado                | NOT VALIDATED     |
+
+## 7. Matriz por modulación propietaria
+
+| Modulación solicitada | Frecuencias probadas                | Presets nuevos | Resultado |
+| --------------------- | ----------------------------------- | -------------: | --------- |
+| FSK                   | 902.2 y 915 MHz                     |              6 | PASS-RF   |
+| GFSK                  | 868, 868.3, 868.95, 902.2 y 915 MHz |              7 | PASS-RF   |
+| OOK                   | No probado                          |              0 | DEFERRED  |
+| MSK                   | No probado                          |              0 | DEFERRED  |
+| 4-FSK                 | No probado                          |              0 | DEFERRED  |
+| 4-GFSK                | No probado                          |              0 | DEFERRED  |
+
+La agrupación corresponde al `mod_type` solicitado por los presets; la modulación física no fue medida independientemente.
+
+## 8. Matriz de switching y recuperación
+
+| Secuencia                                                | Evidencia                                       | Estado                       |
+| -------------------------------------------------------- | ----------------------------------------------- | ---------------------------- |
+| `boot` → `exit`                                          | `BOOT` y `PASSTHROUGH`                          | PASS-CTRL                    |
+| `band2` → `status`                                       | `SUB-GHz Band`, `Band: 1`                       | PASS-CTRL                    |
+| Cambios de preset dentro de Sub-GHz sin reset por prueba | 13 presets con recepción                        | PASS-RF funcional            |
+| 915 → 868 MHz mediante `configure_prop()`                | Recepciones posteriores                         | PASS-RF funcional            |
+| 868 → 902.2 MHz                                          | Control posterior 10/10                         | PASS-RF funcional            |
+| Desconexión/reconexión USB                               | Un BLOCKED seguido de PASS-RF                   | Recuperación en nueva sesión |
+| RESET RX durante ejecución                               | Excepción serial                                | BLOCKED inducido             |
+| RESET TX durante ejecución                               | Cinco ACK y cinco paquetes antes de excepciones | BLOCKED inducido             |
+| Control posterior a RESET                                | 10/10                                           | PASS-RF funcional            |
+| Estado eléctrico CTF1/CTF2/CTF3                          | Sin medición                                    | NOT VALIDATED                |
+| Posición física del RF switch                            | Sin medición                                    | NOT VALIDATED                |
+
+## 9. Matriz de protocolo frente a validación
+
+| Contexto del preset  | PHY/modulación solicitada | Paquetes FeralRF entre CatSniffer | Interoperabilidad de protocolo  |
+| -------------------- | ------------------------- | --------------------------------- | ------------------------------- |
+| Wi-SUN               | Sub-GHz FSK               | PASS-RF                           | NOT VALIDATED                   |
+| Amazon Sidewalk      | Sub-GHz FSK               | PASS-RF                           | NOT VALIDATED                   |
+| Wireless M-Bus S/T/C | Sub-GHz GFSK              | PASS-RF                           | NOT VALIDATED                   |
+| GFSK genérico        | Sub-GHz GFSK              | PASS-RF                           | No aplica como stack específico |
+
+## 10. Validaciones pendientes
+
+| ID  | Tema                                                  | Estado        | Evidencia requerida                          |
+| --- | ----------------------------------------------------- | ------------- | -------------------------------------------- |
+| V01 | Causa histórica de cero recepciones                   | OPEN          | Comparación completa de comandos y ejecución |
+| V02 | Estado físico del RF switch                           | OPEN          | Revisión hardware y medición                 |
+| V03 | Correspondencia firmware–commit                       | OPEN          | Hash y procedencia de binarios               |
+| V04 | Tratamiento de `sync_word`                            | OPEN          | Python, firmware y especificación aplicable  |
+| V05 | Unidades de `deviation` y `rx_bw`                     | OPEN          | Definiciones y conversión del firmware       |
+| V06 | `channel=37`                                          | OPEN          | Estructuras de paquetes y decodificación     |
+| V07 | RSSI y LQI                                            | OPEN          | Ruta de generación y escalado                |
+| V08 | `device_timestamp_us`                                 | OPEN          | Origen, reloj y unidades                     |
+| V09 | Timeouts intermitentes de `get_stats()`               | OPEN          | Secuencia de solicitudes y respuestas        |
+| V10 | Reconexión USB y recuperación de sesión               | OPEN          | Gestión de puertos y lifecycle               |
+| V11 | Interoperabilidad Wi-SUN                              | NOT VALIDATED | Implementación y equipo compatible           |
+| V12 | Interoperabilidad Wireless M-Bus                      | NOT VALIDATED | Tramas conformes y equipo compatible         |
+| V13 | Interoperabilidad Sidewalk                            | NOT VALIDATED | Stack y entorno compatible                   |
+| V14 | Medición espectral                                    | NOT VALIDATED | Instrumentación RF                           |
+| V15 | Reproducibilidad bajo distintas condiciones de enlace | NOT VALIDATED | Ensayos controlados adicionales              |
+
+**Estado final de VALIDATION_MATRIX:** 13 presets nuevos con PASS-RF funcional, cinco controles positivos completos, una repetición satisfactoria y cinco ejecuciones bloqueadas documentadas. La auditoría causal de los experimentos históricos permanece abierta.

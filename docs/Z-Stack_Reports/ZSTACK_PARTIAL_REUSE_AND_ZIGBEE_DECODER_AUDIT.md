@@ -16,7 +16,7 @@ This audit uses the following evidence labels:
 
 The principal findings are:
 
-1. **CONFIRMED BY CURRENT SOURCE** - The current firmware already delivers CRC-valid IEEE 802.15.4 PSDUs to Python with the one-byte PHY length removed and the two-byte FCS retained. `Packet.data` therefore contains the complete received MAC frame, including encrypted Zigbee payload bytes and the received FCS. No firmware change is needed for passive, single-channel Zigbee parsing of frames that pass CRC.
+1. **CONFIRMED BY CURRENT SOURCE** - The current firmware already delivers CRC-valid IEEE 802.15.4 PSDUs to Python with the one-byte PHY length removed and the two-byte FCS retained. `Packet.data` therefore contains the complete received MAC frame, including encrypted Zigbee payload bytes and the received FCS. No firmware change would be needed to supply these bytes to a proposed passive, single-channel Zigbee parser.
 
 2. **CONFIRMED BY PINNED SDK SOURCE** - There is no independently reusable NWK or APS decoder in the visible Z-Stack source. The normal parsers, `NLDE_ParseMsg()` and `APSDE_ParseMsg()`, are declared but not defined in the source tree; the SDK's configured architecture links role-specific TI ARM Clang/IAR Z-Stack libraries for the NWK/APS runtime. No GCC variant is present.
 
@@ -26,11 +26,11 @@ The principal findings are:
 
 5. **BLOCKED BY IDENTIFIED DEPENDENCY** - AF, ordinary NWK/APS processing, ZMAC/TIMAC, the Z-Stack API, BDB, active security, joining, routing, and endpoint behavior require the operational Z-Stack runtime. They depend on OSAL Port tasks and messages, TI-RTOS services, global stack state, role configuration, TIMAC and Z-Stack archives, RF ownership, timers, heap, and, for persistent/security behavior, NV and crypto drivers.
 
-6. **CONFIRMED BY CURRENT SOURCE** - A meaningful intermediate architecture exists between raw IEEE 802.15.4 and a full Zigbee stack: a host-side passive decode pipeline. It can parse MAC, NWK, APS, ZDO, ZCL, and security headers; preserve ciphertext and raw offsets; and optionally maintain address, key, fragmentation, transaction, topology, and attribute state. It does not join, route, acknowledge, commission, or behave as a Zigbee node.
+6. **CONFIRMED BY CURRENT SOURCE** - The existing raw-frame boundary permits a meaningful intermediate architecture between IEEE 802.15.4 reception and a full Zigbee stack. **TECHNICALLY PLAUSIBLE BUT UNVERIFIED** - A proposed host-side passive pipeline could parse MAC, NWK, APS, ZDO, ZCL, and visible security headers; preserve ciphertext and raw offsets; and optionally maintain address, key, fragmentation, transaction, topology, and attribute state. No such repository-native Zigbee decoder is currently implemented or demonstrated. Passive analysis would not join, route, acknowledge, commission, or behave as a Zigbee node.
 
-7. **TECHNICALLY PLAUSIBLE BUT UNVERIFIED** - With supplied keys and sufficient nonce/address context, host code can perform Zigbee authenticated decryption without network participation. An isolated encrypted packet is not always sufficient: short-to-IEEE-address mappings, key sequence/material, security level, prior transport-key traffic, or fragmented content can be missing.
+7. **CONFIRMED BY CURRENT SOURCE** - FeralRF does not currently implement Zigbee NWK or APS decryption. It preserves the received protected bytes and MIC when those bytes are present in a CRC-valid frame. **TECHNICALLY PLAUSIBLE BUT UNVERIFIED** - With authorized keys, the correct security parameters, and sufficient nonce/address context, proposed host code could attempt Zigbee authenticated decryption without network participation, but plaintext is not authenticated unless MIC verification succeeds. An isolated encrypted packet is not always sufficient: short-to-IEEE-address mappings, key sequence/material, security level, prior protocol state, or fragmented content can be missing.
 
-8. **CONFIRMED BY CURRENT SOURCE** - Of the compared in-process approaches, an independent Python decoder using the standard library introduces the fewest new package dependencies. An external Wireshark/PCAP workflow adds no FeralRF Python runtime dependency but is not an in-process decoder API. Scapy offers useful existing dissectors, with documented coverage gaps. KillerBee, zigpy, and WHAD do not currently provide a source-confirmed, direct, complete decoder for FeralRF's `Packet.data` contract.
+8. **CONFIRMED BY CURRENT SOURCE** - Of the compared in-process approaches, an independent Python decoder using the standard library would introduce the fewest new package dependencies. An external Wireshark/PCAP workflow adds no FeralRF Python runtime dependency but is not an in-process decoder API. Pinned Scapy source exposes relevant dissectors with bounded coverage; KillerBee remains version-unpinned; and pinned zigpy and WHAD source/release evidence does not establish a direct decoder for FeralRF's `Packet.data`. None has been validated against FeralRF captures in this repository.
 
 These findings establish reuse and integration boundaries. They are not evidence that any proposed decoder has been implemented or validated in FeralRF.
 
@@ -40,8 +40,8 @@ These findings establish reuse and integration boundaries. They are not evidence
 
 | Item | Verified value | Evidence and classification |
 |---|---|---|
-| FeralRF repository revision | `8a4a8d8194da7f4b2b5c5a4a221b749cc2fa882b` | Git object in the checkout, which was clean before this report was added; **CONFIRMED BY CURRENT SOURCE** |
-| Revision used by the two 2026-10-27 audits | `3409955011ebacc448e96605780560cf8118b364` | The current commit adds only the two audit documents; the firmware and Python source under investigation are unchanged from that parent; **CONFIRMED BY CURRENT SOURCE** |
+| FeralRF repository revision | `bfe056cc323911b6fc4c6f224d1f4f626ee15942` | Git object in the clean checkout verified during correction on 2026-11-02; this commit adds the present audit document; **CONFIRMED BY CURRENT SOURCE** |
+| Revision used by the two 2026-10-27 audits | `3409955011ebacc448e96605780560cf8118b364` | The commits through `bfe056c` add only the two preceding audits and this audit. No firmware, Python, CMake, linker, generated configuration, or SDK-pointer path changed relative to the earlier audited source; **CONFIRMED BY CURRENT SOURCE** |
 | SDK submodule revision | `5b31d0a4903351e544546e23ef3330eaa4291ceb` | Submodule object, tagged `lpf2-8.30.01.01`; **CONFIRMED BY CURRENT SOURCE** |
 | SDK tree | `firmware/sdk/simplelink_cc13xx_cc26xx_sdk_8_30_01_01` | Full `source/ti/zstack` and SysConfig metadata are present; SDK example projects are not present in this checkout; **CONFIRMED BY CURRENT SOURCE** |
 | Active processor configuration | CC1352P7, `DeviceFamily_CC13X2X7`, Cortex-M4F hard-float | `firmware/cc1352/CMakeLists.txt:3-18,32-48`; **CONFIRMED BY CURRENT SOURCE** |
@@ -54,13 +54,23 @@ The investigation shell did not resolve `arm-none-eabi-gcc`, `tiarmclang`, `iarb
 
 The active `APP_SOURCES` contain FeralRF radio, protocol, task, crypto, and support code, not Z-Stack, TIMAC, OSAL Port, NVOCMP, or Z-Stack generated configuration (`firmware/cc1352/CMakeLists.txt:129-148`). Include directories and linked libraries likewise contain TI drivers, DriverLib, RF, and TI-RTOS support but no Z-Stack or TIMAC libraries (`:81-125,240-253`). The only target definitions are device and local logging/configuration definitions, not the Z-Stack role and feature definitions (`:225-237`).
 
-`firmware/cc1352/syscfg/ti_sysbios_config.h:36` configures a 0x1000-byte BIOS heap. This is not the Z-Stack OSAL heap. The SDK OSAL heap manager defaults separately to 3072 bytes unless overridden (`source/ti/ti154stack/common/heapmgr/rtos_heaposal.h:117-119`).
+The heap-related values in the current target and the SDK describe different mechanisms and must not be added together:
+
+| Allocation or definition | Size | Provenance and allocator | Active in current FeralRF target? |
+|---|---:|---|---|
+| FeralRF primary/default `HeapMem` backing store | `0x4000` bytes (16 KiB) | `HEAPSIZE` creates linker section `.priheap` and symbols `__primary_heap_start__`/`__primary_heap_end__` (`firmware/cc1352/linker/cc1352p7.ld:33-34,265-271`). `BIOS_init()` uses those symbols to construct `BIOS_heapMemObject` and assigns it to `Memory_defaultHeapInstance` (`firmware/cc1352/syscfg/ti_sysbios_config.c:83-110`). The active CMake target selects this linker script and compiles that generated C file (`firmware/cc1352/CMakeLists.txt:15-18,48,164-180`). | **Yes** |
+| Generated macro `BIOS_heapSize_D` | `0x1000` bytes (4 KiB) | Defined in `firmware/cc1352/syscfg/ti_sysbios_config.h:36`, but no use of that macro as the size source for the active heap construction was found. It is not evidence of a second allocated heap. | **No separate allocation established** |
+| Z-Stack RTOS `app_release.cfg` OSAL heap selection | `0x1800` bytes (6144 bytes) | The SDK Z-Stack configuration sets `HEAPMGR_CONFIG = 0` and `HEAPMGR_SIZE = 0x1800`; configuration 0 creates a TI-RTOS `HeapCallback` backed by the OSAL allocator (`source/ti/zstack/rtos/app_release.cfg:670-706,741-758`). This is Z-Stack runtime/example configuration, not FeralRF's generated configuration. | **No** |
+| Generic TI 15.4 common OSAL heap fallback | `3072` bytes | `HEAPMGR_SIZE` fallback in `source/ti/ti154stack/common/heapmgr/rtos_heaposal.h:117-119`, used only when no configuration has already defined it. The Z-Stack configuration above supplies 6144 instead. | **No** |
+| FeralRF RF and UART task stacks | 4096 bytes each | Separate static arrays, not allocator heaps (`firmware/cc1352/src/main_rtos.c:54-66,220-232`). | **Yes, but not heaps** |
+
+The earlier Z-Stack feasibility audit correctly identified the active 16-KiB FeralRF primary `HeapMem` and the Z-Stack configuration's 6-KiB OSAL heap, and it correctly warned that they were not an additive integration measurement. Its "Z-Stack default" wording should be read as the inspected `app_release.cfg` value, not as current FeralRF consumption or the generic TI 15.4 fallback. No map or runtime evidence here establishes free RAM, fragmentation, or an integrated Z-Stack memory requirement.
 
 ## 3. Function-level Z-Stack reuse analysis
 
 ### 3.1 Reuse matrix
 
-`None` below means no direct dependency in the isolated algorithm. It does not mean that compiling the original containing translation unit is dependency-free.
+`None` below means no direct dependency in the isolated algorithm. It does not mean that compiling the original containing translation unit is dependency-free. For compactness, matrix paths beginning `stack/`, `zmac/`, `osal/`, or `startup/` are relative to the SDK's `source/ti/zstack/`; the full SDK-root-relative paths are recorded in Section 12.2.
 
 | Component and exact interface | Actual function | Direct/important transitive dependencies | Runtime services in original use | Reuse classification | Assumption that fails in FeralRF; minimum technical adaptation | FeralRF boundary |
 |---|---|---|---|---|---|---|
@@ -229,8 +239,8 @@ RadioIF_startIeee154RfBackend()              radio_if.c:1335-1371
 RadioIF_processIeee154Packets()              radio_if.c:1497-1568
   strips PHR and RF metadata
   drops CRC-failed frames
-  copies PSDU, including FCS, into RadioRxPacket.data
-  -> enqueueRxPacket()                       radio_if.c:872-880
+  copies PSDU, including FCS, into RadioIF_RxPacket.data
+  -> RadioIF_enqueuePacket()                 radio_if.c:872-880
 
 RadioIF_poll()/RadioIF_popRxPacket()          radio_if.c:2354 onward, 2392-2400
   -> DataTask_poll()                         data_task.c:112-139
@@ -276,15 +286,27 @@ The SDK defines the appended correlation/status byte as six correlation bits, bi
 | 13 | `data length` | PSDU including FCS |
 | following | 3 | FeralRF link-layer metadata |
 
-The generic protocol payload maximum is 255 bytes (`firmware/cc1352/include/protocol.h:15-28`). Thirteen bytes of RX metadata plus three bytes of link metadata leave a firmware emission cap of 239 data bytes, even though `RadioRxPacket.data` is 242 bytes (`radio_if.h:14-28`). Valid IEEE 802.15.4 PSDUs are at most 127 bytes, so valid Zigbee frames are not truncated by either cap. Oversized proprietary or malformed captures can be capped. Queue pressure instead drops whole frames: RF has three data entries and the application queue depth is eight (`radio_if.c:32-44,872-880`).
+The generic protocol payload maximum is 255 bytes (`firmware/cc1352/include/protocol.h:15-28`). Thirteen bytes of RX metadata plus three bytes of link metadata leave a firmware emission cap of 239 data bytes, even though `RadioIF_RxPacket.data` is 242 bytes (`radio_if.h:14-28`). Valid IEEE 802.15.4 PSDUs are at most 127 bytes, so valid Zigbee frames are not truncated by either cap. Oversized proprietary or malformed captures can be capped. Queue pressure instead drops whole frames: RF has three data entries and the application queue depth is eight (`radio_if.c:32-44,872-880`).
 
 For an accepted standards-compliant frame, the MAC header, MAC payload (plaintext or ciphertext), MIC if present, and FCS are copied without byte transformation. The preservation is therefore lossless at the per-frame byte level. It does not imply lossless capture over time: CRC rejection and RF/application queue exhaustion remove whole frames before Python observes them.
 
 ### 5.4 Python `Packet.data` and parser assumptions
 
-`Packet` exposes `data`, `timestamp`, `channel`, `rssi`, `lqi`, `crc_valid`, and link-layer fields (`python/feralrf/radio.py:18-30`). `Radio.read_packets()` decodes the response and slices the advertised data length (`radio.py:636-709`). It does not label or strip the FCS and does not parse a PHY, MAC, or Zigbee header.
+The public `Packet` dataclass uses the following exact field names (`python/feralrf/radio.py:18-30`):
 
-The alternate response parser has the same byte contract (`python/feralrf/_responses.py:24-57`). Neither parser verifies that the response actually contains all bytes claimed by the data-length field before slicing. Firmware-generated responses are trusted; a decoder must not copy that assumption to arbitrary external bytes.
+| Public field | Python type | Verified source and semantics | Related names that are not aliases |
+|---|---|---|---|
+| `timestamp_us` | `int` | Transport bytes 0-7 are parsed as an unsigned little-endian integer. For IEEE RX, firmware widens the 32-bit RAT timestamp after integer division by four, so the numeric unit is microseconds but there is no rollover extension or wall-clock epoch. | `timestamp` is a local variable in both response parsers. KillerBee's `datetime` result is a newly sampled host UTC time, not this field. |
+| `channel` | `int` | Transport byte 8; the firmware's configured channel at processing time. | No alternate public name. |
+| `rssi_dbm` | `int` | Transport byte 9 decoded as signed 8-bit RSSI in dBm. | `rssi` is a local parser variable. KillerBee dictionary keys `rssi` and `dbm` both copy this value. |
+| `lqi` | `int` | Transport byte 10; FeralRF's `0x7f` mask of the RF correlation/status byte, with the limitations in Section 5.2. | No alternate public name. |
+| `crc_ok` | `bool` | Transport byte 11 compared with integer `1`; all currently emitted IEEE packets are true because firmware drops CRC-error entries first. | There is no public `crc_valid` field or property. KillerBee dictionary key `validcrc` copies `Packet.crc_ok`; firmware also names its C field `crc_ok`. |
+| `data` | `bytes` | Advertised transport data slice; for IEEE RX this is the FCS-present MPDU and has no PHR. | KillerBee dictionary key `bytes` contains the same bytes. |
+| `ll_pdu_kind`, `ll_pdu_type`, `ll_pdu_flags` | `Optional[int]` | FeralRF link-layer metadata; default `None`. The ordinary IEEE path clears these values. | Not Zigbee layer indicators. |
+
+`Radio.read_packets()` decodes the response and slices the advertised data length (`radio.py:636-709`). `RxPacketResponse` in `python/feralrf/_responses.py:10-22,29-52` uses the same public-style names and types internally. Neither parser labels or strips the FCS or parses a PHY, MAC, or Zigbee header. `timestamp`, `rssi`, and `crc_ok` inside the parser bodies are local variables, not additional `Packet` attributes.
+
+The alternate response parser has the same byte contract (`python/feralrf/_responses.py:10-22,29-52`). Neither parser verifies that the response actually contains all bytes claimed by the data-length field before slicing. Firmware-generated responses are trusted; a decoder must not copy that assumption to arbitrary external bytes.
 
 Existing host-facing assumptions a decoder must preserve are:
 
@@ -299,7 +321,7 @@ Although RF automatic CRC flushing is disabled, firmware discards frames whose a
 
 On transmit, FeralRF accepts at most 125 MPDU bytes without an FCS and configures RF Core to generate PHY/FCS (`radio_if.c:61,468-487`; `smartrf_ieee_15_4_0.c:146-158`). This RX/TX asymmetry explains why the KillerBee adapter removes two received FCS bytes before reinjection.
 
-**Conclusion:** basic passive Zigbee decoding of CRC-valid frames requires no firmware modification. This conclusion is about byte availability, not about an existing Zigbee implementation.
+**Conclusion:** implementing a basic host-side passive Zigbee parser for CRC-valid frames would require no firmware modification to obtain the bytes. This conclusion is about byte availability, not about an existing Zigbee implementation or validated decoder.
 
 ## 6. Independent Zigbee decoder boundaries
 
@@ -316,15 +338,24 @@ On transmit, FeralRF accepts at most 125 MPDU bytes without an FCS and configure
 
 ### 6.2 Stateless, stateful passive, and active behavior
 
-**Stateless parsing** can split a complete frame into validated bounded fields; report malformed/truncated/count-overflow conditions; expose all headers; decode plaintext ZDO/ZCL; and retain encrypted payloads. It does not need a Zigbee task, endpoint, NV store, or RF change.
+**Stateless parsing**, if implemented, can split a complete frame into validated bounded fields; report malformed/truncated/count-overflow conditions; expose visible headers; decode plaintext ZDO/ZCL; and retain encrypted payloads and MIC bytes. It does not need a Zigbee task, endpoint, NV store, or RF change.
 
 **Stateful passive analysis** adds short-to-IEEE mappings, network and link keys, key-sequence history, replay/duplicate tracking, APS fragment reassembly, transaction correlation, topology, and attribute caches. It still does not transmit or join. State must distinguish observations from inferred facts and must never authenticate a payload unless MIC verification succeeds.
 
 **Active protocol participation** includes association/joining, beacon/scan behavior, parent polling, timely MAC acknowledgements, network formation/routing, APS retries/acks, commissioning, key transport/switch/update, frame-counter persistence, endpoint discovery, and response generation. These require an operational MAC/NWK/APS/ZDO/ZCL stack or equivalent implementation; packet parsers are insufficient.
 
+The implementation and validation status is therefore:
+
+| Capability category | Status in this repository |
+|---|---|
+| Existing FeralRF capability | Raw CRC-valid IEEE 802.15.4 frame reception and delivery to Python, with the byte/metadata contract in Section 5. FeralRF does not automatically identify every received frame as Zigbee. |
+| Architecturally feasible capability | Bounded host parsing of visible MAC/NWK/APS/ZDO/ZCL/security structures using the already delivered bytes; no firmware change is inherently required for CRC-valid single-channel input. |
+| Proposed implementation | Independent Python decoder stages or an adapter to a pinned third-party dissector. The module names in Section 8 are proposed boundaries, not files that exist. |
+| Experimentally validated capability | No repository evidence demonstrates a native Zigbee decoder, NWK/APS decryption, third-party decoder compatibility against `Packet.data`, or coverage of all Zigbee revisions/extensions. This does not negate the source-confirmed raw receive path. |
+
 ### 6.3 Firmware changes that are and are not implied
 
-No firmware change is implied for single-channel, CRC-valid passive decoding or host-side key-assisted decryption.
+No firmware change is inherently implied for a proposed single-channel, CRC-valid passive decoder. A proposed host decryption service could also remain host-side, but FeralRF does not currently implement NWK/APS decryption and that capability remains unverified.
 
 Firmware behavior would have to change to expose:
 
@@ -348,19 +379,21 @@ The integration requires a FeralRF-specific KillerBee patch/fork. `docs/killerbe
 
 ### 7.2 Candidate comparison
 
+External source availability is not the same as tested FeralRF compatibility. The source review below is pinned to Scapy v2.8.0 (`e2e35c07bce2f40e7513e1b29a6d300d5329dbc3`), zigpy 2.4.1 (`10b68377bcbd9a8b15cbbfb506cebdc450704614`), and WHAD v1.2.18 (`9d48016375cd2fdae58517fe6f2fb97022c3bb61`). The KillerBee files inspected remain a mutable upstream branch snapshot because no immutable revision for that snapshot could be established from available history. Wireshark's online display-filter pages are explicitly version-unpinned. No third-party package was installed or executed.
+
 | Candidate | Capture/device control | IEEE 802.15.4 parsing | Zigbee decoding | Active-stack behavior | License/dependencies and exact FeralRF compatibility |
 |---|---|---|---|---|---|
-| Current FeralRF KillerBee adapter plus upstream KillerBee helpers | Yes, through the local patch/fork | Upstream contains legacy `dot154decode` helpers and also depends on Scapy | Upstream contains basic `zigbeedecode` NWK/APS helpers; source does not establish current-complete NWK/APS/ZDO/ZCL or modern MAC/security coverage | KillerBee performs capture/injection tooling, not a complete joining/routing Zigbee stack | Upstream LICENSE is BSD-3-Clause. Packaging brings PyUSB, PySerial, PyCrypto, rangeparser, Scapy and a libgcrypt-backed extension. `Packet.data` fits the adapter's FCS-present capture contract; decoder behavior/version is **TECHNICALLY PLAUSIBLE BUT UNVERIFIED** |
-| Scapy `Dot15d4FCS` plus `zigbee.py` | Can consume packets but is not a FeralRF driver unless adapted | `Dot15d4FCS` explicitly accepts FCS-present frames and checks the Kermit CRC; DLT 195 is the FCS-present link type | Has NWK, APS, security-header, limited ZDP and ZCL dissectors. It does not demonstrate a complete ZDO/ZCL catalog or Zigbee decryption engine; source contains TODO/limited schema areas | No operational Zigbee network stack | Scapy source is GPL-2.0-only and is not currently a dependency. `Dot15d4FCS(Packet.data)` is the exact initial byte boundary, with `conf.dot15d4_protocol = "zigbee"`; newer MAC variants and corpus behavior need verification. Distribution/combination licensing requires separate review |
-| zigpy | Radio integrations are adapter-specific; no FeralRF radio adapter exists | No source-confirmed raw MAC/NWK entry point was found | Rich ZDO schemas and ZCL cluster/foundation deserialization operate after lower-layer decapsulation and with cluster/application context | It is a host Zigbee stack framework with controller, device database, tasks, and radio-adapter expectations | GPL-3.0, Python >=3.11 in inspected development source, and many runtime dependencies. It is not directly compatible with raw `Packet.data`; using only upper-layer schemas remains **TECHNICALLY PLAUSIBLE BUT UNVERIFIED** |
-| WHAD | Framework explicitly models devices/sniffers and active CLI roles | Uses Scapy-based packets | Documentation exposes Zigbee sniffing and optional key recovery; exact current lower/upper-layer coverage was not pinned in this repository | Provides active abstractions/CLI capabilities, but no FeralRF connector exists | MIT in inspected upstream source, with Scapy, protobuf, crypto, USB and UI dependencies. Byte adapter and version compatibility are **NOT SUPPORTED BY AVAILABLE EVIDENCE** |
-| Wireshark via classic PCAP DLT 195 | Offline analysis, not device control | Mature IEEE 802.15.4 dissector; DLT 195 consumes FCS-present frames | Official display-filter references expose NWK, APS/reassembly, ZDP, ZCL, and security/decryption fields | Analyzer only, not an operational node | GPL-2.0-or-later according to the official developer guide. External process/file use adds no FeralRF Python package. `python/examples/killerbee_sniff.py:122-137` already writes `Packet.data` as DLT 195 records, but uses host timestamps and classic PCAP cannot carry the current channel/LQI metadata without a different export format |
+| Current FeralRF KillerBee adapter plus upstream KillerBee helpers | Yes, through the local patch/fork | The inspected upstream branch snapshot contains legacy `dot154decode` helpers and depends on Scapy | It contains basic `zigbeedecode` NWK/APS helpers; source does not establish complete current NWK/APS/ZDO/ZCL or modern MAC/security coverage | KillerBee performs capture/injection tooling, not a complete joining/routing Zigbee stack | Repository: `riverloopsec/killerbee`; inspected packaging reports `3.0.0-beta.2`, but the mutable branch snapshot remains **UNPINNED**. Its same-snapshot `LICENSE.txt` declares BSD-3-Clause and packaging lists PyUSB, PySerial, PyCrypto, rangeparser, Scapy and a libgcrypt-backed extension. The local adapter preserves the FCS-present capture bytes, but helper behavior against FeralRF is **TECHNICALLY PLAUSIBLE BUT UNVERIFIED** |
+| Scapy `Dot15d4FCS` plus `zigbee.py` | Can consume packets but is not a FeralRF driver unless adapted | At v2.8.0, `Dot15d4FCS` accepts FCS-present frames and checks the Kermit CRC; DLT 195 is the FCS-present link type | `scapy/layers/zigbee.py` exposes NWK, APS, security-header, limited ZDP and ZCL dissectors. It does not demonstrate a complete ZDO/ZCL catalog or a Zigbee decryption engine | No operational Zigbee network stack | Repository: `secdev/scapy`; v2.8.0 commit `e2e35c07...`; same-revision `LICENSE` is GPL-2.0-only. `Dot15d4FCS(Packet.data)` is the proposed initial byte boundary, with `conf.dot15d4_protocol = "zigbee"`; this call has not been tested against FeralRF and newer MAC variants/corpus behavior need verification |
+| zigpy | Radio integrations are adapter-specific; no FeralRF radio adapter exists | No source-confirmed raw MAC/NWK entry point suitable for `Packet.data` was found | At 2.4.1, ZDO schemas and `zigpy.zcl.Cluster.deserialize()` operate after lower-layer decapsulation and with cluster/application context | It is a host Zigbee stack framework with controller, device database, tasks, and radio-adapter expectations | Repository: `zigpy/zigpy`; release 2.4.1 commit `10b68377...`; same-revision `pyproject.toml` declares GPL-3.0 and Python/runtime requirements. It is not directly compatible with raw `Packet.data`; selective upper-layer schema use remains **TECHNICALLY PLAUSIBLE BUT UNVERIFIED** |
+| WHAD | Framework models devices/sniffers and active CLI roles | Uses Scapy-based packets | The v1.2.18 source/release exposes Zigbee sniffer abstractions; exact lower/upper-layer coverage relevant to FeralRF is not established here | Provides active abstractions/CLI capabilities, but no FeralRF connector exists | Repository: `whad-team/whad-client`; v1.2.18 commit `9d480163...`; same-revision project metadata/LICENSE declares MIT and lists Scapy, protobuf, crypto, USB and UI dependencies. Byte adaptation and FeralRF compatibility are **NOT SUPPORTED BY AVAILABLE EVIDENCE** |
+| Wireshark via classic PCAP DLT 195 | Offline analysis, not device control | The online IEEE 802.15.4 dissector documentation describes FCS-present handling | Current official display-filter references expose NWK, APS/reassembly, ZDP, ZCL, and security/decryption fields | Analyzer only, not an operational node | Repository/project: `wireshark/wireshark`; the cited online display-filter and developer-guide pages are **VERSION-UNPINNED**. They declare GPL-2.0-or-later and expose analyzer fields, but were not tested with FeralRF. `python/examples/killerbee_sniff.py:122-137` writes `Packet.data` as DLT 195 records; it uses host timestamps and classic PCAP omits current channel/LQI metadata |
 
 Scapy source also binds a fixed sequence-number field in its base `Dot15d4` definition and uses simplified PAN-ID compression logic. This is concrete reason to validate 2015/enhanced-frame inputs rather than claim complete IEEE 802.15.4 coverage from class availability alone.
 
 The nearest source-supported third-party boundaries are therefore:
 
-- `Packet.data -> Scapy Dot15d4FCS` for in-process dissection, with known coverage and license/version checks;
+- proposed `Packet.data -> Scapy Dot15d4FCS` for in-process dissection, with pinned source but unvalidated FeralRF behavior;
 - `Packet.data -> DLT 195 PCAP -> Wireshark` for external analysis;
 - the local patched KillerBee device API for capture/injection interoperability, without treating its legacy helpers as a demonstrated complete decoder.
 
@@ -374,8 +407,8 @@ Realistic scope is limited to isolated codec algorithms and protocol definitions
 
 | Boundary | Exact source involved | Necessary interface/change | Dependencies and result |
 |---|---|---|---|
-| ZCL header/value codec in firmware | Algorithms from `stack/zcl/zcl.c:2412-2482,2961-3076,3195-3322`; constants from `zcl.h` | A new isolated bounded codec would take byte span/capacity parameters and use explicit masks, not Z-Stack AF structs or bitfields. If compiled, it would have to be listed in `firmware/cc1352/CMakeLists.txt:129-148` | No Z-Stack runtime is inherently needed. Achieves only ZCL byte header/value encoding/decoding, not APS/NWK/MAC, endpoints, security, or network behavior |
-| ZDO body codec in firmware | Field ordering from `stack/zdo/zd_object.c:2914-3733` | A separate bounded implementation with host/FeralRF result types; original `zd_object.c` is not a valid standalone unit | Avoids OSAL/AF/NWK only by replacing those dependencies. Achieves selected plaintext ZDO body parsing, not dispatch/discovery/network behavior |
+| ZCL header/value codec in firmware | Algorithms from `stack/zcl/zcl.c:2412-2482,2961-3076,3195-3322`; constants from `zcl.h` | A new isolated bounded codec would take byte span/capacity parameters and use explicit masks, not Z-Stack AF structs or bitfields. If compiled, it would have to be listed in `firmware/cc1352/CMakeLists.txt:129-148` | No Z-Stack runtime is inherently needed. It would provide only ZCL byte header/value encoding/decoding, not APS/NWK/MAC, endpoints, security, or network behavior |
+| ZDO body codec in firmware | Field ordering from `stack/zdo/zd_object.c:2914-3733` | A separate bounded implementation with host/FeralRF result types; original `zd_object.c` is not a valid standalone unit | It would avoid OSAL/AF/NWK only by replacing those dependencies and would provide selected plaintext ZDO body parsing, not dispatch/discovery/network behavior |
 | Optional firmware decode placement | `firmware/cc1352/src/data_task.c:132-135`, between `LLManager_processRxPacket()` and `DataTask_emitRxPacket()` | Existing protocol has no representation for decoded trees. Any MCU-derived data would need a new protocol response/metadata contract while preserving raw bytes | Adds firmware/protocol coupling with no passive byte-availability benefit. No current boundary can carry arbitrary ZDO/ZCL structures |
 | Raw transmit assistance | Before current raw transmit call in `radio_if.c:468-487` | A codec could only produce bytes supplied to raw TX; all lower-layer framing/security/state must be supplied independently | ZCL/ZDO reuse alone cannot create a valid active Zigbee transmission |
 
@@ -396,9 +429,9 @@ Existing files affected by a packaged public integration would be:
 - `python/pyproject.toml`, only if optional cryptography or parser dependencies were declared;
 - tests/capture fixtures, needed to validate byte contracts and malformed inputs.
 
-No RF firmware file, CMake file, or MCU runtime dependency is technically required for this boundary. A standard-library structural decoder adds no package dependency. Authenticated decryption can use an optional cryptographic dependency but must be validated against Zigbee CCM* rules and known vectors.
+No RF firmware file, CMake file, or MCU runtime dependency is technically required for this proposed boundary. A standard-library structural decoder would add no package dependency. FeralRF currently has no Zigbee NWK/APS decryption implementation. A proposed optional cryptographic service would have to select the correct key, construct the nonce and authenticated data from sufficient address/security context, perform CCM*, and reject the result unless the MIC verifies. Byte decryption without successful MIC verification is not authenticated decryption. That path remains **TECHNICALLY PLAUSIBLE BUT UNVERIFIED** pending Zigbee CCM* known-answer and captured-frame tests.
 
-This approach achieves passive structural parsing, stateful observation, and potentially key-assisted decryption. It explicitly does not achieve joining, ACK timing, polling, routing, commissioning, APS retry behavior, or any other active stack service.
+If implemented and validated, this approach could provide bounded passive structural parsing, stateful observation, and optional authenticated decryption when all required context is available. It would explicitly not provide joining, ACK timing, polling, routing, commissioning, APS retry behavior, or any other active stack service.
 
 ### 8.3 Approach C: third-party integration
 
@@ -406,7 +439,7 @@ An in-process Scapy boundary would be an optional integration module, conceptual
 
 The current KillerBee boundary is already in `python/feralrf/integrations/killerbee.py`, plus the external patch represented by `docs/killerbee-catsniffer.patch`. It supplies capture/injection interoperability. Claiming decoder compatibility additionally requires pinning and validating the actual external KillerBee/Scapy versions.
 
-The existing offline boundary is `python/examples/killerbee_sniff.py:122-137`: FCS-present `Packet.data` is written as classic PCAP DLT 195. This is directly consumable by Wireshark/compatible tools, but current host-time timestamps and loss of FeralRF radio metadata limit forensic fidelity.
+The existing offline boundary is `python/examples/killerbee_sniff.py:122-137`: FCS-present `Packet.data` is written as classic PCAP DLT 195, the link type intended for FCS-present IEEE 802.15.4 frames. That is the appropriate file-format boundary for Wireshark-class analysis, but end-to-end ingestion was not tested here; current host-time timestamps and loss of FeralRF radio metadata also limit forensic fidelity.
 
 zigpy would require a lower-layer adapter that produces its `ZigbeePacket`/application context rather than passing raw `Packet.data`. WHAD would require a FeralRF device connector and a pinned interface. Neither adapter exists in current source.
 
@@ -420,7 +453,7 @@ zigpy would require a lower-layer adapter that produces its `ZigbeePacket`/appli
 | Compiler/runtime dependencies | GCC-safe isolated C only. Whole Z-Stack path is blocked by generated config, OSAL/TI-RTOS, and TI-only archives | Standard Python for structure; optional crypto for decryption | Library-specific packages, versions, adapters, and license conditions; Wireshark may remain external |
 | RF firmware change | Not required for host decoding; required only if the codec is unnecessarily placed on MCU or active behavior is pursued | None for CRC-valid single-channel capture | None for byte dissection/offline analysis |
 | Coupling/maintenance risk | High if copied from SDK internals; small but still SDK-derived for isolated algorithms | Protocol-spec/test-corpus coupling, independent of TI task/runtime changes | Upstream API/version/schema/license coupling |
-| Functionality achieved | Bounded ZCL header/value and selected ZDO body codecs only | Complete-by-design passive layer parsing is possible; state/decryption can be added with context | Existing dissection according to each tool's actual coverage; Wireshark provides the broadest source-supported external analysis boundary |
+| Functionality if implemented/integrated | Would provide bounded ZCL header/value and selected ZDO body codecs only | Would provide bounded parsing for explicitly supported frame/schema variants; optional passive state and authenticated decryption only with sufficient context and validation | Would expose existing dissection according to each tool's source-confirmed coverage; no candidate is validated against FeralRF here |
 | Explicitly not achieved | Ordinary NWK/APS parsing from hidden binaries; active Zigbee runtime | Active node behavior | A FeralRF-integrated active Zigbee stack; no candidate's availability proves complete modern coverage |
 | Verification before compatibility claim | Bounded malformed-input tests, byte vectors, compiler/ABI test if any SDK object is used, license review | Golden captures/vectors at every layer, truncation/fuzz tests, security/MIC vectors, FCS and round-trip tests | Pin exact versions; adapter tests using FeralRF frames; coverage/security tests; license/deployment review |
 
@@ -435,10 +468,10 @@ Approach B has the fewest new in-process dependencies and the cleanest match to 
    **BLOCKED BY IDENTIFIED DEPENDENCY:** `zcl_ProcessMessageMSG()`, `zcl_SendCommandEx()`, general-cluster handlers, the ZDO dispatch/object translation units, AF, ordinary NWK/APS parsers, Stub APS, ZMAC callbacks/wrappers, Z-Stack API calls, BDB, and active security. Their exact dependencies are OSAL tasks/messages/heap/timers, AF/NWK/APS globals, role configuration, hidden archives, TIMAC/RF ownership, crypto services, and NV where selected.
 
 3. **Is there a meaningful intermediate architecture?**  
-   **CONFIRMED BY CURRENT SOURCE:** yes. A host passive pipeline can be stateless for structural decoding or stateful for address/key/topology/fragment/transaction tracking. It does not need an operational Zigbee stack unless it transmits or participates.
+   **CONFIRMED BY CURRENT SOURCE:** yes, as an integration boundary: the raw FCS-present MPDU and metadata can be delivered to host code without an operational Zigbee stack. **TECHNICALLY PLAUSIBLE BUT UNVERIFIED:** a proposed host passive pipeline could be stateless for structural parsing or stateful for address/key/topology/fragment/transaction tracking. It would require an operational stack or equivalent only when it transmits or participates.
 
 4. **What can FeralRF decode today with new Python code and no firmware changes?**  
-   **CONFIRMED BY CURRENT SOURCE:** MAC and FCS; NWK/APS headers and plaintext; ZDO/ZCL plaintext messages; all visible security headers; and ciphertext preservation. **TECHNICALLY PLAUSIBLE BUT UNVERIFIED:** authenticated NWK/APS decryption and passive state reconstruction when correct keys and nonce/address context are available.
+   FeralRF currently provides the raw IEEE 802.15.4 bytes and metadata but no repository-native Zigbee decoder. **CONFIRMED BY CURRENT SOURCE:** new host code could receive the existing FCS-present MPDU unchanged, so no firmware change is inherently required to implement bounded parsing. **TECHNICALLY PLAUSIBLE BUT UNVERIFIED:** such code could parse supported MAC/FCS, visible NWK/APS headers, plaintext ZDO/ZCL, visible security headers, and preserve ciphertext/MIC. Authenticated NWK/APS decryption and passive state reconstruction remain unimplemented and unverified even when authorized keys are available.
 
 5. **Which functionality requires firmware modifications?**  
    **CONFIRMED BY CURRENT SOURCE:** bad-FCS delivery, extended/continuous or wall-clock timestamp semantics, simultaneous/multi-channel capture, and active MAC behavior. Active Z-Stack/TIMAC also requires resolving RF-client/task/crypto/NV ownership and binary/toolchain compatibility.
@@ -460,14 +493,14 @@ Approach B has the fewest new in-process dependencies and the cleanest match to 
 - **BLOCKED BY IDENTIFIED DEPENDENCY:** source-level audit of the implementations of `NLDE_ParseMsg()`, `APSDE_ParseMsg()`, and TIMAC `MAP_MAC*`; those implementations are not in visible source.
 - **NOT SUPPORTED BY AVAILABLE EVIDENCE:** ABI/link compatibility of any TI ARM Clang archive with the current GNU target. No packaged GCC variant or demonstrated link exists.
 - **NOT SUPPORTED BY AVAILABLE EVIDENCE:** the exact generated Z-Stack project configuration and linker/NV layout that TI would produce for this FeralRF target; SDK examples are absent and the active SysConfig project does not select Z-Stack.
-- **NOT SUPPORTED BY AVAILABLE EVIDENCE:** exact installable versions and FeralRF adapters for KillerBee, Scapy, zigpy, or WHAD. The repository does not pin a resolved environment for them.
-- **TECHNICALLY PLAUSIBLE BUT UNVERIFIED:** whether Scapy's current dissectors accept all frame versions and security cases present in the intended FeralRF traffic; source shows specific limitations that require capture tests.
+- **NOT SUPPORTED BY AVAILABLE EVIDENCE:** an immutable revision for the inspected KillerBee branch snapshot, a resolved install environment for any optional tool, and working FeralRF adapters for Scapy, zigpy, or WHAD. Release/source pinning does not resolve runtime compatibility.
+- **TECHNICALLY PLAUSIBLE BUT UNVERIFIED:** whether Scapy v2.8.0 dissectors accept the frame versions and security cases present in intended FeralRF traffic; source shows specific limitations that require capture tests.
 - **TECHNICALLY PLAUSIBLE BUT UNVERIFIED:** key-assisted decryption until known-answer Zigbee CCM* vectors and captured frames verify nonce, authenticated-header, MIC-length, and key-selection rules.
 - **NOT SUPPORTED BY AVAILABLE EVIDENCE:** redistribution/license conclusions for extracted TI source or combined/in-process GPL-2.0-only parser code. This audit records source licenses but is not legal analysis.
 
 ## 12. Source register
 
-Line references are to the verified revisions in Section 2. SDK-relative paths begin at `firmware/sdk/simplelink_cc13xx_cc26xx_sdk_8_30_01_01/source/ti/` unless stated otherwise.
+Line references are to the verified revisions in Section 2. The SDK root is `firmware/sdk/simplelink_cc13xx_cc26xx_sdk_8_30_01_01/`; every SDK path below that begins with `source/ti/` is relative to that root, not to the FeralRF repository root.
 
 ### 12.1 FeralRF and prior audits
 
@@ -476,18 +509,20 @@ Line references are to the verified revisions in Section 2. SDK-relative paths b
 | `docs/ZSTACK_INTEGRATION_FEASIBILITY_AUDIT_2026-10-27.md` | `:5-6,29-43,58-60,79-102,279-301` | Prior revision, toolchain, SDK and architecture baseline |
 | `docs/FERALRF_DEEP_CODE_IMPLEMENTATION_AUDIT_2026-10-27.md` | `:4-6` | Prior revision baseline |
 | `firmware/cc1352/CMakeLists.txt` | `:3-18,27-48,81-125,129-148,168-184,225-253` | Device, GCC flags, sources, SysConfig, definitions, libraries |
-| `firmware/cc1352/src/main_rtos.c` | `:112-178,201-210,220-235` | Current UART/RF task and semaphore ownership |
+| `firmware/cc1352/src/main_rtos.c` | `:54-66,112-178,201-210,220-235` | Current UART/RF task and semaphore ownership; two 4096-byte static task stacks, which are not heaps |
+| `firmware/cc1352/linker/cc1352p7.ld` | `:33-34,265-271` | Active 16-KiB `.priheap` and linker symbols used by `HeapMem` |
+| `firmware/cc1352/syscfg/ti_sysbios_config.c` | `:83-110` | Constructs the default `BIOS_heapMemObject` from linker-defined primary heap bounds |
 | `firmware/cc1352/src/radio_if.c` | `:32-44,61,468-487,872-880,1194-1221,1335-1371,1497-1568,1822-1835,2354 onward,2392-2400` | RF clients, RX/TX limits, IEEE queue configuration, parsing, dropping and polling |
-| `firmware/cc1352/include/radio_if.h` | `:14-28` | `RadioRxPacket`, 242-byte data capacity |
+| `firmware/cc1352/include/radio_if.h` | `:14-28` | `RadioIF_RxPacket`, exact firmware fields and 242-byte data capacity |
 | `firmware/cc1352/src/smartrf_ieee_15_4_0.c` | `:103-122,146-158` | Frame filtering, auto-ACK, RX/TX PHY/FCS configuration |
 | `firmware/cc1352/src/ll_manager.c` | `:144-159` | Default no-op RX packet processing |
 | `firmware/cc1352/src/data_task.c` | `:23-66,112-139` | Response layout and poll/emit chain |
 | `firmware/cc1352/include/protocol.h` | `:15-28` | 255-byte protocol payload maximum |
 | `firmware/cc1352/src/crypto_engine.c` | `:64,90,214` | Current crypto driver opens/closes |
 | `firmware/cc1352/syscfg/ti_drivers_config.h` | `:80-96` | Single TRNG/AES-ECB/AES-CCM instances |
-| `firmware/cc1352/syscfg/ti_sysbios_config.h` | `:36` | 0x1000 BIOS heap |
-| `python/feralrf/radio.py` | `:18-30,636-709` | `Packet` and host RX parsing |
-| `python/feralrf/_responses.py` | `:24-57` | Alternate response parser |
+| `firmware/cc1352/syscfg/ti_sysbios_config.h` | `:36` | `BIOS_heapSize_D = 0x1000` macro; no separate active allocation or use as the current heap-size source established |
+| `python/feralrf/radio.py` | `:18-30,636-709` | Public `Packet` field names/types and host RX parsing; parser-local `timestamp`/`rssi` variables |
+| `python/feralrf/_responses.py` | `:10-22,29-52` | `RxPacketResponse` field names/types and alternate response parser |
 | `python/feralrf/integrations/killerbee.py` | `:1-19,54-62,95-120` | Optional import, capabilities, capture/injection mapping |
 | `python/feralrf/emulation/ieee154_device.py` | `:1-5` | PHY-only emulator boundary |
 | `python/pyproject.toml` | `:28-44` | Current and optional Python dependencies |
@@ -499,69 +534,70 @@ Line references are to the verified revisions in Section 2. SDK-relative paths b
 
 | Source | Relevant symbols/lines | Evidence used |
 |---|---|---|
-| `zstack/stack/zcl/zcl.c` | `:43-62,160-196,271-420,1039-1165,2159-2482,2961-3076,3195-3322,3609-3634` | Includes/globals/task loop; ZCL processing/sending; byte helpers; sample parser |
-| `zstack/stack/zcl/zcl.h` | `:67-75,825-842,844 onward,1063-1086,1181-1186,1318-1341,1812-1994` | Standalone mode, frame types, AF-coupled structures, memory macros, feature APIs |
-| `zstack/stack/zcl/zcl_port.c` | `:126,224,316,487,546-654,809,1101 onward` | NV registration, initialization, allocation/message/API bridges, Scenes NV |
-| `zstack/stack/zcl/zcl_general.c` | `:3914-4066` | Operational Scenes/NV example |
-| `zstack/stack/zdo/zd_profile.h` | `:229-241` | `zdoIncomingMsg_t` and ASDU contract |
-| `zstack/stack/zdo/zd_profile.c` | `:2092-2134` | `ZDP_IncomingData()`, transaction-sequence removal |
-| `zstack/stack/zdo/zd_object.c` | `:69-96,2914-3733` | Runtime includes and complete inspected `ZDO_Parse*` range |
-| `zstack/stack/af/af.c` | `:70-90,171-231,421-810` | Runtime includes, endpoint registry, inbound AF and data request |
-| `zstack/stack/nwk/nwk_util.h` | `:110-182,321,431` | NWK wire masks/sizes and parser declarations |
-| `zstack/stack/nwk/nl_mede.h` | `:247-283` | `NLDE_FrameFormat_t` runtime parsed structure |
-| `zstack/stack/nwk/nwk_globals.c` | `:355,381 onward` | NWK/NIB initialization and persistent/random state |
-| `zstack/stack/nwk/aps_mede.h` | `:91-173,289-308` | APS masks and `aps_FrameFormat_t` |
-| `zstack/stack/nwk/aps_util.h` | `:112` | `APSDE_ParseMsg()` declaration |
-| `zstack/stack/nwk/aps.h` | `:38-46` | TI-device restriction on source and resulting object code |
-| `zstack/stack/nwk/stub_aps.c` | `:242-316,871-920` | Inter-PAN-only parsers and TIMAC indication path |
-| `zstack/zmac/f8w/zmac.c` | `:78-89,319,506-518,865-889,986-1061,1139-1201` | TIMAC/config coupling and active MLME/MCPS wrappers |
-| `zstack/zmac/f8w/zmac_cb.c` | `:233-245,343,387-392` | OSAL allocation/delivery callbacks |
-| `zstack/stack/api/zstackapi.c` | `:111-169,188-267,514` | OSAL/TI-RTOS RPC behavior and stack-task initialization |
-| `zstack/stack/api/zstacktask.c` | `:666-715,743 onward` | Callback registration and stack event loop |
-| `zstack/stack/sec/ssp.h` | `:125-141,198-240,266-290` | Security auxiliary-header constants, `SSP_Info_t`, global counters and declaration-only security interfaces |
-| `zstack/stack/zdo/zd_sec_mgr.c` | `:1490,1529,1726,2203-2283,2720,3126,3259,3558,3673-3771` | Operational security initialization, hidden SSP calls, key transport/update/load and NV-backed key tables |
-| `zstack/stack/zdo/zd_sec_mgr.h` | `:126,137-180,383-526` | Security state/API and explicit NV/key-table interfaces |
-| `zstack/osal/osal_nv.c` | `:99-146,189-254,303-430` | `pZStackCfg->nvFps`-backed Z-Stack NV shim |
-| `zstack/startup/zstackstartup.c` | `:289-308,374-451,478 onward,628-673` | Task construction, subsystem initialization, crypto and MAC startup |
-| `zstack/startup/main.c` | `:342-357` | NVOCMP, MAC and stack task initialization |
-| `zstack/stack/sys/zglobals.h` | `:81-105` | Device-build/role configuration |
-| `zstack/config/f8wrouter.opts` | `:1-11` | Router MAC sizing, `RTR_NWK`, extended OSAL NV and table persistence definitions |
-| `zstack/config/f8wenddev.opts` | `:1-8` | End-device MAC sizing, extended OSAL NV and table persistence definitions |
-| `zstack/sysconfig/ti_zstack_config.h` | `:60-130` and remaining defaults | SDK-supplied network/PAN/join configuration header, not generated for FeralRF |
-| `ti154stack/common/heapmgr/rtos_heaposal.h` | `:117-119` | Default OSAL heap size |
-| `ti154stack/common/osal_port/osal_port_posix/osal_port.c` | `:198-215,247-268,355-381,449-475,1148-1197` | Task/message/heap services |
-| `ti154stack/common/osal_port/osal_port_posix/osal_port_timers.c` | `:73-79,156-157,218-219,353-421` | Timer list and ClockP use |
-| `drivers/rf/RFCC26X2_multiMode.c` | `:140,327-328,4599,4686` | Two-client RF driver limit |
-| `drivers/rf/RFCC26X2.h` | `:455-468,1028` | RAT rate, width, and clock behavior |
-| `devices/cc13x2x7_cc26x2x7/driverlib/rf_ieee_cmd.h` | `:111-116,616-618` | IEEE command and appended correlation/CRC semantics |
-| `zstack/.meta/zstack.syscfg.js` | `:160-225` | Toolchain/ISA, TIMAC, and role-library selection |
-| `firmware/sdk/simplelink_cc13xx_cc26xx_sdk_8_30_01_01/release_notes_simplelink_cc13xx_cc26xx_sdk_8_30_01_01.html` (repository-relative) | `:115-123` | Tested tool versions |
+| `source/ti/zstack/stack/zcl/zcl.c` | `:43-62,160-196,271-420,1039-1165,2159-2482,2961-3076,3195-3322,3609-3634` | Includes/globals/task loop; ZCL processing/sending; byte helpers; sample parser |
+| `source/ti/zstack/stack/zcl/zcl.h` | `:67-75,825-842,844 onward,1063-1086,1181-1186,1318-1341,1812-1994` | Standalone mode, frame types, AF-coupled structures, memory macros, feature APIs |
+| `source/ti/zstack/stack/zcl/zcl_port.c` | `:126,224,316,487,546-654,809,1101 onward` | NV registration, initialization, allocation/message/API bridges, Scenes NV |
+| `source/ti/zstack/stack/zcl/zcl_general.c` | `:3914-4066` | Operational Scenes/NV example |
+| `source/ti/zstack/stack/zdo/zd_profile.h` | `:229-241` | `zdoIncomingMsg_t` and ASDU contract |
+| `source/ti/zstack/stack/zdo/zd_profile.c` | `:2092-2134` | `ZDP_IncomingData()`, transaction-sequence removal |
+| `source/ti/zstack/stack/zdo/zd_object.c` | `:69-96,2914-3733` | Runtime includes and complete inspected `ZDO_Parse*` range |
+| `source/ti/zstack/stack/af/af.c` | `:70-90,171-231,421-810` | Runtime includes, endpoint registry, inbound AF and data request |
+| `source/ti/zstack/stack/nwk/nwk_util.h` | `:110-182,321,431` | NWK wire masks/sizes and parser declarations |
+| `source/ti/zstack/stack/nwk/nl_mede.h` | `:247-283` | `NLDE_FrameFormat_t` runtime parsed structure |
+| `source/ti/zstack/stack/nwk/nwk_globals.c` | `:355,381 onward` | NWK/NIB initialization and persistent/random state |
+| `source/ti/zstack/stack/nwk/aps_mede.h` | `:91-173,289-308` | APS masks and `aps_FrameFormat_t` |
+| `source/ti/zstack/stack/nwk/aps_util.h` | `:112` | `APSDE_ParseMsg()` declaration |
+| `source/ti/zstack/stack/nwk/aps.h` | `:38-46` | TI-device restriction on source and resulting object code |
+| `source/ti/zstack/stack/nwk/stub_aps.c` | `:242-316,871-920` | Inter-PAN-only parsers and TIMAC indication path |
+| `source/ti/zstack/zmac/f8w/zmac.c` | `:78-89,319,506-518,865-889,986-1061,1139-1201` | TIMAC/config coupling and active MLME/MCPS wrappers |
+| `source/ti/zstack/zmac/f8w/zmac_cb.c` | `:233-245,343,387-392` | OSAL allocation/delivery callbacks |
+| `source/ti/zstack/stack/api/zstackapi.c` | `:111-169,188-267,514` | OSAL/TI-RTOS RPC behavior and stack-task initialization |
+| `source/ti/zstack/stack/api/zstacktask.c` | `:666-715,743 onward` | Callback registration and stack event loop |
+| `source/ti/zstack/stack/sec/ssp.h` | `:125-141,198-240,266-290` | Security auxiliary-header constants, `SSP_Info_t`, global counters and declaration-only security interfaces |
+| `source/ti/zstack/stack/zdo/zd_sec_mgr.c` | `:1490,1529,1726,2203-2283,2720,3126,3259,3558,3673-3771` | Operational security initialization, hidden SSP calls, key transport/update/load and NV-backed key tables |
+| `source/ti/zstack/stack/zdo/zd_sec_mgr.h` | `:126,137-180,383-526` | Security state/API and explicit NV/key-table interfaces |
+| `source/ti/zstack/osal/osal_nv.c` | `:99-146,189-254,303-430` | `pZStackCfg->nvFps`-backed Z-Stack NV shim |
+| `source/ti/zstack/startup/zstackstartup.c` | `:289-308,374-451,478 onward,628-673` | Task construction, subsystem initialization, crypto and MAC startup |
+| `source/ti/zstack/startup/main.c` | `:342-357` | NVOCMP, MAC and stack task initialization |
+| `source/ti/zstack/stack/sys/zglobals.h` | `:81-105` | Device-build/role configuration |
+| `source/ti/zstack/config/f8wrouter.opts` | `:1-11` | Router MAC sizing, `RTR_NWK`, extended OSAL NV and table persistence definitions |
+| `source/ti/zstack/config/f8wenddev.opts` | `:1-8` | End-device MAC sizing, extended OSAL NV and table persistence definitions |
+| `source/ti/zstack/sysconfig/ti_zstack_config.h` | `:60-130` and remaining defaults | SDK-supplied network/PAN/join configuration header, not generated for FeralRF |
+| `source/ti/zstack/rtos/app_release.cfg` | `:670-706,741-758` | Z-Stack OSAL heap selection and 6144-byte configuration; inactive in FeralRF |
+| `source/ti/ti154stack/common/heapmgr/rtos_heaposal.h` | `:117-119` | Generic 3072-byte fallback when `HEAPMGR_SIZE` is not configured; inactive in FeralRF |
+| `source/ti/ti154stack/common/osal_port/osal_port_posix/osal_port.c` | `:198-215,247-268,355-381,449-475,1148-1197` | Task/message/heap services |
+| `source/ti/ti154stack/common/osal_port/osal_port_posix/osal_port_timers.c` | `:73-79,156-157,218-219,353-421` | Timer list and ClockP use |
+| `source/ti/drivers/rf/RFCC26X2_multiMode.c` | `:140,327-328,4599,4686` | Two-client RF driver limit |
+| `source/ti/drivers/rf/RFCC26X2.h` | `:455-468,1028` | RAT rate, width, and clock behavior |
+| `source/ti/devices/cc13x2x7_cc26x2x7/driverlib/rf_ieee_cmd.h` | `:111-116,616-618` | IEEE command and appended correlation/CRC semantics |
+| `source/ti/zstack/.meta/zstack.syscfg.js` | `:160-225` | Toolchain/ISA, TIMAC, and role-library selection |
+| `release_notes_simplelink_cc13xx_cc26xx_sdk_8_30_01_01.html` | `:115-123` | SDK-root release notes and tested tool versions |
 
 ### 12.3 External sources inspected
 
-External projects are not pinned by FeralRF. Line references describe the upstream source inspected on 2026-10-30 and must not be treated as a FeralRF lockfile.
+External projects are not pinned by FeralRF's packaging. The immutable revisions below make this audit's source evidence reproducible; they do not create a FeralRF dependency lock or demonstrate runtime compatibility. Where an immutable revision could not be established, the row is explicitly marked unpinned.
 
 | Source | Relevant interfaces/lines | Evidence used |
 |---|---|---|
-| `https://raw.githubusercontent.com/secdev/scapy/master/scapy/layers/dot15d4.py` | `:17,93-169,207-243,376-381,450-452` | DLT values, `Dot15d4`/`Dot15d4FCS`, FCS, encrypted payload boundary, dispatch and PAN compression behavior |
-| `https://raw.githubusercontent.com/secdev/scapy/master/scapy/layers/zigbee.py` | `:1-10,284 onward,558-684,906-943,946-1015,1273-1330` | License tag, NWK/security/APS, limited ZDP, data types and ZCL |
-| `https://raw.githubusercontent.com/secdev/scapy/master/LICENSE` | Entire file | GPL-2.0 license text |
-| `https://github.com/riverloopsec/killerbee` and raw `killerbee/__init__.py` | Driver dispatch/imports, approximately `:18-20,61-170` | Upstream decoder imports and absence of a vanilla FeralRF driver |
-| `https://raw.githubusercontent.com/riverloopsec/killerbee/master/setup.py` | `:56-75` | Version, dependencies, libgcrypt extension |
-| `https://raw.githubusercontent.com/riverloopsec/killerbee/master/zigbeedecode.py` and `dot154decode.py` | `ZigBeeNWKPacketParser`, `ZigBeeAPSPacketParser`, legacy MAC/security helpers | Basic helper coverage; insufficient evidence for modern/full decoding |
-| `https://raw.githubusercontent.com/riverloopsec/killerbee/master/LICENSE.txt` | Entire file | BSD-3-Clause license |
-| `https://raw.githubusercontent.com/zigpy/zigpy/dev/pyproject.toml` | `:3-25` | Python version, GPL-3.0 declaration and dependencies |
-| `https://raw.githubusercontent.com/zigpy/zigpy/dev/zigpy/application.py` | `:65 onward` | Controller/application/task/database model |
-| `https://raw.githubusercontent.com/zigpy/zigpy/dev/zigpy/zcl/__init__.py` | `:668-705` | Cluster-level ZCL deserialization boundary |
-| `https://raw.githubusercontent.com/zigpy/zigpy/dev/zigpy/zdo/types.py` | `:38-55,433-753` | ZDO descriptors, schemas and header deserialization |
-| `https://whad.readthedocs.io/en/latest/zigbee/started.html` | Zigbee sniffer documentation | WHAD device/Sniffer/Scapy and key-recovery boundary |
-| `https://raw.githubusercontent.com/whad-team/whad-client/main/pyproject.toml` | `:10-48` | Version, MIT declaration, POSIX and dependencies |
-| `https://www.wireshark.org/docs/dfref/z/zbee_nwk.html` | Current display-filter reference | NWK/security dissection fields |
-| `https://www.wireshark.org/docs/dfref/z/zbee_aps.html` | Current display-filter reference | APS and reassembly fields |
-| `https://www.wireshark.org/docs/dfref/z/zbee_zdp.html` | Current display-filter reference | ZDP fields |
-| `https://www.wireshark.org/docs/dfref/z/zbee_zcl.html` | Current display-filter reference | ZCL fields |
-| `https://www.wireshark.org/docs/wsdg_html/` | Licensing section | GPL-2.0-or-later project license |
+| Scapy repository `secdev/scapy`, [v2.8.0 commit `e2e35c07bce2f40e7513e1b29a6d300d5329dbc3`](https://github.com/secdev/scapy/commit/e2e35c07bce2f40e7513e1b29a6d300d5329dbc3) | [`scapy/layers/dot15d4.py`](https://github.com/secdev/scapy/blob/e2e35c07bce2f40e7513e1b29a6d300d5329dbc3/scapy/layers/dot15d4.py): `Dot15d4`, `Dot15d4FCS`, DLT registrations, FCS check and payload dispatch; [`scapy/layers/zigbee.py`](https://github.com/secdev/scapy/blob/e2e35c07bce2f40e7513e1b29a6d300d5329dbc3/scapy/layers/zigbee.py): NWK/security/APS/ZDP/ZCL packet classes | Immutable source for described dissectors and limitations. Same-revision [`LICENSE`](https://github.com/secdev/scapy/blob/e2e35c07bce2f40e7513e1b29a6d300d5329dbc3/LICENSE) declares GPL-2.0-only. Availability is not a FeralRF compatibility test. |
+| KillerBee repository `riverloopsec/killerbee`, mutable `develop`/inspected branch snapshot, packaging version `3.0.0-beta.2` (**UNPINNED**) | [`killerbee/__init__.py`](https://github.com/riverloopsec/killerbee/blob/develop/killerbee/__init__.py): driver dispatch/imports; [`setup.py`](https://github.com/riverloopsec/killerbee/blob/develop/setup.py): version/dependencies/libgcrypt extension; [`killerbee/zigbeedecode.py`](https://github.com/riverloopsec/killerbee/blob/develop/killerbee/zigbeedecode.py): `ZigBeeNWKPacketParser`, `ZigBeeAPSPacketParser`; [`killerbee/dot154decode.py`](https://github.com/riverloopsec/killerbee/blob/develop/killerbee/dot154decode.py): legacy MAC/security helpers | No immutable SHA for the inspected snapshot was established. Same-snapshot [`LICENSE.txt`](https://github.com/riverloopsec/killerbee/blob/develop/LICENSE.txt) declares BSD-3-Clause. Version-specific behavior and FeralRF compatibility remain unverified. |
+| zigpy repository `zigpy/zigpy`, [release 2.4.1 commit `10b68377bcbd9a8b15cbbfb506cebdc450704614`](https://github.com/zigpy/zigpy/commit/10b68377bcbd9a8b15cbbfb506cebdc450704614) | [`zigpy/application.py`](https://github.com/zigpy/zigpy/blob/10b68377bcbd9a8b15cbbfb506cebdc450704614/zigpy/application.py): controller/application/task/database model; [`zigpy/zcl/__init__.py`](https://github.com/zigpy/zigpy/blob/10b68377bcbd9a8b15cbbfb506cebdc450704614/zigpy/zcl/__init__.py): `Cluster.deserialize()`; [`zigpy/zdo/types.py`](https://github.com/zigpy/zigpy/blob/10b68377bcbd9a8b15cbbfb506cebdc450704614/zigpy/zdo/types.py): ZDO descriptors/schemas/header types | Same-revision [`pyproject.toml`](https://github.com/zigpy/zigpy/blob/10b68377bcbd9a8b15cbbfb506cebdc450704614/pyproject.toml) declares GPL-3.0 and runtime requirements. These are upper/runtime interfaces, not a verified raw `Packet.data` entry point. |
+| WHAD repository `whad-team/whad-client`, [v1.2.18 commit `9d48016375cd2fdae58517fe6f2fb97022c3bb61`](https://github.com/whad-team/whad-client/commit/9d48016375cd2fdae58517fe6f2fb97022c3bb61) | [`whad/zigbee/connector/sniffer.py`](https://github.com/whad-team/whad-client/blob/9d48016375cd2fdae58517fe6f2fb97022c3bb61/whad/zigbee/connector/sniffer.py): Zigbee `Sniffer`/`sniff()` connector boundary; project documentation describes device/Scapy-based sniffing | Same-revision [`pyproject.toml`](https://github.com/whad-team/whad-client/blob/9d48016375cd2fdae58517fe6f2fb97022c3bb61/pyproject.toml) and [`LICENSE`](https://github.com/whad-team/whad-client/blob/9d48016375cd2fdae58517fe6f2fb97022c3bb61/LICENSE) identify the dependencies and MIT license. No FeralRF connector or byte-contract test exists here. |
+| Wireshark project `wireshark/wireshark`; online documentation (**VERSION-UNPINNED**) | Current display-filter references for [`zbee_nwk`](https://www.wireshark.org/docs/dfref/z/zbee_nwk.html), [`zbee_aps`](https://www.wireshark.org/docs/dfref/z/zbee_aps.html), [`zbee_zdp`](https://www.wireshark.org/docs/dfref/z/zbee_zdp.html), and [`zbee_zcl`](https://www.wireshark.org/docs/dfref/z/zbee_zcl.html) | Documents exposed dissection/reassembly/security fields. The current [developer guide](https://www.wireshark.org/docs/wsdg_html/) states GPL-2.0-or-later. Because these pages are live rather than release-qualified, exact-version compatibility remains unverified. |
 
 ## 13. Final boundary statement
 
-The available evidence supports selective reuse of small, hardened ZCL codec algorithms and use of ZDO source as a wire-format reference. It does not support compiling any complete ZCL, ZDO, AF, NWK, APS, ZMAC, or Z-Stack API component into the current FeralRF target as an independent decoder. The exact existing RX contract is already sufficient for a host-side passive Zigbee decoder or an FCS-aware third-party dissector. Operational Zigbee behavior remains a different system boundary because it requires MAC timing, persistent protocol state, security services, task/runtime integration, and RF ownership rather than packet parsing alone.
+The available evidence supports selective reuse of small, hardened ZCL codec algorithms and use of ZDO source as a wire-format reference. It does not support compiling any complete ZCL, ZDO, AF, NWK, APS, ZMAC, or Z-Stack API component into the current FeralRF target as an independent decoder. The exact existing RX contract provides the byte input needed by a proposed host-side passive Zigbee decoder or FCS-aware third-party dissector; neither path is implemented and validated merely because that boundary exists. Operational Zigbee behavior remains a different system boundary because it requires MAC timing, persistent protocol state, security services, task/runtime integration, and RF ownership rather than packet parsing alone.
+
+## Audit Corrections and Evidence Reconciliation
+
+Correction check completed 2026-11-02 against FeralRF revision `bfe056cc323911b6fc4c6f224d1f4f626ee15942` and SDK revision `5b31d0a4903351e544546e23ef3330eaa4291ceb` (`lpf2-8.30.01.01`).
+
+| Correction ID | Previous statement/problem | Verified evidence | Correction applied | Remaining uncertainty |
+|---|---|---|---|---|
+| A - Python `Packet` API | Section 5.4 named public fields `timestamp`, `rssi`, and `crc_valid`, which are not `Packet` attributes. | `python/feralrf/radio.py:18-30,676-702`; `_responses.py:10-22,29-52`; KillerBee mapping at `integrations/killerbee.py:95-109`. | Standardized the public fields to `timestamp_us: int`, `channel: int`, `rssi_dbm: int`, `lqi: int`, `crc_ok: bool`, and `data: bytes`; separated parser locals, firmware/transport fields, and KillerBee keys `validcrc`/`rssi`/`dbm`/`datetime`. | Exact RF event edge represented by `timestamp_us` remains unsupported by available evidence; RAT rollover is not extended. |
+| B - Heap terminology | Section 2.2 described `BIOS_heapSize_D = 0x1000` as a separate configured BIOS heap and juxtaposed it with the 3072-byte SDK fallback. | Active linker `.priheap` is `0x4000` in `cc1352p7.ld:33-34,265-271`; `BIOS_init()` constructs the default heap from those linker bounds in `ti_sysbios_config.c:83-110`. Z-Stack `app_release.cfg` selects 6144 bytes; the common TI 15.4 header supplies 3072 only as a fallback. | Added a provenance/status table and stopped counting the unused 0x1000 macro, Z-Stack configuration, and TI 15.4 fallback as active FeralRF allocations. Identified the two 4096-byte task stacks as stacks, not heaps. | No map/runtime evidence establishes actual free heap, fragmentation, or integrated Z-Stack RAM requirements. The earlier feasibility audit's "Z-Stack default" phrase is configuration-specific but its non-additive warning remains correct. |
+| C - External evidence pinning | External citations used mutable `master`, `dev`, or `main` URLs and could be mistaken for versioned compatibility evidence. | Official upstream release/commit records and same-revision source/license files for Scapy v2.8.0, zigpy 2.4.1, and WHAD v1.2.18. | Replaced those mutable citations with immutable commit permalinks and recorded exact modules/functions and licenses. KillerBee and Wireshark live documentation are explicitly labeled unpinned. | No external tool was installed or tested with FeralRF; KillerBee's inspected snapshot SHA and exact Wireshark documentation version remain unresolved. |
+| D - Capability and validation status | "Can decode today" and "complete-by-design" wording blurred raw-byte availability, a possible decoder, and demonstrated behavior. | Current source contains the raw receive/transport path but no Zigbee decoder modules or validated third-party adapter tests. | Recast decoding above IEEE 802.15.4 as proposed or technically plausible, retained the confirmed raw receive contract, and added an implementation/validation-status table. | Required Zigbee revisions, extensions, manufacturer schemas, and representative validation corpus remain undefined. |
+| E - Encrypted frames | Some wording could be read as though key possession or byte decryption alone established authenticated Zigbee decoding. | Current FeralRF preserves protected bytes/MIC but implements no NWK/APS decryption; Zigbee security structures require key, nonce/address, security-level and authenticated-header context. | Separated visible security-header parsing, ciphertext/MIC preservation, context/key selection, CCM* processing, and successful MIC verification. Explicitly stated that unauthenticated plaintext is not a successful result. | Decryption remains technically plausible but unverified pending authorized keys, sufficient context, known-answer CCM* vectors, negative-MIC tests, and captured-frame validation. |
+| F - Paths and integration references | SDK paths mixed Z-Stack-relative shorthand with repository-relative-looking entries; heap and response-parser line references were incomplete. | All cited FeralRF and SDK files were present at the verified revisions; SDK root is `firmware/sdk/simplelink_cc13xx_cc26xx_sdk_8_30_01_01/`. | Made source-register SDK paths explicitly SDK-root-relative as `source/ti/...`; corrected heap, `_responses.py`, and generated configuration references; retained proposed decoder module names as non-existing architectural boundaries. | Hidden NWK/APS/TIMAC implementations and absent SDK examples still prevent source-level review of those operational components. |

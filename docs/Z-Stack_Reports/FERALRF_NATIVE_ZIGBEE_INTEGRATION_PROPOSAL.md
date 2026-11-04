@@ -1,581 +1,412 @@
-# Propuesta técnica de integración Zigbee selectiva y nativa en FeralRF
+# Propuesta técnica revisada para integrar decodificación Zigbee selectiva en FeralRF
 
-**Revisión:** 1.0  
-**Fecha:** 2026-11-03  
-**Repositorio:** `fc0de99b61cdb3d37701cdc625980b8882ed92b2`  
-**Rama:** `feature/hardware-validation`  
-**SDK fijado:** `5b31d0a4903351e544546e23ef3330eaa4291ceb`, SimpleLink `8.30.01.01`  
-**Target:** CC1352P7  
+**Revisión:** 1.1
+**Fecha:** 2026-11-04
+**Repositorio verificado:** `59816be3460884481f2827eacb630d54cfff6ae8` (`feature/hardware-validation`)
+**SDK fijado:** `5b31d0a4903351e544546e23ef3330eaa4291ceb`, SimpleLink `8.30.01.01`
+**Target:** CC1352P7
 **Registro de evidencia:** [FERALRF_NATIVE_ZIGBEE_INTEGRATION_SOURCES.md](FERALRF_NATIVE_ZIGBEE_INTEGRATION_SOURCES.md)
+**Revisión arquitectónica incorporada:** [FERALRF_NATIVE_ZIGBEE_ARCHITECTURE_REVIEW.md](FERALRF_NATIVE_ZIGBEE_ARCHITECTURE_REVIEW.md)
 
 ## 1. Resumen ejecutivo
 
-Se recomienda extender FeralRF con un **pipeline pasivo, acotado y versionado de decodificación Zigbee ejecutado en Python**, sobre el flujo IEEE 802.15.4 raw que el firmware ya entrega. El baseline propuesto no modifica el firmware, el protocolo COBS, `Radio`, `Packet`, la propiedad RF ni los otros PHY. Conserva siempre el MPDU original y añade resultados derivados con offsets, contexto, errores tipados y revisión de schema.
+Se propone añadir al paquete Python de FeralRF una capacidad opt-in de decodificación Zigbee pasiva, con parsing acotado y perfiles de protocolo versionados. Consumirá los bytes recibidos por la ruta IEEE 802.15.4 existente y mantendrá el MPDU original y su provenance. La capacidad no requiere cambios en el firmware inicial, en COBS, en la API pública `Radio`/`Packet`, en RF Driver ni en otras PHY.
 
-El mínimo inicial seleccionado comprende:
+La revisión 1.1 conserva el enfoque host-side y corrige los puntos de la revisión arquitectónica: `Packet` por sí solo no aporta PHY/FCS policy; la identificación Zigbee debe ser conservadora; MAC, NWK y APS tienen límites de seguridad separados; ZDO y ZCL requieren contexto APS; el perfil de aplicación para ZCL no está demostrado en el SDK; y el ACK TX actual sólo acredita aceptación/encolado, no finalización RF.
 
-1. normalización explícita del contrato `Packet.data` —MPDU recibido con FCS—;
-2. parsing bounded de MAC IEEE 802.15.4 para el perfil normativo aprobado;
-3. parsing bounded de Zigbee NWK y APS;
-4. parsing del header ZCL y un subset de foundation commands/tipos;
-5. decoding de un subset ZDO orientado a identificación y descriptores;
-6. detección/interpretación estructural de seguridad suficiente para preservar header, ciphertext y MIC y detener el plaintext pipeline de forma correcta;
-7. preservación raw, unknown fields, provenance y errores por capa;
-8. corpus versionado y comparación con un dissector independiente como parte inseparable de la aceptación.
+El baseline propuesto incluye: `CaptureContext` conceptual; parsing MAC IEEE 802.15.4; clasificación `R-ID-01`; NWK y APS plaintext bounded; security gates estructurales en MAC/NWK/APS sin decryption; seis mensajes ZDO; header ZCL y ocho foundation commands con un allowlist inicial de tipos. El único APS profile activado documentalmente es ZDO/ZDP `0x0000` con endpoint 0. El conjunto de perfiles de aplicación habilitados para interpretación semántica ZCL queda vacío hasta que el supervisor apruebe un perfil y exista su base normativa exacta. Sin ese contexto, sólo se conserva un candidato estructural de header ZCL, marcado como no confirmado, junto con el ASDU original; no se interpretan comandos.
 
-No se seleccionan para el baseline: estado pasivo persistente, descifrado, builders, inyección Zigbee-aware ni cambios RF/MAC. Esas capacidades quedan como extensiones condicionadas y separadas. Joining, formation, routing, coordinator/router/end-device operacional, BDB, key lifecycle, conformance y delivery Zigbee quedan excluidos.
+La implementación preferida es independiente y basada en textos normativos autorizados. Las funciones ZCL y parsers ZDO visibles de TI son cross-checks de campo/algoritmo; sus firmas y ownership no son APIs Python seguras. `NLDE_ParseMsg()` y `APSDE_ParseMsg()` sólo están declaradas en el SDK fijado. No se integra ZMAC/TIMAC, AF, BDB, NV, seguridad operacional ni el runtime Z-Stack.
 
-La recomendación reutiliza Z-Stack de forma selectiva: `zclParseHdr()`, `zclBuildHdr()`, `zclGetDataTypeLength()`, `zclGetAttrDataLength()` y `zclSerializeData()` son referencias algorítmicas adaptables con bounds; varios `ZDO_Parse*` aportan field order, pero su dependencia de `zdoIncomingMsg_t`, OSAL heap y falta de validación completa favorece una reimplementación host. `NLDE_ParseMsg()` y `APSDE_ParseMsg()` sólo están declaradas; ZMAC delega en TIMAC binario. Ninguno de esos componentes operacionales se incorpora.
+**Dictamen heredado de la revisión crítica:** arquitectura adecuada con cambios documentales; factibilidad de implementación condicional a normas, perfiles y fixtures; ninguna capacidad propuesta está implementada o validada. Esta versión es apta para evaluación del supervisor, conservando expresamente las decisiones pendientes.
 
-La propuesta ofrece valor académico porque convierte una capacidad raw demostrable en una herramienta protocol-aware verificable sin fingir que FeralRF es un nodo Zigbee.
+## 2. Historial de revisión
 
-## 2. Objetivo, alcance y criterio de evidencia
+| Revisión | Fecha | Cambios |
+|---|---|---|
+| 1.0 | 2026-11-03 | Propuesta raw-first basada en auditorías del código y SDK. |
+| 1.1 | 2026-11-04 | Incorpora la revisión crítica: contrato `CaptureContext`, `R-ID-01`, security gates por capa, límites y TSN ZDO, subset ZCL explícito, política APS profile, TX completion corregido, y registro de licencias/provenance. Se retienen firmware único y baseline host-side. R22/ZCL7 sigue provisional; no se añaden resultados experimentales. |
 
-### 2.1 Objetivo rector
+## 3. Objetivo, alcance y criterio de evidencia
 
-Extender el proyecto FeralRF existente con un subconjunto Zigbee mantenible y verificable, preservando el CC1352P7 y la arquitectura RF actual. Las funciones host forman parte de FeralRF, pero se identifican siempre como ejecución Python, no CC1352P7.
+### 3.1 Objetivo rector
 
-### 2.2 Alcance seleccionado
+Extender FeralRF para que el host pueda interpretar, con precisión declarada, un subconjunto pasivo de tramas IEEE 802.15.4 compatibles con Zigbee. La integración es un componente opt-in del paquete FeralRF que consume el `Packet` existente; no una herramienta externa desconectada ni una implementación de nodo Zigbee.
 
-| Categoría | Decisión |
+### 3.2 Restricciones y exclusiones
+
+- FeralRF sigue siendo el único firmware y CC1352P7 el target.
+- No se introduce una imagen/persona ZNP, ZED o Zigbee separada.
+- No se reemplaza RadioIF/RF Driver por el runtime completo de Z-Stack.
+- No se enlazan librerías binarias TIMAC/Z-Stack sin evidencia de compatibilidad con el target GNU actual.
+- No se implementan joining, commissioning, association, auto-ACK, CSMA-CA, retries, routing, coordinator/router/end device, BDB, key lifecycle ni endpoint operacional.
+- El baseline no descifra, construye ni transmite tramas Zigbee-aware; no afirma interoperabilidad ni conformidad.
+- Estado pasivo persistente, decryption autenticado, builders/raw injection y primitivas RF temporales permanecen condicionales.
+
+### 3.3 Estados de evidencia
+
+**CONFIRMADO-CÓDIGO** identifica comportamiento visible en el checkout; **CONFIRMADO-SDK** identifica código/definición visible en el SDK fijado; **DOCUMENTADO-TI/CSA/IEEE** identifica una afirmación oficial versionada; **EVIDENCIA EXPERIMENTAL HISTÓRICA** es una observación limitada a su setup; **INFERENCIA ARQUITECTÓNICA** deriva de evidencia; **FACTIBLE-CONDICIONAL** requiere decisiones/implementación; **NO VALIDADO** indica que no se ha probado la capacidad propuesta; **NO SOPORTADO/NO RESUELTO** limita claims. Referencias cortas remiten al registro de fuentes.
+
+## 4. Baseline verificado y reconciliación
+
+El checkout examinado está en `59816be3460884481f2827eacb630d54cfff6ae8`, rama `feature/hardware-validation`. El submódulo apunta a `5b31d0a4903351e544546e23ef3330eaa4291ceb`, SimpleLink `8.30.01.01`. Desde el HEAD citado por la revisión anterior (`fc0de99...`) sólo se añadieron los dos documentos de propuesta; no hay diferencias de firmware, Python ni hardware. El árbol inicial estaba limpio salvo la revisión arquitectónica previa, que permanece como archivo no rastreado. Target CC1352P7 y toolchain configurado GNU Arm (`arm-none-eabi-gcc`); no se compiló ni se verificó la versión instalada del compilador [BASE-01–08].
+
+Se conserva la discrepancia del audit de fuentes: `source/ti/zstack/stack/nwk/nwk.c` no existe en el submódulo. `NLDE_ParseMsg()` aparece sólo como declaración en `nwk_util.h:319-321`; `APSDE_ParseMsg()` sólo como declaración en `aps_util.h:110-113`. No se les atribuye una implementación reusable [DISC-01, SDK-Z11–14].
+
+## 5. Arquitectura FeralRF existente
+
+### 5.1 Responsabilidades y frontera de extensión
+
+| Componente | Runtime | Comportamiento actual | Uso propuesto |
+|---|---|---|---|
+| `Radio`, `Packet` | PC/Python | Control RX/TX y objeto recibido (`radio.py:18-30,70-120,599-750`) | Entrada opt-in; no se cambia su API pública. |
+| `protocol.py` / `protocol.c` | Python + CC1352P7 | COBS y CRC16 del transporte | Sin cambios; no es framing Zigbee. |
+| `CommandProcessor`, `ControlTask` | CC1352P7 | Valida/encola comandos; ACK puede anteceder ejecución RF | Sin nueva semántica en baseline. |
+| `DataTask` | CC1352P7/TI-RTOS | Drena RX y emite `RSP_RX_PACKET`; hasta ocho por poll | Mantiene la ruta raw actual. |
+| `PhyManager`, `LLManager` | CC1352P7 | IEEE pasa sin parser MAC/Zigbee; sólo BLE se clasifica | No se añade parsing embedded. |
+| `RadioIF` | CC1352P7 | Único owner de RF Driver, modos, colas, buffers y callbacks | Sin cambio en baseline. |
+| RF Core/SmartRF | CC1352P7 | RX IEEE incluye PHR/FCS y metadata; TX genera PHR/FCS | Provee el bearer raw, no servicio MAC completo. |
+| Decodificador conceptual | Host Python | **PROPOSED — NOT IMPLEMENTED** | Parser opt-in con schemas y resultados preservando raw. |
+
+### 5.2 Ruta RX/TX confirmada
+
+```text
+RX: RF Core → RadioIF queue → RadioIF_poll/processIeee154Packets
+    → RadioIF_RxPacket → LLManager (IEEE pass-through) → DataTask
+    → COBS/UART → Radio.read_packets() → Packet.data
+
+TX: Radio.transmit/transmit_frame → COBS command → CommandProcessor ACK/queue
+    → ControlTask/DataTask → RadioIF_transmitIeee154Raw → RF Core
+```
+
+RX solicita PHR, FCS, RSSI, correlación y RAT (`radio_if.c:1335-1355`); firmware valida longitud, elimina PHR, descarta CRC-bad y expone MPDU con FCS (`radio_if.c:1497-1568`). El TX IEEE acepta MPDU sin FCS, 1–125 bytes, y RF Core genera PHR/FCS (`radio_if.c:468-488`; `smartrf_ieee_15_4_0.c:146-163`). `TX_FRAME` no construye una trama MAC.
+
+La cola RF tiene 3 entradas y la cola de aplicación 8; el polling limita el drenaje. Filtering, auto-ACK y CCA están deshabilitados en SmartRF (`smartrf_ieee_15_4_0.c:95-125`). RX/TX no son servicio MAC operacional. La API host no expone completion RF correlacionado: ACK significa aceptado/encolado (`command_processor.c:188-258`; `control_task.c:332-357`; `radio.py:725-750`).
+
+## 6. Contrato de captura y propiedad de bytes
+
+`Packet.data` contiene los bytes recibidos, pero `Packet` no incluye PHY ni un flag FCS dedicado. `Radio` conserva su PHY seleccionada internamente; eso no equivale a que un objeto `Packet` autocontenga ese contexto. El backend determina PHR/FCS policy. Timestamp y `lqi` también tienen limitaciones documentadas [FW-H01–07, FW-F12–15].
+
+### 6.1 Contratos conceptuales
+
+Todos los nombres de esta tabla son **PROPOSED — NOT IMPLEMENTED**.
+
+| Modelo | Campos/contrato conceptual | Obtención y límite |
+|---|---|---|
+| `CaptureContext` | `phy_confirmed`; `phr_policy`; `fcs_policy` (present/absent/unknown y CRC status); source/provenance; host contract/schema version; opcional firmware/build identity; calidad/origen de timestamp y correlación; capture/session identity | Se construye fuera de `Packet` a partir de la configuración/session que el caller controla o adjunta como metadata externa. El repositorio no ofrece hoy un método público para consultar/adjuntar firmware identity o FCS policy por packet. |
+| `RawCapture` | Referencia inmutable a `Packet.data`, `CaptureContext`, metadata original y policy aprobada | El input owner sigue siendo `Packet`/caller; wrapper no altera bytes. Si el lifetime no está garantizado, conserva una copia inmutable en el host. |
+| `LayerResult` | Campos tipados, clasificación, status, raw reference, spans absolutos `[start,end)`, payload restante y issues | Los spans siempre se miden desde el inicio de `Packet.data`, nunca desde un buffer temporal sin conversión. |
+| `DecodeIssue` | Layer, code, severity, absolute offset y bytes requeridos/disponibles; detalle no sensible | Resultado por frame; input malformado no termina el stream. |
+| `SchemaProfile` | Revisiones IEEE/Core/ZCL; APS profile allowlist; tablas ZDO/ZCL; feature coverage | Inmutable por decode y parte de provenance del resultado. No se mezcla con estado observado. |
+
+Si PHY falta, el decoder devuelve `missing_context` y conserva raw sin intentar MAC/Zigbee; no la infiere del canal. FCS `unknown` impide calcular el límite MAC/FCS con certeza: se devuelve raw/candidate y un issue; no se quitan bytes por heurística. Si FCS/PHR policy contradice el perfil de sesión, se devuelve `context_mismatch`. `crc_ok=false` no es esperado en el flujo IEEE actual porque firmware descarta CRC-bad; si llega en otra fuente, permanece raw y no entra al parser por defecto.
+
+### 6.2 Metadatos
+
+Preservar `timestamp_us`, channel, RSSI, `lqi` reportado, `crc_ok`, bytes originales, policy FCS/PHR y procedencia. El campo `lqi` refleja siete bits de correlación del backend; no se afirma calibración LQI Zigbee. Timestamp procede de RAT/4; no se asume wall-clock, continuidad o precisión sin validación [FW-F13].
+
+## 7. Capacidad propuesta y protocolo de identificación
+
+### 7.1 Requisitos baseline
+
+| ID | Capacidad propuesta | Ejecución | Estado/decisión |
+|---|---|---|---|
+| `R-BASE-01` | Crear `RawCapture` con `CaptureContext` explícito, ownership, FCS/PHR policy y raw intacto | Python | Propuesta; no modificar `Packet`. |
+| `R-MAC-01` | Parsing bounded IEEE 802.15.4 del profile aprobado: frame type/version, addresses/PAN, sequence suppression, security aux header, IEs y spans MAC/payload/FCS | Python | Requiere texto IEEE exacto. |
+| `R-ID-01` | Clasificador conservador MAC-payload→candidato Zigbee; no prueba origen por similitud bytes | Python | Nuevo requisito; stop antes de NWK autoritativo cuando insuficiente. |
+| `R-NWK-01` | Parsing bounded de NWK elegible: FCF, direcciones, radius/sequence, campos opcionales, security boundary y tipo Data/Command | Python | No incluye routing/service. |
+| `R-APS-01` | Parsing bounded de APS plaintext: Data/Command/ACK, delivery mode, endpoints/group, cluster/profile, counter, extensión, security y fragmentación | Python | Fragmentos no reensamblados paran dispatch app. |
+| `R-ZDO-01` | Seis schemas ZDO indicados en §10 | Python | Sólo payload plaintext, APS profile/endpoint coherente. |
+| `R-ZCL-01` | Header ZCL general: FC, manufacturer code opcional, TSN y command ID | Python | Header no acredita por sí solo que el payload sea ZCL. |
+| `R-ZCL-02` | Ocho foundation commands y lista candidata de tipos de §11 | Python | No incluye cluster-specific; requiere profile allowlist aprobado. |
+| `R-SEC-01` | Security state y spans estructurales por MAC/NWK/APS; preservar opaque ciphertext/MIC; detener plaintext | Python | Sin decryption. MIC exacto sólo con perfil/nivel que lo determine. |
+| `R-RAW-01` | Preservar bytes, metadata, unknown remainder y spans absolutos en todo resultado | Python | Obligatorio. |
+| `R-ERR-01` | Errores tipados incluyendo truncation, malformed, unsupported, encrypted/opaque, missing context, ambiguous protocol, context mismatch y schema unknown | Python | No excepciones opacas por frame normal inválido. |
+| `R-VAL-01` | Corpus versionado y comparator secundario, divergencias resueltas por fuente normativa | Herramientas offline | No ejecutado; no implica validación actual. |
+
+### 7.2 `R-ID-01`: clasificaciones y semántica
+
+Input: `RawCapture` con PHY/FCS policy confirmada, resultado MAC bounded y el segmento payload MAC; `SchemaProfile` que declara la cobertura. Las únicas fuentes de evidencia son provenance explícito (captura conocida, corpus etiquetado o contexto suministrado por caller) y consistencia estructural del frame control/version/fields permitidos. Channel, bytes “parecidos”, perfil por defecto y nombre del dispositivo no confirman Zigbee.
+
+| Resultado | Evidencia/condición | Semántica y acción |
+|---|---|---|
+| `confirmed_by_context` | Provenance externo afirma Zigbee y MAC/NWK header es estructuralmente consistente con el profile activo | “Confirmado por procedencia declarada”, no certificado ni autenticado. Puede continuar NWK si no hay security stop. |
+| `structurally_consistent` | Estructura soportada cuadra con MAC Data, NWK control/version, opcionales y límites; no hay provenance de origen | Candidato compatible, nunca claim de origen Zigbee. Parsing posterior se etiqueta tentativo y preserva clasificación. |
+| `ambiguous` | Contexto insuficiente, combinación de bytes admite interpretación no resuelta, profile de MAC no fijado o parsing sólo parcial | Raw/candidato más issue; no produce resultado Zigbee autoritativo. Stop antes de semántica superior. |
+| `invalid_for_profile` | El caller solicita un profile explícito, pero bits reservados, versión o longitudes contradicen una regla aprobada | Resultado parcial + issue y raw remainder; stop en capa que detectó contradicción. No equivale a “no Zigbee” global. |
+| `not_eligible` | MAC no Data, no tiene payload, FCS/PHY context desconocidos, frame version fuera de cobertura o payload cubierto por MAC security sin plaintext | Se devuelve resultado IEEE raw y el motivo; no se intenta NWK plaintext. |
+
+El clasificador no escoge Zigbee entre protocolos por heurística. `structurally_consistent` permite inspección marcada como tentativa sólo cuando el profile y límites están aprobados. `confirmed_by_context` requiere provenance que acompañe al resultado; no se deriva de la estructura.
+
+## 8. Pipeline y límites por protocolo
+
+```text
+Packet + session/provenance → CaptureAdapter → IEEE MAC bounded parser
+  ├─ no elegible / MAC security / revisión desconocida → raw + security/issue; STOP
+  └─ MAC payload → R-ID-01 classifier
+       ├─ ambiguous / invalid / not_eligible → raw/candidate; STOP
+       └─ confirmed_by_context o structurally_consistent
+            → NWK parser (opciones según FCF)
+              ├─ NWK security → visible header + opaque ciphertext/MIC; STOP
+              ├─ NWK Command → NWK command/opaque; no APS
+              └─ NWK Data plaintext → APS parser
+                   ├─ APS security → visible header + opaque ciphertext/MIC; STOP
+                   ├─ APS Command/ACK → APS result; no ZDO/ZCL data dispatch
+                   ├─ APS fragment → fragment metadata + opaque payload; STOP (sin reassembly)
+                   └─ APS Data plaintext → dispatch por profile/endpoint/cluster
+                        ├─ ZDO profile 0x0000, endpoints 0 → seis schemas ZDO
+                        ├─ app profile aprobado + ZCL frame type 0 → ZCL header/foundation
+                        └─ profile/context desconocido → raw app payload; STOP
+```
+
+Los flags NWK activan multicast/source route/extended addresses y cambian los offsets (`nwk_util.h:111-155`). El parser debe consumir opcionales en orden especificado y confirmar límites antes de cada lectura. APS frame type y delivery mode determinan campos presentes; extended header/fragment control añade otros (`aps_mede.h:91-124`). No se pasa un NWK Command como APS ni un APS Command/ACK como application data.
+
+## 9. Security boundaries y política de datos
+
+El baseline nunca llama a parser plaintext sobre ciphertext. Seguridad indicada no significa que el decoder conozca autenticidad. `R-SEC-01` se aplica en cada capa y produce un estado con raw spans.
+
+| Límite | Campos potencialmente visibles | Datos necesarios / stop |
+|---|---|---|
+| IEEE MAC security | FCF security bit, auxiliary security control, frame counter, key identifier/address fields según security control | MAC parser necesita revisión IEEE para auxiliary header y payload/FCS boundary. MIC length depende de security level/profile; si desconocido, no afirmar división exacta ciphertext/MIC y parar NWK. |
+| Zigbee NWK security | NWK security flag/header; security control, frame counter, source/key identifier según nivel/contexto | NWK header puede ser visible, pero payload protegido no se entrega a APS sin plaintext autenticado. MIC span se marca sólo si nivel soportado y norma exacta permiten determinarlo. |
+| APS security | APS security flag y campos de extensión visibles conforme a formato aprobado | No se entrega ASDU protegido a ZDO/ZCL. APS encryption/security debe distinguirse de security indicada en NWK. |
+
+Estados por capa: `not_indicated` (bits/nivel aprobado no indican security), `opaque` (hay security y payload no interpretable), `authentication_not_attempted` (estado descriptivo cuando no se ejecutó CCM*), `unsupported_security_level` o `missing_context`. No se afirma `authenticated` en baseline. Conservar header visible, frame counter/key-id visibles, ciphertext/remaining raw y issue; no registrar secretos. Sin nivel/contexto normativo, MIC permanece incluido en opaque remainder, no se calcula por conjetura.
+
+APS fragmentation: decodificar sólo indicador/contador/span permitido; sin reassembly no hay una ASDU completa y se detiene ZDO/ZCL. Reassembly, deduplicación y state son extensión separada.
+
+## 10. Baseline ZDO: seis mensajes
+
+Contexto obligatorio: APS Data plaintext; profile `ZDO_PROFILE_ID=0x0000`; source/destination endpoint ZDO `0`; APS cluster ID igual al comando seleccionado; destination/broadcast pattern compatible cuando la definición lo exija. El SDK define profile/endpoint (`zd_profile.h:86-87`). En entrada TI separa el Transaction Sequence Number del primer byte antes de asignar `asdu` y `asduLen` (`zd_profile.c:2104-2106`). Por tanto, en este modelo `ZdoEnvelope.tsn` es externo y los schemas de esta tabla empiezan después del TSN; nunca se cuenta dos veces.
+
+Las reglas marcadas “wire candidate TI” describen field order/cantidad observada en fuente y requieren confirmar texto Zigbee R22 antes de fijar acceptance normativa. Los parsers TI no son bounded seguros [SDK-Z08–10].
+
+| Mensaje / cluster | Payload después de TSN (orden candidato) | Condiciones, límites y significado pasivo |
+|---|---|---|
+| `Device_annce` `0x0013` | NWK address `u16 LE`; IEEE/EUI-64 `8`; capability `u8` (11 bytes) | `ZDO_ParseDeviceAnnce()` consume esos campos (`zd_object.c:3607-3618`). Anuncio puede observarse sin request previo; no prueba que el nodo permanezca unido. Truncation issue; trailing bytes preservados y reportados. |
+| `NWK_addr_rsp` `0x8000` | status `u8`; success: EUI-64 `8`; NWK address `u16 LE`; address-list count/start/list según request/mode aplicable | `ZDO_ParseAddrRsp()` presenta base de 11 bytes e inspecciona count en índice 11 sólo si `asduLen > 11`; para count no cero consume count, start index y `count×u16` (`zd_object.c:3005-3057`). Longitud/count/status normativos aún provisionales; no leer lista si no cabe. |
+| `IEEE_addr_rsp` `0x8001` | Igual wire candidate address response: status; en success EUI-64, NWK address y lista opcional | Cluster IDs de `zd_profile.h:164-173`; la función TI se comparte. Interpretación depende del request/mode y no sólo del layout. Correlación fuera del parser. |
+| `Node_Desc_rsp` `0x8002` | status `u8`; NWK address `u16 LE`; si success, Node Descriptor (13 bytes según lecturas TI) | `ZDO_ParseNodeDescRsp()` lee descriptor lógico/capabilities/manufacturer/transfers/server mask (`zd_object.c:3070-3101`). Longitud y tratamiento no-success deben cotejarse con R22. |
+| `Simple_Desc_rsp` `0x8004` | status `u8`; NWK address `u16`; descriptor length `u8`; descriptor si success: endpoint, profile ID `u16`, device ID `u16`, version/reserved, input count + `2×nIn`, output count + `2×nOut` | `ZDO_ParseSimpleDescRsp/Buf()` muestra orden de campos y asignación heap (`zd_object.c:3147-3160,3543-3594`). Candidate descriptor length `8+2×nIn+2×nOut`; debe concordar con bytes disponibles y campo length; confirmar normativa. |
+| `Active_EP_rsp` `0x8005` | status `u8`; NWK address `u16`; endpoint count `u8`; endpoint IDs `count` | `ZDO_ParseEPListRsp()` (`zd_object.c:3172-3194`); candidate total 4+count. TI no demuestra bounds completos. No contiene endpoints ZCL data; es descriptor pasivo. |
+
+Todos los enteros listados como `u16` son wire little-endian según `BUILD_UINT16` en TI; confirmar contra norma aprobada. Para status de error no se asumen campos de success. Si una longitud/status exacta no está resuelta, el registro devuelve status + remainder opaque y `schema_incomplete`, no una estructura completada por default. Unknown cluster permanece APS raw. Extra bytes se preservan y se marcan `trailing_data`; nunca descartar silenciosamente.
+
+TSN ZDO se guarda por separado de NWK sequence, APS counter y ZCL TSN. Correlación request/response no es requisito del parser pasivo; si se añade, requiere cluster, direcciones, perfil, endpoints, TSN y ventana temporal/provenance. Fixture mínimo por mensaje: ejemplo válido provenance conocido, success/error donde corresponda, truncation en cada frontera, extra bytes, count 0/1/máximo que cabe/count overrun; simple descriptor con counts combinados; casos de TSN presente una sola vez y contexto APS incorrecto.
+
+## 11. Baseline ZCL: header, commands y tipos
+
+### 11.1 APS profile y dispatch
+
+El profile `0x0000` y endpoint 0 se habilitan para ZDO por `zd_profile.h:86-87`. El SDK contiene clusters ZCL, pero no define una allowlist de perfiles de aplicación interoperables en los headers inspeccionados. `af.c` enruta según el `ProfileID` declarado por cada endpoint; eso no establece que todo profile admita este decoder (`af.c:463-486`).
+
+Política de revisión 1.1:
+
+| Profile/contexto | Tratamiento |
 |---|---|
-| Firmware | FeralRF sigue siendo el único firmware; baseline sin cambios embedded. |
-| Host | Nuevos componentes internos Python, todos **NO IMPLEMENTADOS ACTUALMENTE**. |
-| API existente | `Radio` y `Packet` se reutilizan sin cambio obligatorio. |
-| Transporte | COBS/UART y respuestas actuales se preservan. |
-| Z-Stack | Reuso de algoritmos/definiciones pequeños o referencia; no runtime ni translation units completas. |
-| Semántica | Decoder/constructor/injector/MAC/nodo son capacidades distintas. |
-| Validación | Ninguna capacidad propuesta se considera validada por aprobar esta arquitectura. |
+| APS profile `0x0000` + endpoint ZDO 0 | Sólo dispatch de seis clusters ZDO; no ZCL. |
+| Perfil de aplicación candidate `0x0104` (Home Automation) | **No habilitado aún.** Es candidato para aprobación normativa; fuentes SDK revisadas no bastan para certificar su significado/revisión. Habilitar sólo cuando el supervisor autorice norma exacta/profile version y fixtures. |
+| Otros perfiles estándar | Unsupported hasta añadir individualmente al `SchemaProfile` con fuente/version aprobada. |
+| `0xFFFF` wildcard, profile unknown o falta contexto | No usar para afirmar ZCL; preservar APS ASDU raw y `missing_context`/`unsupported_profile`. |
+| Manufacturer-specific schema/profile | Payload opaco salvo schema explícito, versionado y aprobado. |
 
-### 2.3 Estados de evidencia
+ZCL payload interpretation requiere APS Data plaintext, perfil allowlisted, cluster ID, source/destination endpoint donde aplique, ZCL frame type `0x00` foundation, header bounded y command/tipo dentro del allowlist. Profile common no es evidencia suficiente para activarlo. **La allowlist de aplicación está vacía en el baseline ejecutable propuesto**, y su activación es decisión explícita del supervisor; se pueden validar header/layout con fixtures controlados y profile marcado synthetic/test sin claim de red real.
 
-Se emplean los estados definidos en el registro: **CURRENT IMPLEMENTATION**, **SDK-CONFIRMED MECHANISM**, **HISTORICAL EXPERIMENTAL EVIDENCE**, **ARCHITECTURAL INFERENCE**, **CONDITIONALLY FEASIBLE**, **UNRESOLVED** y **UNSUPPORTED**. Cada recomendación principal referencia IDs del registro de evidencia.
+### 11.2 Header separado
 
-## 3. Baseline verificado y reconciliación
+ZCL header contiene Frame Control, Manufacturer Code opcional, Transaction Sequence Number y Command ID. TI `zclParseHdr()` lee 3 o 5 bytes sin argumento de longitud (`zcl.c:2412-2446`); una reimplementación propuesta usa cursor+remaining. Header de 3/5 bytes con frame type no foundation no activa los schemas de esta sección. Manufacturer-specific permanece header+payload raw.
 
-El `HEAD` actual es `fc0de99`; el commit añade la evaluación nativa previa. No hay cambios en `firmware/`, `python/` ni `hardware/` desde `31f9535`, y el SDK permanece en `5b31d0a...`. El árbol estaba limpio antes de estos dos entregables. El target continúa configurado para GNU Arm/CC1352P7, aunque el ejecutable del compilador no está en `PATH` y no se verificó su versión [BASE-01–08].
+### 11.3 Ocho foundation commands
 
-Se preserva una corrección importante: el `source/ti/zstack/stack/nwk/nwk.c` citado por un registro anterior no existe. El inventario real contiene `nwk.h`, `nwk_bufs.h`, `nwk_globals.c`, `nwk_globals.h` y `nwk_util.h`; `NLDE_ParseMsg()` sigue sin definición visible. La ausencia fortalece la decisión de implementar NWK independientemente y no se corrige retroactivamente el informe anterior [DISC-01][SDK-Z11][SDK-Z14].
+IDs provienen de `zcl.h:509-557`; estructuras candidatas en `zcl.h:844-899,971-1016`. Dirección es la convención ZCL; el receptor debe validar flags/contexto según R7 aprobado, sin reinterpretar command ID por dirección inesperada.
 
-## 4. Arquitectura relevante actual
-
-### 4.1 Responsabilidades
-
-| Componente existente | Procesador/runtime | Responsabilidad verificada | Límite relevante |
+| Command (ID) | Dirección usual | Payload candidato | Condicionalidad/errores |
 |---|---|---|---|
-| `Radio` / `Packet` | PC, Python | Control, RX asíncrono, TX y representación de bytes/metadata | No hay modelo MAC/Zigbee. [FW-H01–H05] |
-| `protocol.py` / `protocol.c` | PC + CC1352P7 | COBS, CRC16 y frame de comando/respuesta | No es framing RF ni Zigbee. [FW-H06][FW-F01] |
-| RP2040 bridge | Hardware/firmware externo al repo | Puente PC↔UART documentado | Source no disponible aquí; no atribuirle decoding. [HW-04] |
-| `CommandProcessor` | CC1352P7 | Valida y acepta comandos | ACK puede preceder terminación RF. [FW-F02–F03] |
-| `ControlTask` | CC1352P7/TI-RTOS | Estado, buffers y eventos de control | `TX_FRAME` es raw; fallo posterior asíncrono. [FW-F04] |
-| `DataTask` | CC1352P7/TI-RTOS | Ejecuta control/RF, drena colas y emite RX | Máximo 8 paquetes por poll para no bloquear UART. [FW-F05] |
-| `PhyManager` | CC1352P7 | Selecciona PHY/backend/LL | IEEE usa LL default. [FW-F06] |
-| `LLManager` | CC1352P7 | Clasificación BLE | IEEE pasa sin parsing. [FW-F07] |
-| `RadioIF` | CC1352P7 | Único owner de RF Driver, colas, RX/TX y metadata | Compartido por BLE/IEEE/sub-GHz; alto riesgo de regresión. [FW-F08–F14] |
-| RF Driver/RF Core | CC1352P7 system core/CM0 | Programa operaciones y radio | Hardware command ≠ servicio MAC. [SDK-RF01–04][TI-D02] |
-| Crypto engine | CC1352P7 | AES-CCM genérico one-shot | No construye contexto Zigbee ni key lifecycle. [FW-H05][FW-F17] |
+| Read Attributes `0x00` | Client→server | attribute IDs `u16 LE` repetidos hasta fin; sin count explícito | Longitud remanente múltiplo de 2; parcial final = truncated. |
+| Read Attributes Response `0x01` | Server→client | records attr ID `u16`, status `u8`; en success, datatype `u8` + value | Status error omite datatype/value; exactos según R7. Type desconocido detiene records posteriores y preserva resto. |
+| Write Attributes `0x02` | Client→server | records attr ID, datatype, value hasta fin | Value length depende del datatype y profile. Unknown datatype: no adivinar límite del siguiente record. |
+| Write Attributes Response `0x04` | Server→client | success/status o records de error con status y attribute ID según regla ZCL | Semántica success compacta/error conditional debe verificarse en texto ZCL7; hasta entonces marcar payload provisional y evitar aceptar variantes no verificadas. |
+| Report Attributes `0x0A` | Dirección depende del role cliente/servidor del cluster | records attr ID, datatype, value hasta fin | No imponer una dirección universal en parser genérico; no inferir semántica de cluster. |
+| Default Response `0x0B` | Respuesta al command previo; dirección opuesta a la transacción correspondiente | command ID respondido `u8`, status `u8` | Sin correlación se decodifican campos, no se afirma que responde a un frame capturado. |
+| Discover Attributes `0x0C` | Client→server | start attribute `u16`, max attribute IDs `u8` | Longitud fija 3 después del header. |
+| Discover Attributes Response `0x0D` | Server→client | discovery-complete `u8`; records attr ID `u16` + datatype `u8` | Prefijo 1 y resto múltiplo de 3; flags/status exactos de R7. |
 
-### 4.2 RX actual
+Estas estructuras son schemas candidatos y no afirmación normativa completa mientras falte la especificación R7 autorizada. Cluster-specific commands no se interpretan. Invalid/truncated/mismatched direction produce issue y raw remainder. Se distinguen ZCL TSN, APS counter y ZDO TSN.
 
-```text
-RF Core
-  → cola RF (3 entradas)
-  → callback que marca evento
-  → RadioIF_poll()/RadioIF_processIeee154Packets()
-  → cola RadioIF (8 paquetes)
-  → LLManager (IEEE pass-through)
-  → DataTask_emitRxPacket()
-  → COBS/UART/RP2040/PC
-  → Radio.read_packets()
-  → Packet
-```
+### 11.4 Allowlist inicial candidato de tipos
 
-`RadioIF_startIeee154RfBackend()` configura PHR y FCS incluidos y añade RSSI, corr/CRC y timestamp. `RadioIF_processIeee154Packets()` elimina PHR, conserva el MPDU incluido su FCS, descarta CRC-bad y construye `RadioIF_RxPacket` [FW-F12–F13]. El baseline propuesto comienza después de `Packet`, no altera esa cadena.
+Los IDs están confirmados por `zcl.h:597-652`; tamaños fijos deben cotejarse con la tabla normativa ZCL7 y el helper TI (`zcl.c:3195-3283`). Esta es **lista candidata**, no aprobación final.
 
-### 4.3 TX actual
+| Tipo | ID | Longitud wire candidata | Nota |
+|---|---:|---:|---|
+| `NO_DATA` | `0x00` | 0 | No debe confundirse con tipo desconocido; contexto command debe permitirlo. |
+| `BOOLEAN` | `0x10` | 1 | Interpretación de valores válidos requiere R7. |
+| `BITMAP8/16/32/64` | `0x18/19/1B/1F` | 1/2/4/8 | No incluir bitmap24/40/48/56. |
+| `UINT8/16/32/64` | `0x20/21/23/27` | 1/2/4/8 | Little-endian conforme al schema aprobado. |
+| `INT8/16/32/64` | `0x28/29/2B/2F` | 1/2/4/8 | Sign extension definida por implementation; bytes originales preservados. |
+| `ENUM8/16` | `0x30/31` | 1/2 | Valores no conocidos permanecen numéricos. |
+| `OCTET_STR/CHAR_STR` | `0x41/42` | Prefijo `u8` + longitud indicada | `0xFF` como invalid/null sentinel es candidato conocido pero queda sujeto a R7; manejar sin intentar leer bytes de contenido si sentinel así lo establece. |
+| `CLUSTER_ID/ATTR_ID` | `0xE8/0xE9` | 2 | Campo wire 16-bit. |
+| `IEEE_ADDR` | `0xF0` | 8 | Mantener bytes y convención de visualización documentada. |
 
-```text
-Radio.transmit(bytes)
-  → COBS command
-  → CommandProcessor ACK de aceptación
-  → ControlTask event/buffer
-  → DataTask_poll()
-  → RadioIF_transmitIeee154Raw()
-  → CMD_IEEE_TX inmediato
-  → RF Core añade PHR/FCS
-```
+Tipos compound (array, structure, set, bag), floating point, widths 24/40/48/56/long strings y key type quedan fuera del primer subset. String prefix mayor que remaining = truncated; longitud nula/vacía sigue schema; sentinel/null se acepta sólo si revisión normativa lo confirma. Tipo no soportado devuelve `unsupported_data_type`, datatype offset y todo el resto raw. No se continúa hacia supuestos records posteriores.
 
-El caller entrega 1–125 bytes de MPDU sin FCS. TX es rechazado si RX está activo. No existen CCA/CSMA, espera de ACK, retry, association ni completion host correlacionado [FW-H04][FW-F03–F04][FW-F11][FW-F14–F15].
+Fixtures mínimos: headers 3/5; profile allowlisted/no allowlisted/missing; cada command en request/response context; dirección esperada y mismatch; cada tipo candidato en mínimo/normal/máximo; empty/null/truncated string; unknown type; manufacturer-specific opaque; trailing bytes y listas parciales.
 
-## 5. Contrato IEEE 802.15.4 consumido
+## 12. Componentes propuestos y ownership
 
-| Campo/propiedad | Estado actual | Consecuencia para la propuesta | Validación pendiente |
-|---|---|---|---|
-| PHY/canal | `PHY.IEEE_802_15_4=4`; canal aplicado a RX/FS | El contexto de captura debe acompañar cada resultado | Confirmar canales/límites con firmware actual. |
-| PHR RX | Incluido en cola RF, removido antes de `Packet` | Parser MAC nunca recibe PHR | Fixture/captura byte-exacta. |
-| MPDU RX | `Packet.data` conserva MPDU | Input primario inmutable | Confirmación OTA independiente. |
-| FCS RX | Incluido; CRC-bad descartado | `fcs_present=true`; parser separa últimos 2 bytes, no los adivina | Longitudes frontera y bad-FCS policy futura. |
-| TX input | MPDU sin FCS, 1–125 bytes | Builder condicional debe excluir FCS | Captura independiente del FCS generado. |
-| CRC | Hardware/firmware filtra inválidos | Baseline no analiza bad-FCS | Aclarar si se desea modo forensic posterior. |
-| RSSI | Byte appended expuesto | Metadata, no semántica Zigbee | Correlación con instrumento no demostrada. |
-| `lqi` | Siete bits de correlación expuestos como `lqi` | Nombrar “correlación/LQI reportada”; no normalizar sin evidencia | Calibración/semántica pendiente. |
-| Timestamp | RAT de 32 bits dividido entre 4 | Contexto relativo; no asumir wall clock ni continuidad | Evento exacto, wrap y loss bajo carga. |
-| Colas | 3 RF, 8 app; hasta 8 drains/poll | Captura puede tener gaps; estado pasivo no puede asumir exhaustividad | Stress/telemetry de drops. |
-| RX/TX | Mutuamente excluyentes | Construcción no implica respuesta/ACK temporal | Validar error y recuperación. |
-| ACK host | Aceptación/encolado | No usar como “transmitido” | Completion contract futuro. |
+Las responsabilidades siguientes son **PROPOSED — NOT IMPLEMENTED** y no requieren un paquete separado cada una.
 
-Estados: la representación anterior es **CURRENT IMPLEMENTATION** [FW-F09–F15]; RAW OTA es sólo **HISTORICAL EXPERIMENTAL EVIDENCE** en canal 25 [EXP-01–05].
-
-## 6. Subconjunto funcional seleccionado
-
-### 6.1 Baseline propuesto
-
-| ID | Capacidad | Cobertura inicial | Razón de selección |
-|---|---|---|---|
-| `R-BASE-01` | Adaptador de contrato raw | MPDU+FCS, metadata y schema profile explícitos | Evita heurísticas y desacopla captura de parsing. |
-| `R-MAC-01` | MAC bounded | FCF, frame type/version aprobado, sequence, addressing, PAN compression, aux security boundary, payload/FCS; IE no soportada se detecta y preserva | Fundamento de todas las capas. |
-| `R-NWK-01` | NWK bounded | Frame control/type/version, addresses, radius, seq, ext addresses, multicast/source route y security boundary | Alta utilidad pasiva; definitions disponibles. |
-| `R-APS-01` | APS bounded | Type, delivery mode, endpoints/group, cluster, profile, counter, ext/fragment/security boundary | Entrega contexto a ZDO/ZCL. |
-| `R-ZDO-01` | ZDO seleccionado | `Device_annce`, `NWK_addr_rsp`, `IEEE_addr_rsp`, `Node_Desc_rsp`, `Active_EP_rsp`, `Simple_Desc_rsp` | Identidad y descriptors con field-order TI visible. |
-| `R-ZCL-01` | Header ZCL | FC, manufacturer code, direction, TSN, command ID | Algoritmo TI pequeño y claro. |
-| `R-ZCL-02` | Foundation subset | Read/Write Attributes req/rsp, Report Attributes, Default Response, Discover Attributes req/rsp; tipos escalares y strings cubiertos por el schema aprobado | Valor analítico, cobertura bounded y testable. |
-| `R-SEC-01` | Frontera de seguridad | Extraer campos visibles, longitud MIC esperada cuando esté definida, preservar ciphertext/MIC y detener plaintext | Evita falsos decodes; no decryption. |
-| `R-RAW-01` | Preservación | Bytes originales, spans/offsets y unknown remainder en cada capa | Auditabilidad y forward compatibility. |
-| `R-ERR-01` | Errores tipados | `truncated`, `malformed`, `unsupported_revision`, `unsupported_field`, `encrypted`, `missing_context`, `schema_unknown` | Sin excepciones opacas por frame. |
-| `R-VAL-01` | Comparación independiente | Corpus versionado + dissector fijado + resolución contra norma | Aceptación reproducible. |
-
-**No se promete cobertura completa** de MAC moderno, ZDO, ZCL ni manufacturer-specific clusters. Un comando desconocido se conserva raw y produce un resultado estructurado, no semántica inventada.
-
-### 6.2 Extensiones condicionadas
-
-| ID | Capacidad | Gate antes de aprobar |
-|---|---|---|
-| `C-OBS-01` | Estado pasivo: devices, mappings, transactions, fragments, topology/attributes observados | Parsers aceptados; modelado de gaps, provenance, expiry y conflicto. |
-| `C-DEC-01` | Descifrado autenticado autorizado | Revisión/security levels, keys autorizadas, nonce/AAD, CCM* known-answer y política de secretos. |
-| `C-BLD-01` | Serializers/builders y raw TX | Schemas aceptados, round-trip, FCS contract, estados accepted/completed/observed separados. |
-| `C-RF-01` | Timed raw TX o CCA observacional | Requisito funcional real, timebase/completion, recursos y regresión demostrables. |
-
-Auto-ACK, CSMA, TX→RX_ACK y RX→TX quedan investigación posterior a `C-RF-01`, no parte implícita de ella.
-
-### 6.3 Exclusiones operacionales
-
-Joining, formation, coordinator/router, endpoint operacional, NWK routing, BDB, key lifecycle, MAC completo, conformance y delivery guarantee requieren runtime/estado/temporización ausentes. Se excluyen, no se posponen silenciosamente.
-
-## 7. Reuso selectivo de Z-Stack
-
-### 7.1 Evaluación por función
-
-| Candidato | Input/output real | Entorno/dependencias | Decisión | Hardening/prueba requerida |
+| Responsabilidad conceptual | Contrato | Contexto/dependencia | Ownership/error | Ejecución |
 |---|---|---|---|---|
-| `zclParseHdr()` | `uint8_t*`→`zclFrameHdr_t` + puntero payload | Tipos/macros ZCL; sin longitud | **Adaptar algoritmo** en Python, no compilar archivo | Buffer length 3/5; bits reservados; vectors y truncación. [SDK-Z03] |
-| `zclBuildHdr()` | struct + buffer→puntero final | `static`; sin capacidad | Referencia para `C-BLD-01`, no baseline | Writer bounded y round-trip. [SDK-Z04] |
-| `zclGetDataTypeLength()` | datatype→0/1…16 | Constantes; cero ambiguo | Adaptar como tabla typed fixed/variable/unsupported | Exhaustividad contra ZCL7 aprobado. [SDK-Z06] |
-| `zclGetAttrDataLength()` | datatype+data→length | Lee prefijo 1/2 sin bytes restantes | Adaptar regla, nunca firma original | Bounds, overflow y content available. [SDK-Z06] |
-| `zclSerializeData()` | C attr→bytes | Layout C, endian, sin capacidad | Referencia condicional para serializer | Writer bounded, tipos y round-trip. [SDK-Z05] |
-| `ZDO_ParseDeviceAnnce()` | `zdoIncomingMsg_t`→struct | ASDU sin length check; OSAL types | Reimplementar desde schema; usar field order como evidencia | Longitud exacta/extra bytes y endianness. [SDK-Z10] |
-| `ZDO_ParseAddrRsp()` | incoming→heap object/list | `OsalPort_malloc`, count/ownership | Reimplementar bounded | Counts vs remaining, allocation caps. [SDK-Z10] |
-| `ZDO_ParseEPListRsp()` | incoming→heap endpoints | Count leído antes de comprobar ASDU | Reimplementar bounded | 0/max/truncated counts. [SDK-Z10] |
-| `ZDO_ParseSimpleDescRsp/Buf()` | incoming→descriptor+dos listas | Heap/free rules; sin buffer length | Reimplementar bounded | Descriptor length y cluster counts. [SDK-Z10] |
-| `NLDE_ParseMsg()` | declaración buffer+len→frame format | Definición no visible | **No reutilizable**; parser independiente | Norma aprobada + corpus. [SDK-Z11/Z14] |
-| `APSDE_ParseMsg()` | declaración NWK frame→APS format | Definición no visible | **No reutilizable**; parser independiente | Norma aprobada + corpus. [SDK-Z12] |
-| ZMAC/TIMAC | MLME/MCPS wrappers/callbacks | Binarios, OSAL, tasks, PIB/state | Excluido | No hay adaptación parcial equivalente. [SDK-M01–05] |
+| Core capture/model | `Packet + CaptureContext → RawCapture` | PHY/FCS/PHR/provenance/profile | Referencia inmutable/copia si lifetime incierto; errores `missing_context`/`context_mismatch`; raw original | Python |
+| Bounded cursor + issues | `bytes/span → read result + absolute offset` | Longitud del buffer y límites de subspan | No lee fuera de span; errores requeridos/disponibles | Python |
+| Classifier/pipeline | `RawCapture + SchemaProfile → DecodeResult` | Resultado MAC, clasificación, security state | Stop por ambiguo/security/unsupported; no muta raw | Python |
+| IEEE parser | MPDU+FCS policy → `MacResult` y payload span | Profile IEEE aprobado | FCS/metadata preservados; error por offset absoluto | Python |
+| NWK / APS parsers | Payload elegible/plaintext → resultados de capa | Profile Zigbee, flags opcionales, frame type | Ciphertext/fragment no asciende | Python |
+| ZDO / ZCL schemas | APS context + ASDU → record tipado u opaque | Profile, endpoint, cluster, command, types | Raw desconocido y offsets absolutos | Python |
+| Validation adapters | fixtures/PCAP + resultados → diff reproducible | Corpus licenciado, comparator fijado | Separados del runtime; no cambian `Radio` | Host/tooling |
 
-### 7.2 Direct source vs. definición
+Forma de empaquetado mínima conceptual: un `core` (capture/cursor/issues/profile), un `pipeline` (classification/dispatch), parsers de capas y tablas de schemas; adapters offline en test tooling. Los nombres de módulos futuros son internos, no API pública comprometida. La biblioteca no debe abrir radio, leer serial ni importar KillerBee al importarse.
 
-- **Direct source reuse:** no seleccionado para baseline.
-- **Adapted source algorithm:** sólo helpers ZCL pequeños si la revisión de licencia lo permite y tras reescritura bounded.
-- **Protocol-definition reuse:** constantes/máscaras ZCL/ZDO/NWK/APS como referencia secundaria.
-- **Independent reimplementation:** MAC, NWK, APS y ZDO; preferida para ownership, errors y mantenimiento.
-- **Dependiente del runtime/no soportado:** ZMAC/TIMAC, AF, ZDO/ZCL operacionales, BDB, security/NV y Z-Stack API.
+## 13. Reutilización Z-Stack, procedencia y límites
 
-`zcl.c` contiene aviso BSD-3-Clause, mientras `aps.h` incluye condición TI-device-only; FeralRF es GPL-3.0. La compatibilidad/redistribución debe revisarse archivo por archivo. La disponibilidad de fuente no resuelve la cuestión legal [SDK-Z01/Z13][TI-D06].
+| Símbolo/área | Tratamiento propuesto | Motivo y evidencia |
+|---|---|---|
+| `zclParseHdr()` | Reimplementar bounded desde norma; TI como cross-check | Source 3/5 bytes, sin length (`zcl.c:2412-2446`). |
+| `zclBuildHdr()` | Fuera baseline; referencia condicional para builder | `static`, sin capacity (`zcl.c:2459-2482`). |
+| `zclGetDataTypeLength()` | Reexpresar como tabla fixed/variable/unsupported | Devuelve cero para varias categorías (`zcl.c:3195-3283`). |
+| `zclGetAttrDataLength()` | No portar firma; usar reader bounded | Lee prefix sin available length (`zcl.c:3296-3322`). |
+| `zclSerializeData()` | No baseline; cross-check si builder futuro | Usa layout C y carece de capacity (`zcl.c:2961-3076`). |
+| `ZDO_Parse*` | Verificar field order; implementar Python independiente | `zdoIncomingMsg_t`, `asduLen`, OSAL allocation/ownership y funciones sin bounds completos (`zd_object.c:3005-3194,3543-3618`). |
+| NWK/APS headers | Máscaras/structs cross-check secundarios | `NLDE_ParseMsg`/`APSDE_ParseMsg` sin source visible; no inventar función. |
+| ZMAC/TIMAC/AF/BDB/security/NV | Excluidos | Wrappers y callbacks ligados a `MAP_MAC_*`, OSAL, task/config y bibliotecas por toolchain/rol; no servicio raw FeralRF equivalente. |
 
-## 8. Estrategia normativa y versionado
+Política de provenance: implementar desde especificación protocolaria autorizada y versionada; TI fuente sirve como contraste. `zcl.c` tiene aviso tipo BSD-3-Clause (`zcl.c:9-37`); `zd_object.c`, `nwk_util.h` y `aps.h` incluyen licencia limitada a TI Devices (`:9-63`). Headers con definiciones no son automáticamente una licencia independiente. Binarios TI no son código fuente portable. FeralRF declara GPL-3.0 (`python/pyproject.toml:5-11`); Scapy/zigpy/Wireshark son sólo comparadores según versiones y licencias registradas. No se emite conclusión legal. Si se selecciona adaptación directa después, revisión archivo por archivo y provenance/notices son requisito.
 
-TI declara para Z-Stack 8.30 Zigbee PRO 2017/R22 y ZCL7 [TI-D04]. El catálogo CSA actual ofrece R22.1/R23.x y ZCL7/8 [CSA-D01]. IEEE 802.15.4-2020 está hoy superseded por 2024 [IEEE-D01]. Por tanto:
+## 14. Normativa y APS profile versioning
 
-1. el profile provisional de implementación será **R22/ZCL7 alineado al SDK**, pendiente de aprobación y acceso a los textos exactos;
-2. el profile declarará separadamente revisión MAC, Core, ZCL y schemas de cluster;
-3. no se mezclará R23/ZCL8 en el mismo parser sin un profile nuevo;
-4. frame version/IE no cubierto producirá `unsupported_revision` o `unsupported_field` conservando raw;
-5. manufacturer-specific sin schema se entrega como header+payload raw;
-6. la ZCL rev.6 pública sólo puede ayudar históricamente; no es oráculo de ZCL7.
+TI release notes para Z-Stack 8.30 declaran Zigbee PRO 2017/R22 y ZCL 7 [TI-D04]. CSA publica un catálogo de Core R22.1/R23.x y ZCL7/8 [CSA-D01]. Eso justifica **R22-aligned/ZCL7 como perfil provisional de trabajo**, no sus detalles wire por autoridad completa.
 
-Esta decisión provisional requiere aprobación del supervisor antes de implementar `R-MAC-01` y schemas superiores.
+Pendiente antes de implementar schemas: copia autorizada del Core R22 exacto y ZCL7 exacta; revisión IEEE 802.15.4 referenciada por ese profile; errata y requisitos status/dirección de mensajes; y aprobación de `SchemaProfile`. IEEE 802.15.4-2020 está superseded por 2024 según la página oficial consultada; no seleccionar revisión sólo por ser más nueva [IEEE-D01]. No mezclar R22 con R23/ZCL8 bajo un mismo profile.
 
-## 9. Arquitectura propuesta
+APS profile allowlist: `0x0000` confirmado para ZDO; allowlist de aplicación vacía inicialmente. `0x0104` se registra como candidato explícito sujeto a verificación de significado/revisión en el documento oficial aplicable y aprobación del supervisor. El SDK observado no es evidencia suficiente para activar ese ID. Ningún profile manufacturer-specific se habilita por defecto. El registro de fuentes enumera URLs oficiales, versiones/publication/access dates y vacíos [TI-D01–07, CSA-D01–03].
 
-### 9.1 Principio
+## 15. Compatibilidad y preservación de FeralRF
 
-Python procesa pasivamente `Packet.data`; el firmware permanece intacto. La hipótesis está soportada porque el MPDU y metadata ya llegan al host y ninguna operación de parsing exige timing RF [FW-H01][FW-F05/F13].
+| Superficie | Efecto esperado del baseline | Condición de aceptación |
+|---|---|---|
+| `Radio`/`Packet` | Consumo por wrapper opt-in; API pública intacta | Imports sin side effects; `Packet.data` byte-identical; PHY/session context obligatorio. |
+| COBS/UART | Sin comandos/respuestas nuevas | Prueba de regresión del protocolo al implementarse; decoder no toca serial automáticamente. |
+| Firmware/RF Driver | Sin modificaciones | Inspección diff; no altera ownership ni colas. |
+| Raw RX/TX | Bytes permanecen accesibles sin decoder | Unknown/non-Zigbee siempre pasa como raw; decoder no consume el iterador de fondo. |
+| Otras PHY | No elegibles para Zigbee | Rechazo por PHY de contexto, nunca por heurística de canal. |
+| KillerBee | Adapter independiente/lazy | No es dependencia del decoder; conserva ruta existente (`killerbee.py:1-19,95-119`). |
+| Capacidad host | Añade CPU/RAM y puede acumular backlog | Medir throughput/pérdida/backlog antes de habilitar observation state; no asumir captura sin gaps. |
 
-### 9.2 Componentes
+La compatibilidad es inferencia arquitectónica, no resultado probado. No se normalizan timestamp/LQI. Current Python `read_packets()` parsea el response length y hace slicing de `pkt_len`, pero no comprueba explícitamente que todos esos bytes estén presentes (`radio.py:673-707`); cualquier decoder adapter debe validar su input y devolver issue si contexto o longitudes no son suficientes. Esta propuesta no modifica esa API.
 
-Todos los elementos marcados “propuesto” son **NO IMPLEMENTADOS ACTUALMENTE** y sus nombres son candidatos internos, no API pública comprometida.
+## 16. Requisitos funcionales verificables
 
-| Componente | Estado | Ubicación | Responsabilidad/input/output | Firmware/recursos RF |
+| ID | Entrada/contexto | Salida | Error/stop | Capa/validación |
 |---|---|---|---|---|
-| `Radio`, `Packet`, transporte | Existente | Python/firmware | Captura, metadata y bytes | Sin cambio. |
-| `zigbee.model` conceptual | Propuesto | Python | Tipos inmutables de span/context/result/error/schema | Ningún cambio. |
-| `zigbee.pipeline` conceptual | Propuesto | Python | Orquesta MAC→NWK→APS→ZDO/ZCL y stops | Ningún cambio. |
-| `zigbee.mac` conceptual | Propuesto | Python | `RawCapture`→`MacResult` | CPU/RAM host. |
-| `zigbee.nwk` conceptual | Propuesto | Python | MAC payload→`NwkResult` | CPU/RAM host. |
-| `zigbee.aps` conceptual | Propuesto | Python | NWK plaintext→`ApsResult` | CPU/RAM host. |
-| `zigbee.zdo` conceptual | Propuesto | Python | APS ZDO context→selected schema result | CPU/RAM host. |
-| `zigbee.zcl` conceptual | Propuesto | Python | APS app context→header/foundation result | CPU/RAM host. |
-| `zigbee.schemas` conceptual | Propuesto | Python/data | Profiles versionados y registries | Revisión/mantenimiento host. |
-| adapter PCAP/comparator | Propuesto para validación | Python/tool externo | Corpus/PCAP→comparación | No runtime obligatorio. |
-| observation/security/builders | Condicional | Python | Estado, decryption, serializers | Sin firmware salvo elección explícita futura. |
-| timed RF primitive | Condicional | CC1352P7 | Operación temporal estrecha | Cambio de alto riesgo; fuera baseline. |
+| `R-BASE-01` | `Packet` + `CaptureContext` con PHY, FCS/PHR policy, source/version/ownership | `RawCapture` raw inmutable, metadata y spans | Falta/conflicto context → issue y sólo raw | Python; V-RAW-01 + fixtures adapter |
+| `R-MAC-01` | MPDU y FCS policy + revisión IEEE | Campos MAC, header/payload/FCS spans | No Data/unsupported/secured → result raw/security y stop | Python; V-MAC-01 |
+| `R-ID-01` | MAC payload + provenance + schema profile | Una de cinco clasificaciones §7.2 | Ambiguous/not eligible/invalid se conservan y no autorizan decode afirmativo | Python; V-NWK-APS-01 |
+| `R-NWK-01` | Payload clasificado y sin MAC security indicada; plaintext externo autenticado queda fuera del baseline | Header base/opcionales, frame type, payload/security spans | Security/unsupported version/command path para APS | Python; V-NWK-APS-01 |
+| `R-APS-01` | NWK Data plaintext | APS type/delivery/context/counter/extensions/spans | security/command/ACK/fragment/malformed paran app dispatch | Python; V-NWK-APS-01 |
+| `R-ZDO-01` | APS plaintext profile 0/endpoints 0/cluster allowlist | TSN separado + seis schemas §10 | Status/length/count provisional → partial/raw issue | Python; V-ZDO-01 |
+| `R-ZCL-01` | APS Data plaintext + profile allowlisted | Header 3/5 y payload span | Missing/unsupported profile o manufacturer payload → opaque | Python; V-ZCL-01 |
+| `R-ZCL-02` | ZCL foundation frame + command/type allowlist | Campos/value/span por §11 | Tipo/longitud desconocidos detienen records, preservan tail | Python; V-ZCL-01 |
+| `R-SEC-01` | Security fields de cada capa | Security state + visible/ciphertext spans | Nunca plaintext sin authenticated context; MIC no supuesto | Python; V-SEC-01 |
+| `R-RAW-01` | Cada resultado parcial o final | Bytes originales reconstruibles por spans | Preservar unknown/trailing bytes aun con error | Core; property fixtures |
+| `R-ERR-01` | Todo input bounded | Issue estable por capa/offset | Frame inválido no mata siguiente frame | Core; suite negative |
+| `R-VAL-01` | Corpus normativo versionado y comparator | Resultado/diff/provenance reproducible | Conflicto sin resolver bloquea claim | Offline; V-COMP-01 |
 
-### 9.3 Contratos internos conceptuales
+Todos son **propuestos/no implementados**. La cobertura se declara por profile y command. “Unsupported” es distinto de “malformed”; “structurally consistent” no significa interoperable.
 
-- **`RawCapture` conceptual:** referencia inmutable a MPDU, `fcs_present`, canal, RSSI, corr/LQI, timestamp y profile.
-- **`LayerResult` conceptual:** status, campos tipados, spans `[start,end)`, payload/remaining, issues y raw reference.
-- **`DecodeIssue` conceptual:** layer, code, severity, offset, required/available y detail no sensible.
-- **`SchemaProfile` conceptual:** IDs/revisiones aprobadas y feature flags.
+## 17. Validación reproducible requerida (futura; no ejecutada)
 
-Estos contratos no sustituyen `Packet`; lo envuelven. El decoder nunca modifica bytes y no copia salvo que ownership/lifetime lo exija. Cada capa consume un span de la anterior y conserva offsets absolutos al MPDU.
+| Test | Prerrequisitos y estímulos | Observables/criterio | Límite |
+|---|---|---|---|
+| `V-RAW-01` | Build/firmware identificado; capturas de entrada conocidas; sniffer OTA independiente si se evalúa TX | Confirmar por interfaces actuales: RX bytes y PHR/FCS policy según captura externa; channel y metadata documentadas. TX separa (1) ACK accepted, (2) ausencia de async failure dentro de ventana declarada como evidencia negativa débil, (3) OTA observed byte-exact. Terminal RF completed correlacionado: no disponible en host actual; no inferir de ausencia de error. MAC ACK y respuesta app son observables distintos, no requisitos del baseline. | No prueba Zigbee ni delivery. No inventar umbral temporal. OTA receiver necesario para afirmación de emisión. |
+| `V-MAC-01` | IEEE profile autorizado; fixtures byte-exactos | Non-Data; combinaciones addressing; versiones supported/unsupported; PAN compression; sequence suppression; aux security; IE policy; FCS present/unknown; truncation cada offset; malformed. Expects spans/issues exactos y raw conservado. | No RF stack service. |
+| `V-NWK-APS-01` | Zigbee Core profile aprobado y known captures con provenance | R-ID-01 positive contextual, structural unconfirmed, non-Zigbee, ambiguous, invalid NWK, context missing; NWK optional fields/data-vs-command; APS Data/Command/ACK, delivery modes, profiles unsupported; security MAC/NWK/APS; fragment stops; unknown/truncated. | Comparator no sustituye norma. |
+| `V-ZDO-01` | ZDO schemas R22 autorizados | Seis clusters, TSN exactly once, status success/error, count/length, request/response context sólo para correlation, APS mismatch, unknown cluster, trailing/truncation. Expected bytes/offsets exactos. | Las reglas TI de status/count no son oracle. |
+| `V-ZCL-01` | ZCL7 autorizada y APS allowlist aprobada | Header 3/5; profile allowed/unsupported/missing; ocho commands; candidate types; direction mismatch; manufacturer opaque; unknown type; string sentinel/limits/truncation; invalid records. | Sin semántica cluster-specific. |
+| `V-SEC-01` | Vectores estructurales de profile aprobado; sin claves para baseline | Security headers MAC/NWK/APS, missing context, unsupported level, opaque ciphertext/MIC handling, no plaintext calls; assertion de estado `authentication_not_attempted`. | Authenticated decryption excluida. |
+| `V-COMP-01` | Release/config/DLT/FCS policy fijados de dissector independiente | Mismos fixtures/captures y diff campo a campo; cada diferencia explicada por norma o bloquea claim | Norma aprobada es autoridad. Scapy/Wireshark sólo comparator. |
 
-### 9.4 Política de errores
+Fixtures deben registrar provenance/licencia, revisión, FCS policy, expected classification, raw hashes, schema version y sensibilidad. Fuzzing offline será posterior; no se ejecutó aquí. Aceptación de arquitectura no cambia implementación o validación a “completa”.
 
-Por frame, truncation/unsupported/encrypted son resultados, no fallos del stream. Sólo errores de programación/configuración elevan excepciones. El pipeline se detiene en la última capa segura:
+### 17.1 Estados TX que no deben confundirse
 
-- malformed MAC: no intenta NWK;
-- payload no Zigbee: termina con clasificación raw;
-- NWK/APS secured sin plaintext: devuelve security metadata+ciphertext/MIC;
-- revisión no soportada: devuelve campos previos+raw remainder;
-- contexto ZCL faltante: header opcional, payload raw y `missing_context`;
-- comando desconocido: preserva command ID/payload, `schema_unknown`.
+`accepted` = ACK host de comando encolado; `async_failure` = evento error posterior, no necesariamente correlacionado; `completed` = terminación interna que no se expone correlacionadamente por la API; `observed_ota` = trama capturada por sniffer externo; `mac_acknowledged` = ACK IEEE recibido; `application_responded` = respuesta de capa superior. `Radio.transmit()` sólo espera ACK/ERROR (`radio.py:725-750`). Baseline pasivo no necesita una nueva completion API.
 
-## 10. Flujos de datos
+## 18. Mapa requisito → fuente → validación
 
-### 10.1 A — Recepción y decode pasivo
+| Requisito | Fuente principal | Verificación futura | Estado actual |
+|---|---|---|---|
+| `R-BASE-01` | `radio.py:18-30,455-478,673-707`; `radio_if.c:1335-1355,1497-1568` | Adapter fixtures + V-RAW-01 | Raw implementado; contexto completo no existe en `Packet`; decoder propuesto. |
+| `R-MAC-01` | IEEE-D01; AUD-01; RF RX citado arriba | V-MAC-01 | No existe parser. Normativa pendiente. |
+| `R-ID-01` | MAC pass-through `ll_manager.c:144-159`; policy §7 | V-NWK-APS-01 | Nuevo clasificador propuesto. |
+| `R-NWK-01` | SDK-Z11/Z14 `nwk_util.h:111-155,319-321` | V-NWK-APS-01 | Definiciones visibles; implementación TI no visible. |
+| `R-APS-01` | SDK-Z12 `aps_mede.h:91-124`; `aps_util.h:110-113` | V-NWK-APS-01 | Definiciones visibles; parser TI no visible. |
+| `R-ZDO-01` | SDK-Z08–10 `zd_profile.h/.c`, `zd_object.c/.h` | V-ZDO-01 | Field order visible; parser propuesto, no validado. |
+| `R-ZCL-01` | SDK-Z03/07 `zcl.c:2412-2446`, `zcl.h:822-842` | V-ZCL-01 | Algoritmo visible sin bounds; propuesta Python. |
+| `R-ZCL-02` | SDK-Z05/06 `zcl.c:2961-3076,3195-3322`; `zcl.h:509-652` | V-ZCL-01 | IDs/helpers visibles; schema pendiente de ZCL7. |
+| `R-SEC-01` | SDK-Z12/M08; `ssp.h`; IEEE profile | V-SEC-01 | No decryption ni validación propuesta. |
+| `R-RAW-01` | `Packet`, `RadioIF_RxPacket`; FW-F13 | Spans/property fixtures | Modelo común propuesto. |
+| `R-ERR-01` | Parse hazards SDK-Z03–10 | Negative suites | Issues propuestos. |
+| `R-VAL-01` | EXT-01/05; normativa | V-COMP-01 | No comparador ejecutado. |
 
-```text
-RF Core → RadioIF → DataTask → COBS/UART → Radio.read_packets() → Packet
-                                                               │
-                                                               ▼
-                                                      RawCapture (propuesto)
-                                                               │
-                  ┌──────────── malformed/unsupported ─────────┤
-                  ▼                                            ▼
-             DecodeIssue ← MAC → NWK → [security gate] → APS → dispatch
-                                                           ├─ ZDO subset
-                                                           └─ ZCL subset
-```
+## 19. Extensiones condicionales
 
-La detección Zigbee se basa en contexto/estructura aprobados; no en que toda trama IEEE sea Zigbee. Security gates impiden interpretar ciphertext como APS/ZDO/ZCL.
-
-### 10.2 B — Estado pasivo condicional
-
-```text
-LayerResult + capture provenance
-        → observation service (C-OBS-01, NO IMPLEMENTADO)
-             ├─ short↔EUI-64 mappings observados
-             ├─ PAN/device observations
-             ├─ transaction/fragment correlation
-             └─ topology/attributes observados o inferidos
-```
-
-Cada registro conserva primera/última observación, source frame, confidence y gaps. “Observado” no significa miembro actual/autorizado de la red.
-
-### 10.3 C — Construcción condicional
-
-```text
-campos+schema+contexto explícito
-  → serializers ZCL/ZDO/APS/NWK/MAC
-  → MPDU ≤125 sin FCS
-  → Radio.transmit()
-  → accepted
-  → [completion RF hoy no correlacionado]
-  → observed OTA
-  → optional MAC ACK
-  → optional application response
-```
-
-Cada estado es distinto. Sólo el primero está reflejado por el ACK host actual; los demás requieren evidencia propia.
-
-### 10.4 D — Primitiva embedded condicional
-
-```text
-conceptual host command (versionado)
- → CommandProcessor: valida/operation-id
- → ControlTask: copia/estado/evento
- → DataTask: serializa ejecución
- → RadioIF: chain/trigger RF
- → RF Driver/Core
- → terminal result correlacionado
-```
-
-No se incluye en baseline. Antes debe existir necesidad funcional que no pueda resolverse en host, además de timebase, completion y regresión.
-
-## 11. Compatibilidad
-
-### 11.1 Protocolo e interfaz
-
-| Dimensión | Compatibilidad fuente | Condición/límite |
+| ID | Extensión | Gate explícito |
 |---|---|---|
-| MPDU/FCS | Compatible con input pasivo | Contrato debe hacerse explícito; confirmación actual pendiente. |
-| NWK/APS | Bytes preservados permiten parsing | Sólo plaintext después de security gate; revisión versionada. |
-| ZDO/ZCL | Contexto APS contiene profile/cluster/endpoints | Subset/schema explícito; unknown raw. |
-| `Radio` | Reutilizable sin cambio | Decoder puede ser servicio separado; no ocultar runtime. |
-| `Packet` | Suficiente para baseline | LQI/timestamp tienen incertidumbres. |
-| COBS/UART | Sin cambio | Parser corre después de entrega host. |
-| Async delivery | Compatible | Gaps y multiplexing deben registrarse; no asumir lossless. |
-| Errores | Decoder añade errores propios | No alterar silenciosamente `CommandError`/RF errors. |
+| `C-OBS-01` | Estado pasivo mappings/transactions/topology | Parser aceptado; provenance, gaps, conflicts, expiry y pérdidas modelados. |
+| `C-DEC-01` | Decryption Zigbee autorizado | CCM* exacto, keys autorizadas, nonce/AAD, frame counters, MIC known-answer y política secretos; fuera baseline. |
+| `C-BLD-01` | Builders ZCL/ZDO/NWK/APS/MAC y raw injection | Normas y schemas aprobados, serializers bounded, FCS contract, V-BLD-01; inyección no equivale a nodo. |
+| `C-RF-01` | Timed TX/CCA observacional | Requisito funcional, ownership, terminal events, timing, recursos y regresión multi-PHY aprobados. Auto-ACK/CSMA/RX_ACK requieren estudio MAC separado. |
 
-### 11.2 Implementación/toolchain/licencia
+## 20. Riesgos y dependencias no resueltas
 
-La solución Python independiente evita ABI y librerías Z-Stack IAR/TI-clang, OSAL heap, globals, tasks y ownership embebido. Tampoco consume RAM/stack CC1352P7 ni cambia RF. Los algoritmos adaptados deben tener notice/provenance y revisión legal. Scapy/zigpy no son dependencias runtime baseline por cobertura, adapter y licencias [SDK-M04–05][EXT-01–02].
+1. Obtener/autorizar texto exacto Core R22 y ZCL7, revisión IEEE asociada, errata y reglas de status/direction.
+2. Confirmar perfil de aplicación; `0x0104` sigue sólo candidato no activado.
+3. Fijar definición de MAC versions/IE/security cubiertas, incluidos PAN compression y sequence suppression.
+4. Validar `Packet` layout, FCS policy, metadata, drops y firmware identity con artefacto identificado antes de claims físicos.
+5. Mantener provenance de corpus y licencia; revisión archivo por archivo si se copia código TI.
+6. Medir CPU/memoria/backlog host antes de estado pasivo; colas actuales pueden perder frames.
+7. No hay completion RF correlacionado en host; cualquier futuro requisito requiere interfaz o evidencia externa diferenciada.
+8. Corpus, comparadores y schemas no se han construido/ejecutado; divergencia queda bloqueante.
 
-### 11.3 Runtime/hardware
+## 21. Decisiones para supervisor
 
-Baseline no toca RF Driver, tasks, frontend/antena ni buffers embedded. Sí consume CPU/RAM del host por frame; se debe medir throughput y queueing en implementación. Exportar/decodificar no recupera frames ya perdidos. Cualquier futuro firmware change activa pruebas de memoria, timing y regresión BLE/IEEE/sub-GHz [HW-01–04].
-
-## 12. Enfoque conceptual de implementación
-
-Este apartado define separaciones, no pasos de código.
-
-1. **Contrato primero:** un adapter valida metadata y expone MPDU/FCS sin heurísticas.
-2. **Cursor bounded común:** cada parser lee mediante remaining/offset y nunca con puntero sin longitud.
-3. **Resultados parciales:** un header válido se conserva aun si payload es unsupported.
-4. **Schemas declarativos versionados:** comandos/tipos no quedan dispersos en conditionals opacos.
-5. **Raw como autoridad:** campos derivados incluyen spans hacia los bytes originales.
-6. **Security gate:** ninguna capa plaintext se invoca sobre ciphertext.
-7. **Independent oracle:** fixtures esperados provienen de norma/corpus y se comparan con herramienta externa fijada.
-8. **Feature discovery interna:** profile declara cobertura; ausencia de schema no se interpreta como malformed.
-9. **Sin firmware baseline:** no añadir resultados Zigbee al wire protocol ni parsear en `LLManager`/`RadioIF`.
-
-## 13. Especificación funcional baseline
-
-### 13.1 Requisitos testables
-
-| ID | Propósito; entrada/contexto | Salida y comportamiento válido | Malformed/unsupported/encrypted | Ubicación/dependencias | Validación y exclusiones |
-|---|---|---|---|---|---|
-| `R-BASE-01` | Convertir `Packet` IEEE en captura; requiere PHY, MPDU y policy FCS | Raw inmutable, metadata, payload length y FCS span | Length<minimum→typed issue; nunca inferir Zigbee | Python; `Packet`; componente propuesto | Fixtures de layout + captura independiente. No corrige RF metadata. |
-| `R-MAC-01` | Parsear MAC del MPDU+FCS según profile | FCF/type/version/seq/address/PAN/security/IE flags, header/payload/FCS spans | Truncated exact offset; version/IE no soportada→raw remainder | Python; norma IEEE aprobada | Vectores de combinations, boundaries, fuzz, oracle. No MAC service. |
-| `R-NWK-01` | Parsear payload MAC identificado como Zigbee | FC/type/version/dst/src/radius/seq/spans opcionales/frontera de seguridad | Un frame malformado detiene APS; una versión no soportada se preserva | Python; profile Zigbee | Flags combinadas, source route/multicast/ext addr y corpus negativo. Sin routing. |
-| `R-APS-01` | Parsear NWK plaintext | Type/delivery/endpoints/group/cluster/profile/counter/ext/fragment/security | Ciphertext→security stop; missing fields typed issue | Python; `R-NWK-01` | Data/command/ack, unicast/group, ext headers, fuzz. No APS service/ACK. |
-| `R-ZDO-01` | Decodificar payload APS profile `0x0000` seleccionado | TSN + estructura del comando; cluster desconocido raw | Inconsistencia count/length tipada; comando no soportado raw | Python; contexto APS; schemas R22 | Vectores para seis mensajes y counts cero/máximo/truncados. Sin ZDO completo. |
-| `R-ZCL-01` | Parsear header app plaintext | FC/manufacturer/direction/TSN/command + payload span | <3/5 bytes→truncated; reserved preserved | Python; APS cluster/profile context | 3/5-byte vectors, directions/types/manufacturer. No command semantics por sí solo. |
-| `R-ZCL-02` | Decodificar foundation subset y tipos aprobados | Typed records/values + unknown tail | Invalid length/count typed; unknown datatype raw | Python; ZCL7 schema provisional | Endian, scalar/string boundaries, each command, round-trip when serializer exists. No cluster-specific baseline. |
-| `R-SEC-01` | Evitar falso plaintext y exponer security metadata | Visible control/key-id/counter/source context, ciphertext/MIC spans, auth=`not_attempted` | Missing EUI/context reported; nunca plaintext no autenticado | Python; NWK/APS results | Security-header vectors y malformed cases. No key acquisition/decryption. |
-| `R-RAW-01` | Mantener auditabilidad | Original bytes + absolute spans + unknown raw en todo resultado | Siempre preserva incluso error | Python common model | Property tests: concatenación/spans reproducen input. |
-| `R-ERR-01` | Errores consumibles sin matar stream | Layer/code/severity/offset/required/available | No stack trace para input normal inválido | Python common model | Cada negative fixture produce issue estable; decoder continúa siguiente frame. |
-| `R-VAL-01` | Evidencia independiente | Resultado corpus propio + comparator + diff explicado | Divergencia no resuelta hasta norma | Test tooling, versión fijada | Cada fixture baseline tiene expectativa y resultado; sin umbral OTA inventado. |
-
-### 13.2 Política común
-
-- Output nunca afirma “dispositivo unido”, “mensaje entregado” o “autenticado” sin evidencia correspondiente.
-- Unsupported revision es distinto de malformed.
-- Unknown enum/command se retiene numéricamente.
-- Manufacturer-specific sólo se interpreta con schema versionado explícito.
-- El contexto necesario viaja entre capas; no se usa estado global implícito.
-- Los limits de lista/string se derivan del frame y de caps defensivos documentados; caps de implementación deben aprobarse y probarse.
-
-## 14. Extensiones condicionales: especificación de entrada
-
-| ID | Condiciones mínimas | Output permitido | Prohibición |
-|---|---|---|---|
-| `C-OBS-01` | Baseline validado; provenance/gap/expiry model aprobado | Observations con confidence y source frames | No “authoritative topology” ni membership actual. |
-| `C-DEC-01` | Keys autorizadas; exact nonce/AAD/level; known-answer CCM*; secret policy | Plaintext sólo con MIC válido; auth state explícito | No plaintext tras MIC failure; no key discovery. |
-| `C-BLD-01` | Schema aprobado; bounded writers; parse/serialize round-trip; FCS contract | MPDU sin FCS y construction report | No claim de join/delivery/ACK por host ACK. |
-| `C-RF-01` | Need aprobado; RAT/completion design; memory/regression plan | Una primitiva exacta con terminal result | No “MAC service” por agregar timed TX/CCA. |
-
-## 15. Dependencias y riesgos
-
-| Riesgo | Evidencia/causa | Impacto | Mitigación/decisión |
-|---|---|---|---|
-| Revisión normativa incorrecta | R22/ZCL7 vs R23/ZCL8/IEEE 2024 | Parser aparentemente correcto pero semántica mezclada | Profile aprobado antes de código; fixtures por versión. |
-| Out-of-bounds | Helpers TI sin length/capacity | Seguridad/robustez | Cursor bounded, caps y fuzz; no firmas originales. |
-| Falsa clasificación Zigbee | Toda trama IEEE no es Zigbee | Resultados engañosos | Dispatch estructural/contextual y `not_zigbee/unknown`. |
-| Ciphertext interpretado | Security flag/context faltante | Datos falsos | Security gate obligatorio. |
-| Pérdida de raw/provenance | Models sólo semánticos | No auditable | `R-RAW-01` obligatorio. |
-| Gaps de captura | Colas/transport/timestamp | Estado/topología incompletos | Telemetry y explicit gaps; estado fuera baseline. |
-| Licencia TI/GPL | Mixed files/tools | Redistribución/dependency risk | Implementación independiente; review legal; tools externos de test. |
-| Drift de schemas | Zigbee/ZCL evoluciona | Mantenimiento | Registry versionado y cobertura declarada. |
-| Oracle externo divergente | Scapy/Wireshark coverage/version | Falsa confianza | Pin version; norma resuelve discrepancia. |
-| Exposición de claves | Decryption futura | Riesgo de seguridad | Fuera baseline; policy y negative tests antes de incluir. |
-| Regresión RF | Cambio futuro a `RadioIF` | BLE/IEEE/sub-GHz afectados | No firmware baseline; gates estrictos para `C-RF-01`. |
-| Semántica de completion | ACK anticipado | TX claim incorrecto | Estados separados; corregir antes de active claims. |
-
-## 16. Preservación de FeralRF
-
-El baseline satisface preservación por diseño:
-
-- no modifica C, Python existente, CMake, SysConfig, linker ni submodule;
-- no cambia `Radio`, `Packet`, command IDs o COBS;
-- no consume CC1352P7 flash/RAM/stack ni RF slots;
-- no altera BLE, IEEE capture, sub-GHz, antenna switch o task priorities;
-- permite opt-in del decoder; quien use raw obtiene exactamente el contrato anterior;
-- guarda el MPDU original aun cuando el decoder falle.
-
-Antes de integrar cualquier componente se deberá demostrar con tests que importar/usar el decoder no cambia captura o TX existente. Si más adelante se cambia firmware, el baseline de regresión de todos los PHY pasa a ser gate obligatorio.
-
-## 17. Estrategia de validación reproducible
-
-### 17.1 Actividades
-
-| ID | Qué se verifica | Herramientas/equipo y precondiciones | Estímulos | Observables | Criterio de aceptación | Evidencia retenida | Limitación |
-|---|---|---|---|---|---|---|---|
-| `V-RAW-01` | PHR/FCS/length/channel/RX/TX/ACK contract actual | Dos CatSniffer identificados, firmware hash, sniffer independiente; autorización RF | MPDUs únicos en límites definidos por source, channels aprobados, RX/TX conflict | Bytes capturados, FCS, terminal events, stats, logs | Igualdad byte-exacta esperada; estados accepted/completed separados; cleanup exitoso | Hashes, commands, PCAPNG, JSONL, stats, setup | No prueba Zigbee. |
-| `V-MAC-01` | `R-MAC-01`, errors y raw spans | Offline; corpus normativo versionado + comparator fijado | Positivos por FCF/address/version; truncación en cada offset; unknowns | Result/spans/issues/diff | Todos los fixtures declarados producen expectativa exacta; ninguna lectura OOB/fuzz crash | Corpus, expected JSON, version/hash, fuzz seeds | Cobertura limitada al profile. |
-| `V-NWK-APS-01` | `R-NWK-01/R-APS-01/R-SEC-01` | Offline; Zigbee profile aprobado | Flags opcionales combinadas, frames types/delivery, secured/truncated | Layer fields, stops, ciphertext/MIC spans | Igualdad con vectors/norma; secured nunca llega a plaintext parser | Fixtures/diffs/revision | No routing/APS service. |
-| `V-ZDO-01` | Seis mensajes baseline | Offline; schemas versionados | count 0/max válido, inconsistent/truncated, unknown cluster | Typed records/raw/issues | Field/endian/count exactos; unknown preservado; no OOB | Fixture por command/case | No ZDO completo. |
-| `V-ZCL-01` | Header/foundation/types | Offline; ZCL7 aprobado | Header 3/5, comandos seleccionados, límites scalar/string y manufacturer desconocido | Registros tipados, spans y remanente raw | Resultado exacto esperado; longitudes inválidas rechazadas; no soportado queda raw | Schema/version, vectores y logs de round-trip | Sin semántica cluster-specific. |
-| `V-SEC-01` | Security structural y futuro decryption | Offline; authorized known-answer data | Headers, missing context; para futuro correct/wrong key/nonce/AAD/MIC | Auth state, ciphertext/plaintext policy | Baseline: no plaintext; futuro: plaintext sólo MIC válido y negatives fallan | Vector provenance, no secret logs | No key lifecycle. |
-| `V-COMP-01` | Independencia del decoder | Release fijado de Scapy/Wireshark; misma captura | Corpus baseline | Diferencia campo a campo | Toda divergencia se explica por norma o queda bloqueante/no resuelta | Versiones, comando, salida y diff | El comparador no es autoridad normativa. |
-| `V-BLD-01` | `C-BLD-01` | Offline round-trip; luego sniffer independiente | Campos boundary/unknown policy; MPDU TX autorizado | Bytes, FCS OTA, states | Serializer/parser equivalence y captura byte-exacta; no confundir ACK | Fixtures, PCAP, logs | No delivery/interoperability. |
-| `V-RF-01` | `C-RF-01` si se aprueba | Analizador lógico/RF, dos peers, map/high-water, firmware hash | Early/late/wrap triggers, queue pressure, cancel, other PHY | Timing/status/drops/memory/frontend | Requisito temporal normativo aprobado y terminal result exacto; regresión pasa | Traces, map, high-water, PCAP, manifests | Criterio numérico se deriva de norma, no se inventa aquí. |
-
-### 17.2 Confirmación del baseline existente
-
-Los resultados históricos RAW/FRAME prueban delivery de bytes en canal 25 bajo condiciones documentadas, no la revisión actual instalada ni Zigbee [EXP-01–05]. Antes de usar hardware para validar builders o RF debe repetirse `V-RAW-01` con source→artifact→device identity. Timestamp, packet loss, RX_STOP/completion y telemetry permanecen gaps.
-
-### 17.3 Corpus y fuzz
-
-El corpus debe registrar licencia/provenance, revisión, expected layer, FCS policy y si contiene datos sensibles. Debe incluir cada branch opcional, límites, truncation byte a byte, count/length inconsistency, unknown enums, manufacturer payload, secured frames y fragments. Fuzzing debe ser determinista/reproducible y conservar seeds mínimos de crash/divergencia. “No crash” no sustituye corrección semántica.
-
-## 18. Matriz de trazabilidad requisito–validación
-
-| Capacidad | Requisito | Evidencia | Componente propuesto | Verificación | Criterio | Estado actual |
-|---|---|---|---|---|---|---|
-| Raw input | `R-BASE-01` | FW-H01–04, FW-F05/F09/F12–15, EXP-01–05 | adapter/model | `V-RAW-01` + fixtures | Layout/FCS/bytes exactos | Existente/source-confirmed; históricamente observado; confirmación actual requerida. |
-| MAC | `R-MAC-01` | IEEE-D01, AUD-01 | `zigbee.mac` | `V-MAC-01` | Expectativa exacta y bounded | Propuesto/no implementado; revisión no resuelta. |
-| NWK | `R-NWK-01` | SDK-Z11/Z14, TI-D04 | `zigbee.nwk` | `V-NWK-APS-01` | Campos/offsets exactos | Propuesto; parser TI unavailable. |
-| APS | `R-APS-01` | SDK-Z12/Z13, TI-D04 | `zigbee.aps` | `V-NWK-APS-01` | Modes/types/context exactos | Propuesto; parser TI unavailable. |
-| ZDO | `R-ZDO-01` | SDK-Z08–10 | `zigbee.zdo/schemas` | `V-ZDO-01` | Seis mensajes+negatives | Propuesto/no implementado. |
-| ZCL header | `R-ZCL-01` | SDK-Z02–04/Z07 | `zigbee.zcl` | `V-ZCL-01` | 3/5 bytes+negatives | Propuesto; algoritmo adaptable. |
-| ZCL foundation | `R-ZCL-02` | SDK-Z05–07, TI-D04 | `zigbee.zcl/schemas` | `V-ZCL-01` | Commands/types selected exact | Propuesto; schema approval required. |
-| Security boundary | `R-SEC-01` | SDK-Z12/M08 | `zigbee.security` | `V-SEC-01` | No false plaintext; spans exactos | Propuesto/no decryption. |
-| Raw preservation | `R-RAW-01` | FW-H01/F13 | common model | property tests | Input reproducible desde spans | Propuesto. |
-| Typed errors | `R-ERR-01` | Risks SDK-Z03–10 | common model | all negative suites | Stable issue + next frame continues | Propuesto. |
-| Independent check | `R-VAL-01` | EXT-01/05, FW-H09 | test adapter | `V-COMP-01` | Divergences resolved/blocked | Proposed; tools not run. |
-| Passive state | `C-OBS-01` | Results baseline | observation service | future state corpus | Provenance/gaps/conflicts correct | Conditionally feasible/deferred. |
-| Descifrado | `C-DEC-01` | FW-H05/F17, SDK-M08 | servicio de seguridad | `V-SEC-01` futuro | Plaintext sólo con MIC válido | Condicional/no resuelto. |
-| Builder/TX | `C-BLD-01` | FW-H04/F11/F14/F15, SDK-Z04–06 | serializers | `V-BLD-01` | Round-trip+OTA exact; state separated | Conditional; raw TX exists, builder absent. |
-| RF temporal | `C-RF-01` | SDK-RF01–03, FW-F10–16 | frontera firmware | `V-RF-01` | Temporización derivada de norma + regresión | Sólo mecanismo SDK; no resuelto. |
-
-La aprobación de implementación no cambia ningún estado a “validado”.
-
-## 19. Prioridades y dependencias
-
-### 19.1 Orden lógico
-
-```text
-P0: revisión normativa + contrato raw + corpus skeleton
- └─ P1: common model/errors/raw spans
-     └─ P2: MAC
-         └─ P3: NWK + security boundary
-             └─ P4: APS
-                 ├─ P5a: ZDO subset
-                 └─ P5b: ZCL header/foundation subset
-
-Validation/oracle runs alongside P1–P5, not after them.
-P6+: state / decryption / builders are independent conditional branches.
-P7: embedded RF only after an approved need; it does not depend on completing all host branches.
-```
-
-### 19.2 Matriz de prioridad
-
-| Capacidad | Valor | Evidencia | Complejidad | Riesgo integración | Validación | Mantenimiento/licencia | Prioridad |
-|---|---|---|---|---|---|---|---|
-| Contrato/profile/corpus | Muy alto | Alta/pendiente normativa | Baja-media | Baja | Media | Baja | **P0** |
-| Common model/errors/raw | Alto | Alta arquitectura | Baja-media | Baja | Baja | Baja | **P1** |
-| MAC bounded | Muy alto | Media-alta | Media | Baja | Media-alta | Normativa | **P2** |
-| NWK/security boundary | Muy alto | Definiciones, parser TI ausente | Media | Baja | Alta | Normativa | **P3** |
-| APS | Muy alto | Definiciones, parser TI ausente | Media | Baja | Alta | Normativa | **P4** |
-| ZDO subset | Alto | Field order visible | Media | Baja | Media-alta | TI/spec review | **P5a** |
-| ZCL subset | Alto | Helpers visibles | Media-alta | Baja | Alta | License/schema | **P5b** |
-| Estado pasivo | Medio-alto | Inferencia | Alta | Baja | Alta | Modelo durable | **Condicional** |
-| Decryption | Medio | Crypto primitive | Alta | Media seguridad | Muy alta | Secrets/spec | **Condicional posterior** |
-| Builders/TX | Medio | TX existente | Alta | Media | Muy alta | Schema/license | **Condicional separada** |
-| RF primitives | Bajo sin requirement | Mecanismo SDK | Muy alta | Muy alta | Muy alta | Embedded | **Diferida** |
-
-No se asignan horas, memoria ni costes sin datos.
-
-## 20. Alternativas dentro del alcance
-
-| Alternativa | Ventajas | Dependencias/riesgos | Decisión |
-|---|---|---|---|
-| Decoder Python interno spec-driven | Contrato natural con `Packet`; bounded; testeable; sin firmware/toolchain | Mantener schemas y obtener normas | **Seleccionada**. |
-| Metadata mínima embedded | Puede preclasificar antes de UART | Consume task RF, nuevo wire contract, poco valor porque bytes ya llegan | Rechazada baseline. |
-| Copiar helpers ZCL C al firmware | Algoritmo TI conocido | Bounds/ABI/license/CPU MCU; no resuelve NWK/APS | Rechazada. Adaptar idea en host. |
-| Compilar translation units Z-Stack | Mucho código visible | AF/BDB/OSAL/globals/libs/toolchain; riesgo extremo | Rechazada/no soportada. |
-| Scapy in-process | Cobertura rápida y objetos existentes | GPL-2.0-only, coverage/version y adapter no validados | Sólo comparator/optional integration futuro. |
-| Wireshark/PCAP | Independencia, análisis maduro | No API in-process; metadata/timestamps/version | Comparator/export path, no arquitectura principal. |
-| zigpy schemas | ZDO/ZCL model rico | GPL-3.0, controller context, no raw entry | Referencia comparativa, no baseline. |
-| Builder bounded | Round-trip y experimentación | Puede confundirse con nodo/delivery; seguridad/counters | Rama condicional. |
-| Timed TX/CCA | Puede habilitar research temporal | Firmware/completion/RF regression | Diferida hasta requirement explícito. |
-
-## 21. Exclusiones explícitas
-
-| Capacidad excluida | Base de exclusión | Tipo |
+| Decisión | Recomendación | Bloquea |
 |---|---|---|
-| ZNP/ZED/segunda persona | Contradice objetivo de extender único FeralRF | Decisión de proyecto. |
-| Runtime Z-Stack completo | Toolchain/libs/tasks/RF/NV no compatibles demostrados | Unsupported por arquitectura actual. |
-| Joining/rejoining | Requiere scan, association, MAC/NWK/security/timers/state | No soportado. |
-| Network formation/coordinator/router | Requiere routing, tables, permit join, persistence | No soportado. |
-| Endpoint Zigbee operacional | Requiere AF/APS/ZDO/ZCL services, state y timing | No soportado. |
-| MAC completo | Auto-ACK/CSMA/retry/association/PIB/confirmations ausentes | No soportado; mecanismos RF aislados no bastan. |
-| NWK routing/APS delivery | Parser no es servicio; core fuente ausente | No soportado. |
-| BDB commissioning | Runtime/state/security/NV completos | Fuera de alcance. |
-| Key lifecycle activo | Counters, replay, key update, NV/power-loss | Fuera baseline y no soportado. |
-| Zigbee certification/conformance | Requiere suite/proceso formal y stack operacional | Unsupported claim. |
-| Garantía OTA/application delivery | ACK host no prueba RF/peer/app | Unsupported claim. |
-| Multi-channel simultáneo | Backend actual usa un owner/canal; no evidencia | No soportado. |
-| Manufacturer clusters genéricos | Schemas propietarios/no examinados | Unknown raw solamente. |
+| Arquitectura | Aprobar decoder opt-in del paquete Python FeralRF y sin firmware inicial | Decisión principal. |
+| Profile Core/ZCL/IEEE | Retener R22-aligned/ZCL7 provisional; aprobar revisión IEEE exacta cuando texto disponible | Parsers semánticos. |
+| Aplicación APS/ZCL | Mantener allowlist vacía; revisar `0x0104` con norma oficial y autorizar explícitamente si procede | Payload ZCL typed. |
+| ZDO subset | Aprobar seis IDs de §10; mantener status/count exactos sujetos a norma | ZDO schemas. |
+| ZCL subset | Aprobar ocho commands y tipos candidatos de §11, excluyendo manufacturer/cluster-specific | ZCL schemas. |
+| Source policy | Implementación independiente desde specs autorizadas; TI cross-check; licencia por archivo si se adapta | Uso de fuente TI. |
+| Validación TX | Baseline no exige completion host; OTA observación externa sólo si se evalúa TX | Ninguno para decoder; completion claim queda bloqueado. |
+| Extensiones | Mantener observation state, decryption, builder/injection y RF primitives condicionales | Sus ramas respectivas. |
 
-## 22. Decisiones del supervisor y preguntas abiertas
+## 22. Recomendación final
 
-| Tipo | Decisión/pregunta | Recomendación provisional | Bloquea baseline |
-|---|---|---|---|
-| Establecida por alcance | Único firmware FeralRF | Confirmar sin cambio | No. |
-| Recomendación técnica | Decoder Python interno y firmware unchanged | Aprobar | Sí, decisión arquitectónica. |
-| Aprobación requerida | Profile Zigbee PRO 2017/R22 + ZCL7 y base IEEE exacta | Aprobar alineación SDK u ordenar otro profile separado | Sí para schemas. |
-| Aprobación requerida | Subset ZDO de seis mensajes | Aprobar como mínimo; expansión posterior | Sí para `R-ZDO-01`. |
-| Aprobación requerida | Foundation ZCL seleccionado; sin cluster-specific | Aprobar; schemas de cluster en change control | Sí para `R-ZCL-02`. |
-| Aprobación requerida | Política de licencia: reimplementación vs adaptación ZCL | Preferir independiente; review legal antes de copiar | Sí para source reuse. |
-| Decisión diferible | Estado pasivo | Después del decoder | No. |
-| Decisión diferible | Authenticated decryption | Fuera primera implementación | No. |
-| Decisión diferible | Builders/raw TX | Rama posterior separada | No. |
-| Decisión diferible | Embedded RF primitive | No autorizar sin requirement | No. |
-| Experimento futuro | Confirmar FCS/length/timestamp/loss/completion en build identificado | Ejecutar `V-RAW-01` tras autorización | No para diseño; sí para claims. |
-| Recurso futuro | Zigbee devices/captures/keys autorizadas y sniffer independiente | Definir antes de validation campaign | No para diseño. |
+Se recomienda aprobar la dirección **raw-first, host-side y versionada**, con el alcance ya corregido: adapter/contexto de captura, MAC bounded, clasificación conservadora, NWK/APS plaintext con límites de seguridad, seis mensajes ZDO, header ZCL y foundation subset sólo bajo contexto/profile permitido. El baseline permanece en Python y no altera firmware, `Radio`, `Packet`, COBS, RF ownership ni otras PHY.
 
-## 23. Recomendación técnica final
+La aplicación ZCL no recibe profile habilitado por defecto. Debe aprobarse un APS profile de aplicación y su revisión normativa antes de decodificar payload semántico; `0x0104` es candidato, no hecho confirmado en el SDK examinado. R22/ZCL7 permanece provisional y no reemplaza los textos normativos. La implementación independiente desde norma reduce dependencia de OSAL, ABI y condiciones de licencia.
 
-La integración debe adoptar una arquitectura **raw-first, host-side y spec-versioned**. FeralRF continúa capturando y transmitiendo IEEE 802.15.4; Python añade un pipeline pasivo que convierte bytes en resultados MAC/NWK/APS/ZDO/ZCL auditables sin perder el original. Los helpers ZCL y field order ZDO de TI sirven como evidencia o algoritmos adaptados con bounds; NWK/APS se reimplementan desde la especificación porque sus parsers no están disponibles. TIMAC/ZMAC y el runtime operacional quedan fuera.
+El éxito futuro requiere corpus con provenance, límites/negativos por capa, clasificación no heurística, security stops, comparación secundaria y divergencias resueltas por norma. V-RAW-01 puede usar interfaces actuales para ACK accepted y observación externa OTA; no puede afirmar completion correlacionado. Ningún resultado histórico raw acredita Zigbee, joining, seguridad o interoperability.
 
-El primer objetivo técnico no es “hacer un nodo Zigbee”, sino demostrar que un MPDU FeralRF puede:
+## 23. Respuesta final
 
-1. ser interpretado de forma bounded según un profile aprobado;
-2. detenerse correctamente ante encryption, revisión o schema desconocidos;
-3. conservar raw/provenance y producir errores reproducibles;
-4. coincidir con vectors normativos y un decoder independiente;
-5. hacerlo sin cambiar firmware ni degradar otras capacidades FeralRF.
+La capacidad justificable es un decodificador pasivo, bounded y opt-in integrado en el paquete Python FeralRF, sobre el MPDU IEEE 802.15.4 que ya llega al host. Para interpretarlo exige contexto de PHY/FCS/provenance explícito, clasifica compatibilidad Zigbee sin afirmar origen por bytes, conserva raw y para en seguridad, fragmentación o profile desconocido. En la primera cobertura propone los seis mensajes ZDO, un header ZCL y ocho foundation commands con tipos candidatos; profile de aplicación ZCL queda sin habilitar hasta aprobación.
 
-Sólo después de esa aceptación deben evaluarse, como ramas independientes, state, decryption, builders/TX o primitives RF. Ninguna debe heredar un claim de interoperabilidad del decoder pasivo.
+El SDK TI justifica campos/algoritmos de referencia ZCL/ZDO y definiciones de headers; no provee los parsers NWK/APS como source disponible ni un runtime MAC independiente compatible demostrado. La propuesta recomienda reimplementar desde texto normativo autorizado, no copiar unidades C ni integrar TIMAC. Cada capacidad queda **propuesta/no implementada/no validada**; las normas R22/ZCL7/IEEE exactas, el perfil APS para ZCL, licensing si se adapta código y corpus experimental permanecen como condiciones explícitas.
 
-## 24. Respuesta a la pregunta final
+## 24. Referencias
 
-La funcionalidad específica que debe integrarse es un decoder pasivo Python de MAC IEEE 802.15.4, Zigbee NWK y APS, acompañado por parsing ZCL header/foundation acotado, un subset ZDO de identificación/descriptores, security-aware boundaries, raw preservation, typed errors y validación independiente. Esta selección utiliza el transporte IEEE existente y no requiere firmware.
-
-TI Z-Stack apoya la integración mediante algoritmos pequeños ZCL y definiciones/field order ZDO/NWK/APS; no aporta parsers source-reusable para NWK/APS ni un MAC independiente. La compatibilidad exige fijar revisión R22/ZCL7 o un profile alternativo, respetar MPDU/FCS, no compilar runtime TI con el target GNU sin evidencia, no trasladar ownership OSAL y revisar licencias.
-
-El éxito se demuestra con contrato raw byte-exacto, corpus versionado, negative/boundary/fuzz tests, comparación externa fijada y criterios por requisito. Si se añade TX, se separan construcción, aceptación, completion, observación, ACK y respuesta. Si se añade RF embedded, timing, queues, memory, frontend y regresión multi-PHY son obligatorios. Nada de ello autoriza afirmar joining, routing, conformance o nodo Zigbee operacional.
-
-## 25. Revisión de consistencia final
-
-- [x] Extiende FeralRF; no selecciona firmware/persona separada.
-- [x] Cada capacidad tiene propósito, ubicación, frontera y validación.
-- [x] Interfaces nuevas están marcadas **NO IMPLEMENTADAS ACTUALMENTE**.
-- [x] `nwk.c`, `NLDE_ParseMsg()`, `APSDE_ParseMsg()` y TIMAC se tratan según disponibilidad real.
-- [x] Decoder, builder, raw TX, MAC y participación se distinguen.
-- [x] Hardware mechanism no se presenta como firmware service.
-- [x] Compatibilidad fuente no se presenta como validación experimental.
-- [x] Preservación de FeralRF es requisito explícito.
-- [x] Gaps tienen actividades de verificación.
-- [x] El registro separado soporta claims y decisiones.
-- [x] No se modificó implementación ni auditorías previas para esta propuesta.
+La evidencia detallada por ruta, símbolo, línea, versión oficial, historial experimental, licencia y vacíos está en [FERALRF_NATIVE_ZIGBEE_INTEGRATION_SOURCES.md](FERALRF_NATIVE_ZIGBEE_INTEGRATION_SOURCES.md). Los estados de decisión arquitectónica se explican en [FERALRF_NATIVE_ZIGBEE_ARCHITECTURE_REVIEW.md](FERALRF_NATIVE_ZIGBEE_ARCHITECTURE_REVIEW.md).

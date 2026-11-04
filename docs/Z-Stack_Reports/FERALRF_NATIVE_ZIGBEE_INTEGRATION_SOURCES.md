@@ -1,225 +1,207 @@
-# Registro de evidencia — propuesta de integración Zigbee nativa en FeralRF
+# Registro de fuentes — propuesta nativa Zigbee para FeralRF, revisión 1.1
 
-**Revisión:** 1.0  
-**Fecha:** 2026-11-03  
-**Repositorio:** `fc0de99b61cdb3d37701cdc625980b8882ed92b2`  
-**SDK:** `5b31d0a4903351e544546e23ef3330eaa4291ceb`, SimpleLink `8.30.01.01`  
-**Documento asociado:** [FERALRF_NATIVE_ZIGBEE_INTEGRATION_PROPOSAL.md](FERALRF_NATIVE_ZIGBEE_INTEGRATION_PROPOSAL.md)
+**Fecha de actualización:** 2026-11-04
+**Propuesta asociada:** [FERALRF_NATIVE_ZIGBEE_INTEGRATION_PROPOSAL.md](FERALRF_NATIVE_ZIGBEE_INTEGRATION_PROPOSAL.md)
+**Revisión crítica incorporada:** [FERALRF_NATIVE_ZIGBEE_ARCHITECTURE_REVIEW.md](FERALRF_NATIVE_ZIGBEE_ARCHITECTURE_REVIEW.md)
 
-## 1. Propósito y reglas
+Las rutas FeralRF son relativas a la raíz del repositorio. `SDKROOT/` equivale a `firmware/sdk/simplelink_cc13xx_cc26xx_sdk_8_30_01_01/`. Los rangos de línea identifican evidencia fuente consultada; no implican que el código haya sido ejecutado o que la funcionalidad Zigbee exista en FeralRF.
 
-Este registro permite auditar independientemente las afirmaciones de la propuesta. Los rangos corresponden al checkout indicado. Las rutas son relativas a la raíz `FeralRF/`, salvo que se indique expresamente `SDKROOT`, que significa `firmware/sdk/simplelink_cc13xx_cc26xx_sdk_8_30_01_01/`.
+## 1. Estados de evidencia
 
-Estados de evidencia usados:
+- **CURRENT SOURCE:** implementación visible en el checkout verificado.
+- **PINNED SDK SOURCE:** fuente/definición visible en el submódulo exacto; no prueba compatibilidad ni integración.
+- **OFFICIAL DOCUMENTATION:** documentación primaria TI, CSA o IEEE con versión/fecha declarada.
+- **HISTORICAL EXPERIMENTAL EVIDENCE:** resultado anterior limitado a su setup y artefacto.
+- **ARCHITECTURAL INFERENCE:** conclusión derivada de fuente confirmada.
+- **CONDITIONALLY FEASIBLE:** requiere norma, decisión, implementación o validación pendiente.
+- **UNRESOLVED/UNSUPPORTED:** disponible evidencia insuficiente; no promover a claim.
 
-- **CURRENT IMPLEMENTATION:** demostrado por código FeralRF actual.
-- **SDK-CONFIRMED MECHANISM:** mecanismo o definición visible en el SDK fijado; no demuestra integración.
-- **HISTORICAL EXPERIMENTAL EVIDENCE:** observación previa limitada a su artefacto y condiciones.
-- **ARCHITECTURAL INFERENCE:** consecuencia razonada de fuentes verificadas.
-- **CONDITIONALLY FEASIBLE:** requiere desarrollo o validación identificados.
-- **UNRESOLVED:** la evidencia no resuelve la pregunta.
-- **UNSUPPORTED:** no debe afirmarse como implementado, validado o disponible.
+## 2. Baseline actual
 
-No se ejecutó firmware, hardware, build ni paquete externo para producir este registro.
-
-## 2. Baseline Git y SDK
-
-| ID | Comprobación | Resultado | Uso |
+| ID | Verificación | Resultado | Implicación |
 |---|---|---|---|
-| BASE-01 | `git rev-parse HEAD`, 2026-11-03 | `fc0de99b61cdb3d37701cdc625980b8882ed92b2` | Baseline documental actual. |
+| BASE-01 | `git rev-parse HEAD` | `59816be3460884481f2827eacb630d54cfff6ae8` | HEAD al actualizar esta revisión. |
 | BASE-02 | `git branch --show-current` | `feature/hardware-validation` | Rama examinada. |
-| BASE-03 | `git status --short --branch`, antes de crear los entregables | Árbol limpio | No había cambios locales que reconciliar. |
-| BASE-04 | `git submodule status --recursive` | SDK `5b31d0a4903351e544546e23ef3330eaa4291ceb` (`lpf2-8.30.01.01`) | Único SDK usado. |
-| BASE-05 | `SDKROOT/.metadata/product.json:4` | `8.30.01.01` | Versión del paquete. |
-| BASE-06 | `git diff 31f9535..HEAD -- firmware python hardware` | Sin diferencias | `fc0de99` sólo incorpora la evaluación documental; implementación sin cambios. |
-| BASE-07 | `firmware/cc1352/CMakeLists.txt:12-17,35-43,123-124` | CC1352P7; GNU Arm `arm-none-eabi-gcc/g++`; libs driver GCC | Toolchain configurado. |
-| BASE-08 | Resolución de ejecutable en shell | `arm-none-eabi-gcc` no está en `PATH` | Versión efectiva no verificada; no es un resultado de build. |
+| BASE-03 | `git status --short --branch`, previo a editar | Rama sincronizada con origen; revisión arquitectónica previa `??` | La revisión previa se preservó. |
+| BASE-04 | `git submodule status -- firmware/sdk/simplelink_cc13xx_cc26xx_sdk_8_30_01_01` | `5b31d0a4903351e544546e23ef3330eaa4291ceb` (`lpf2-8.30.01.01`) | Único SDK usado. |
+| BASE-05 | `SDKROOT/.metadata/product.json` | `8.30.01.01` | Versión del paquete SDK. |
+| BASE-06 | `git diff fc0de99..HEAD -- firmware python hardware` | Sin cambios | Los commits posteriores al baseline auditado fueron documentación. |
+| BASE-07 | `firmware/cc1352/CMakeLists.txt:12-18,35-43` | Target `CC1352P7`, toolchain configurado GNU Arm (`arm-none-eabi-gcc/g++`) | No se compiló ni verificó toolchain instalado. |
+| BASE-08 | Paths solicitados | Repository, firmware, Python y `SDKROOT/source/ti/zstack` existen | No se usó otra copia de SDK/repositorio. |
 
-## 3. Informes previos reconciliados
+El estado final tras esta tarea debe contener cambios sólo en la propuesta y este registro; la revisión crítica previa seguirá untracked y no se modifica.
 
-| ID | Ruta y secciones | Uso | Cautela |
-|---|---|---|---|
-| AUD-01 | `docs/FERALRF_NATIVE_ZIGBEE_CAPABILITY_ASSESSMENT.md:1-421` | Baseline nativo, clasificación A–E, límites RF/MAC y discrepancia `nwk.c` | Es evaluación, no implementación. |
-| AUD-02 | `docs/Z-Stack_Reports/ZSTACK_FERALRF_API_CONVERGENCE_PROPOSAL.md:1-535` | Objetivos de convergencia, alternativas y límites de runtime | Su solución multi-persona no se selecciona en esta propuesta. |
-| AUD-03 | `docs/Z-Stack_Reports/ZSTACK_FERALRF_API_CONVERGENCE_SOURCES.md:1-186` | Registro previo de código, SDK, documentos y experimentos | `:92` cita erróneamente un `stack/nwk/nwk.c` inexistente. |
-| AUD-04 | `docs/Z-Stack_Reports/ZSTACK_PARTIAL_REUSE_AND_ZIGBEE_DECODER_AUDIT.md:1-603` | Reuso por función, alternativas host, licencias y correcciones A–F | Herramientas externas no fueron instaladas/probadas. |
-| AUD-05 | `docs/Z-Stack_Reports/ZSTACK_INTEGRATION_FEASIBILITY_AUDIT_2026-10-27.md:1-938` | Fronteras Z-Stack/TIMAC/toolchain/RF/RTOS | No es una prueba de compilación ni compatibilidad ABI. |
-| AUD-06 | `docs/FERALRF_DEEP_CODE_IMPLEMENTATION_AUDIT_2026-10-27.md:1-1084` | Arquitectura completa, contratos RF y limitaciones de evidencia | Incluye otros PHY; aquí sólo se usa lo necesario para preservar regresión. |
+## 3. Documentos previos consultados
 
-Las correcciones A–F de AUD-04 están incorporadas en `HEAD`. Permanecen abiertas revisión normativa, corpus, timestamp, memoria libre, ABI, CCM* y versiones de herramientas.
+| ID | Ruta | Uso y cautela |
+|---|---|---|
+| DOC-01 | `docs/Z-Stack_Reports/FERALRF_NATIVE_ZIGBEE_INTEGRATION_PROPOSAL.md` | Versión 1.0 revisada y sustituida documentalmente por 1.1. |
+| DOC-02 | `docs/Z-Stack_Reports/FERALRF_NATIVE_ZIGBEE_INTEGRATION_SOURCES.md` | Registro versión 1.0 actualizado en esta tarea. |
+| DOC-03 | `docs/Z-Stack_Reports/FERALRF_NATIVE_ZIGBEE_ARCHITECTURE_REVIEW.md` | Revisión crítica; su archivo no se modifica. |
+| DOC-04 | `docs/FERALRF_NATIVE_ZIGBEE_CAPABILITY_ASSESSMENT.md:68-252` | Baseline de capacidades, RF/MAC, reuso y discrepancia NWK. |
+| DOC-05 | `docs/Z-Stack_Reports/ZSTACK_FERALRF_API_CONVERGENCE_PROPOSAL.md:1-535` | Alternativas de convergencia; persona separada no seleccionada. |
+| DOC-06 | `docs/Z-Stack_Reports/ZSTACK_FERALRF_API_CONVERGENCE_SOURCES.md:1-186` | Evidencia histórica; referencia errónea a `nwk.c` anotada como discrepancia. |
+| DOC-07 | `docs/Z-Stack_Reports/ZSTACK_PARTIAL_REUSE_AND_ZIGBEE_DECODER_AUDIT.md:1-603` | Reuso/decoders/licencias/correcciones A–F; no constituye validación de herramienta. |
+| DOC-08 | `docs/Z-Stack_Reports/ZSTACK_INTEGRATION_FEASIBILITY_AUDIT_2026-10-27.md:1-938` | Fronteras runtime, toolchain y RF; no prueba ABI/link. |
+| DOC-09 | `docs/FERALRF_DEEP_CODE_IMPLEMENTATION_AUDIT_2026-10-27.md:1-1084` | Contratos, metadata, ACK/completion y riesgos multi-PHY. |
 
 ## 4. Código FeralRF actual
 
-### 4.1 Host, API y transporte
+### 4.1 Python/host
 
-| ID | Ruta, símbolo y líneas | Evidencia |
+| ID | Ruta, símbolo y líneas | Evidencia y límite |
 |---|---|---|
-| FW-H01 | `python/feralrf/radio.py:18-30`, `Packet` | Modelo RX: timestamp, canal, RSSI, LQI, CRC, bytes y metadata LL opcional. |
-| FW-H02 | `python/feralrf/radio.py:455-478`, `Radio.set_phy()`, `set_channel()` | Selección PHY/canal mediante comandos host. |
-| FW-H03 | `python/feralrf/radio.py:599-709`, `start_rx()`, `stop_rx()`, `read_packets()` | Control RX y entrega asíncrona de `Packet`/errores. |
-| FW-H04 | `python/feralrf/radio.py:725-750`, `transmit()`, `transmit_frame()` | TX host existente; respuesta ACK/ERROR. |
-| FW-H05 | `python/feralrf/radio.py:943-1004`, AES-CCM | Primitiva crypto host→firmware; nonce 7–13, tag par 4–16. |
-| FW-H06 | `python/feralrf/protocol.py:11-90` | Framing/COBS y CRC16 de transporte. |
-| FW-H07 | `python/feralrf/enums.py:8-18,21-89` | `PHY.IEEE_802_15_4=4`, comandos y respuestas. |
-| FW-H08 | `python/feralrf/integrations/killerbee.py:54-62,81-120` | Adapter de captura/inyección; no decoder Zigbee completo. |
-| FW-H09 | `python/examples/killerbee_sniff.py:122-137` | Escritura PCAP DLT 195 con `Packet.data`; usa timestamp host y pierde parte de metadata RF. |
+| FW-H01 | `python/feralrf/radio.py:18-30` (`Packet`) | timestamp, channel, RSSI, `lqi`, `crc_ok`, data y metadata LL opcional; no contiene PHY ni FCS-policy field. |
+| FW-H02 | `python/feralrf/radio.py:113-120,455-478` (`Radio`, `set_phy`, `set_channel`) | PHY/canal se conservan en estado `Radio`; no se exponen dentro de cada `Packet`. |
+| FW-H03 | `python/feralrf/radio.py:599-709` (`start_rx`, `stop_rx`, `read_packets`) | RX control y parseo response→Packet; el parser no comprueba explícitamente que `pkt_len` esté totalmente presente antes del slice. |
+| FW-H04 | `python/feralrf/radio.py:725-750` (`transmit`, `transmit_frame`) | Host espera ACK/ERROR; no hay evento terminal correlacionado de completion. |
+| FW-H05 | `python/feralrf/protocol.py:11-90` | COBS/CRC16 para comandos y respuestas, no IEEE FCS ni Zigbee. |
+| FW-H06 | `python/feralrf/enums.py:8-18,21-89` | `PHY.IEEE_802_15_4=4`, comandos/respuestas actuales. |
+| FW-H07 | `python/pyproject.toml:5-44` | GPL-3.0; runtime pyserial, pyserial-asyncio, COBS; cryptography/dev y KillerBee opcionales. |
+| FW-H08 | `python/feralrf/integrations/killerbee.py:1-19,95-119` | KillerBee opcional/lazy; consume `pkt.data`, no es decoder Zigbee. |
 
-### 4.2 Firmware y recorrido de datos
+### 4.2 Firmware/RF
 
-| ID | Ruta, símbolo y líneas | Evidencia |
+| ID | Ruta, símbolo y líneas | Evidencia y límite |
 |---|---|---|
-| FW-F01 | `firmware/cc1352/src/protocol.c:115-180` | Frame con campos `CMD`, `SEQ`, `LEN`, `PAYLOAD` y `CRC16`; distinto de Zigbee y NPI/MT. |
-| FW-F02 | `firmware/cc1352/src/command_processor.c:101-270` | Validación/despacho; `SET_PHY`, `SET_CHANNEL`, RX y TX. |
-| FW-F03 | `firmware/cc1352/src/command_processor.c:188-258` | RX/TX reciben ACK tras aceptación/encolado, no tras terminación RF. |
-| FW-F04 | `firmware/cc1352/src/control_task.c:194-264,332-358,440-454` | Estado, buffers y eventos; `TX_FRAME` delega a raw; fallo TX posterior es error asíncrono. |
-| FW-F05 | `firmware/cc1352/src/data_task.c:28-65,76-139` | Layout RX y orden command/control/RF/LL/emisión. |
-| FW-F06 | `firmware/cc1352/src/phy_manager.c:9-75` | IEEE selecciona RF backend y link layer por defecto. |
-| FW-F07 | `firmware/cc1352/src/ll_manager.c:40-159` | Sólo BLE se clasifica; IEEE pasa sin decoder MAC/Zigbee. |
-| FW-F08 | `firmware/cc1352/include/radio_if.h:15-28,55-68` | `RadioIF_RxPacket`, buffer 242 y API raw/RX. |
-| FW-F09 | `firmware/cc1352/src/radio_if.c:32-75,108-193` | Cola app 8, cola RF 3, TX IEEE 125 y buffers/ownership estáticos. |
-| FW-F10 | `firmware/cc1352/src/radio_if.c:324-381` | `RF_runCmd()` y handle persistente para TX; status interno no correlacionado al ACK host. |
-| FW-F11 | `firmware/cc1352/src/radio_if.c:457-488` | Canal IEEE y TX: copia MPDU, `TRIG_NOW`, `CMD_IEEE_TX`. |
-| FW-F12 | `firmware/cc1352/src/radio_if.c:1080-1144,1335-1397` | RX `RF_postCmd`, configuración PHR/FCS/metadata, stop y ownership. |
-| FW-F13 | `firmware/cc1352/src/radio_if.c:1497-1568` | PHR removido; MPDU+FCS copiado; CRC malo descartado; RAT/4, RSSI, correlación. |
-| FW-F14 | `firmware/cc1352/src/radio_if.c:2182-2204,2297-2400` | TX rechazado con RX activo; start/stop/poll/pop. |
-| FW-F15 | `firmware/cc1352/src/smartrf_ieee_15_4_0.c:81-163` | Filtering/auto-ACK/CCA apagados; TX sin PHR/FCS aportados por caller. |
-| FW-F16 | `firmware/cc1352/src/main_rtos.c:54-77,110-178,220-232` | Tareas UART/RF prioridad 3, stacks 4096, cooperación. |
-| FW-F17 | `firmware/cc1352/src/crypto_engine.c:197-246`; `command_processor.c:357-414` | AES-CCM genérico one-shot y rechazo de MAC/tag inválido. |
-| FW-F18 | `firmware/cc1352/CMakeLists.txt:81-184,225-253` | Target no incluye Z-Stack/TIMAC/AF/BDB/OSAL de rol. |
+| FW-F01 | `firmware/cc1352/src/protocol.c:115-180` | Frame serial `CMD|SEQ|LEN|PAYLOAD|CRC16`; separado de protocolos RF. |
+| FW-F02 | `firmware/cc1352/src/command_processor.c:188-258` | RX/TX ACK enviado después de validar/encolar. |
+| FW-F03 | `firmware/cc1352/src/control_task.c:332-357,440-454` | TX se ejecuta después; error posterior es evento async seq 0; RX control diferido. |
+| FW-F04 | `firmware/cc1352/src/data_task.c:28-65,76-139` | Serializa Packet metadata; hasta ocho packet drains por poll; RX path. |
+| FW-F05 | `firmware/cc1352/src/ll_manager.c:40-159` | BLE classification; default/IEEE pass-through sin MAC/Zigbee parse. |
+| FW-F06 | `firmware/cc1352/include/radio_if.h:15-28` | `RadioIF_RxPacket`: timestamp/channel/RSSI/lqi/crc/data. |
+| FW-F07 | `firmware/cc1352/src/radio_if.c:324-381` | RF TX `RF_runCmd` y status interno; no host-correlated completion. |
+| FW-F08 | `firmware/cc1352/src/radio_if.c:457-488` | IEEE TX acepta 1–125 bytes, copia MPDU, `TRIG_NOW`. |
+| FW-F09 | `firmware/cc1352/src/radio_if.c:1335-1371` | IEEE RX config incluye PHR/FCS/RSSI/corr/timestamp. |
+| FW-F10 | `firmware/cc1352/src/radio_if.c:1497-1568` | PHR length; elimina PHR; CRC-bad descartado; MPDU+FCS y metadata quedan en queue. |
+| FW-F11 | `firmware/cc1352/src/smartrf_ieee_15_4_0.c:81-163` | Filtering/auto-ACK/CCA apagados; TX no aporta PHR/FCS. |
+| FW-F12 | `firmware/cc1352/CMakeLists.txt:12-18,129-184,225-253` | CC1352P7 GNU target; no incluye Z-Stack/TIMAC runtime del rol. |
+| FW-F13 | `firmware/cc1352/src/data_task.c:28-65` | Payload RX lleva timestamp/channel/RSSI/lqi/crc/len/data y metadata LL. |
 
-### 4.3 Hardware, memoria y frontend
+### 4.3 Evidencia experimental histórica
 
-| ID | Ruta y líneas | Evidencia |
-|---|---|---|
-| HW-01 | `firmware/cc1352/syscfg/ti_drivers_config.c:119-160,202-303`; `ti_drivers_config.h:21,44-54` | Callback RF y selección de frontend/antena mediante DIO. |
-| HW-02 | `firmware/cc1352/syscfg/ti_radio_config.c:5-22`; `ti_radio_config_433.c:5-18` | Configuración generada CC1352P7 y diseños RF seleccionados. |
-| HW-03 | `firmware/cc1352/linker/cc1352p7.ld:33-47,265-271`; `syscfg/ti_sysbios_config.c:83-110` | Regiones y heap configurado; no miden margen libre ni high-water. |
-| HW-04 | `hardware/PINOUT.md:3-17,31-73`; `README.md:62-65` | Conexión UART/RP2040 y pines RF documentados; firmware RP2040 no está en este repo. |
+| ID | Ruta | Observación | Límite |
+|---|---|---|---|
+| EXP-01 | `docs/HARDWARE_VALIDATION_RESULTS/OTA-SUBGHZ-EXPERIMENT_REPORT_2026-10-12/SUMMARY.md:16-37` | Raw IEEE/FRAME observed en canal 25 bajo setup registrado. | No Zigbee, conformance, PER/range general ni identidad actual de firmware. |
+| EXP-02 | `docs/HARDWARE_VALIDATION_RESULTS/OTA-SUBGHZ-EXPERIMENT_REPORT_2026-10-12/experiments/01_ieee_raw_frame_burst.md:13,358-443,891-906` | RAW 20/20, 10/10; FRAME 10/10 histórico. | ACK de enqueue no prueba RF por sí solo. |
+| EXP-03 | `docs/HARDWARE_VALIDATION_RESULTS/EXPERIMENTAL_EVIDENCE_REFERENCE.md:47-59` | Índice de evidencia previa. | No se promovió a validación Zigbee. |
+| EXP-04 | `docs/HARDWARE_VALIDATION_RESULTS/VALIDATION_MATRIX_CURRENT.md:57-59,67,71-79` | Estado histórico de RX/TX/completion. | Claims siguen limitados por firmware/build y telemetry. |
+| EXP-05 | `docs/HARDWARE_VALIDATION_RESULTS/OTA-SUBGHZ-EXPERIMENT_REPORT_2026-10-12/execution_report.md:77-107` | Repetición bilateral 10/10; informa expresamente que no validó Zigbee stack. | Canal 25/setup y frames marcados. |
 
-## 5. SDK TI fijado
+## 5. TI SimpleLink SDK fijado
 
-### 5.1 Codecs y definiciones Zigbee
+### 5.1 ZCL
 
 | ID | Ruta SDKROOT, símbolo y líneas | Evidencia y límite |
 |---|---|---|
-| SDK-Z01 | `source/ti/zstack/stack/zcl/zcl.c:1-38` | Aviso BSD-3-Clause del archivo; revisión legal sigue siendo necesaria. |
-| SDK-Z02 | `source/ti/zstack/stack/zcl/zcl.c:40-62` | Translation unit depende de config, AF, BDB, Green Power y ports. |
-| SDK-Z03 | `source/ti/zstack/stack/zcl/zcl.c:2412-2446`, `zclParseHdr()` | Algoritmo de 3/5 bytes; no recibe longitud. |
-| SDK-Z04 | `source/ti/zstack/stack/zcl/zcl.c:2459-2482`, `zclBuildHdr()` | Serializer pequeño `static`; no recibe capacidad. |
-| SDK-Z05 | `source/ti/zstack/stack/zcl/zcl.c:2961-3076`, `zclSerializeData()` | Serializa escalares/strings; no recibe capacidad y asume layouts C. |
-| SDK-Z06 | `source/ti/zstack/stack/zcl/zcl.c:3195-3322`, length helpers | Tabla de tamaños; strings leen prefijo sin bytes restantes. |
-| SDK-Z07 | `source/ti/zstack/stack/zcl/zcl.h:1927-1994` | Declaraciones/tipos asociados; `zclBuildHdr()` no es pública. |
-| SDK-Z08 | `source/ti/zstack/stack/zdo/zd_object.c:69-96` | Translation unit acoplada a NV, NWK, APS, AF, security, BDB y globals. |
-| SDK-Z09 | `source/ti/zstack/stack/zdo/zd_object.c:2914-3733`; `source/ti/zstack/stack/zdo/zd_object.h:399-602` | `ZDO_Parse*`: orden de campos; varios usan `OsalPort_malloc` y carecen de bounds completos. |
-| SDK-Z10 | `source/ti/zstack/stack/zdo/zd_object.c:3005-3057,3147-3194,3225-3284,3543-3618` | Addr, simple descriptor, endpoints, LQI y announce: ejemplos concretos de count/ownership. |
-| SDK-Z11 | `source/ti/zstack/stack/nwk/nwk_util.h:111-201,286-321` | Máscaras/estructuras y declaración `NLDE_ParseMsg()`; definición no visible. |
-| SDK-Z12 | `source/ti/zstack/stack/nwk/aps_mede.h:91-173,231-234`; `aps_util.h:86-117` | Definiciones APS y declaración `APSDE_ParseMsg()`; definición no visible. |
-| SDK-Z13 | `source/ti/zstack/stack/nwk/aps.h:38-46` | Condición de licencia TI-device-only en este archivo; no conclusión legal global. |
-| SDK-Z14 | `source/ti/zstack/stack/nwk/nwk.h`; `source/ti/zstack/stack/nwk/nwk_bufs.h`; `source/ti/zstack/stack/nwk/nwk_globals.c`; `source/ti/zstack/stack/nwk/nwk_globals.h`; `source/ti/zstack/stack/nwk/nwk_util.h` | Inventario NWK realmente presente. `nwk.c` no existe. |
+| SDK-Z01 | `source/ti/zstack/stack/zcl/zcl.c:9-37` | Aviso BSD-style de ese translation unit; no aplica automáticamente a todo Z-Stack. |
+| SDK-Z02 | `source/ti/zstack/stack/zcl/zcl.c:40-63` | Unidad depende de config, AF, BDB, Green Power/ports; no codec autónomo completo. |
+| SDK-Z03 | `source/ti/zstack/stack/zcl/zcl.c:2412-2446`; `zcl.h:822-842` | `zclParseHdr()`, header 3/5 bytes, sin length arg. |
+| SDK-Z04 | `source/ti/zstack/stack/zcl/zcl.c:2459-2482` | `zclBuildHdr()` static, sin capacity; fuera baseline. |
+| SDK-Z05 | `source/ti/zstack/stack/zcl/zcl.c:2961-3076` | `zclSerializeData()`, layout C y sin capacity. |
+| SDK-Z06 | `source/ti/zstack/stack/zcl/zcl.c:3195-3322` | Helpers longitud; zero ambiguo; attr length lee prefix sin available bytes. |
+| SDK-Z07 | `source/ti/zstack/stack/zcl/zcl.h:490-557,597-652,822-1016` | Frame flags, command IDs, datatype IDs/structures. No sustituye ZCL7 normativa. |
 
-### 5.2 MAC, runtime y build
+### 5.2 ZDO, NWK y APS
 
 | ID | Ruta SDKROOT, símbolo y líneas | Evidencia y límite |
 |---|---|---|
-| SDK-M01 | `source/ti/zstack/zmac/f8w/zmac.c:480-560` | `ZMacInit()` delega a `MAP_MAC_*` y estado TIMAC. |
-| SDK-M02 | `source/ti/zstack/zmac/f8w/zmac.c:870-917,1160-1218` | Association/data/purge wrappers delegan a MLME/MCPS binario. |
-| SDK-M03 | `source/ti/zstack/zmac/f8w/zmac_cb.c:165-240` | Callbacks, ownership y mensajes OSAL hacia NWK. |
-| SDK-M04 | `source/ti/zstack/.meta/zstack.syscfg.js:150-226` | Selección binaria MAC/Z-Stack por device, role, ISA y toolchain. |
-| SDK-M05 | `source/ti/zstack/lib/iar/`; `source/ti/zstack/lib/ticlang/` | No hay archivo de rol Z-Stack GCC demostrado. |
-| SDK-M06 | `source/ti/zstack/startup/main.c:319-389` | CCFG, NVOCMP, stack task, NPI/app; runtime operativo acoplado. |
-| SDK-M07 | `source/ti/zstack/stack/api/zstacktask.c:724-820`; `zstackapi.c/h` | API interna task/message, no codec wire independiente. |
-| SDK-M08 | `source/ti/zstack/stack/sec/`; `stack/zdo/zd_sec_mgr.c`; `stack/nwk/nwk_globals.h:144-145,458-466` | Keys, counters, política y estado de seguridad. |
-| SDK-RF01 | `source/ti/devices/cc13x2x7_cc26x2x7/driverlib/rf_ieee_cmd.h:80-207` | RX, filtering, auto-ACK, CCA y direcciones como mecanismo RF Core. |
-| SDK-RF02 | `source/ti/devices/cc13x2x7_cc26x2x7/driverlib/rf_ieee_cmd.h:266-394` | TX temporal, `CMD_IEEE_CSMA`, `CMD_IEEE_RX_ACK`; no integración FeralRF. |
-| SDK-RF03 | `source/ti/devices/cc13x2x7_cc26x2x7/driverlib/rf_ieee_cmd.h:548-620` | CCA request, output RX y corr/CRC. |
-| SDK-RF04 | `source/ti/drivers/rf/RFCC26X2_multiMode.c:140,4599-4712,4931,5287` | RF Driver admite clientes/comandos; no demuestra scheduling Zigbee+FeralRF. |
+| SDK-Z08 | `source/ti/zstack/stack/zdo/zd_profile.h:86-87,154-186,229-241` | ZDO endpoint/profile 0; selected cluster IDs; `zdoIncomingMsg_t` separa TSN/asdu. |
+| SDK-Z09 | `source/ti/zstack/stack/zdo/zd_profile.c:2104-2106` | Extrae `TransSeq=pData->cmd.Data[0]`, `asdu=pData->cmd.Data+1`, longitud menos TSN. |
+| SDK-Z10 | `source/ti/zstack/stack/zdo/zd_object.c:3005-3194,3543-3618`; `zd_object.h:109-145,200-205` | Address/node/simple/active EP/device announce field order; heap/bounds risks. |
+| SDK-Z11 | `source/ti/zstack/stack/nwk/nwk_util.h:111-155,319-321`; `nwk.h`, `nwk_bufs.h`, `nwk_globals.c/.h` | NWK masks/layout hints; `NLDE_ParseMsg()` declaration only. `stack/nwk/nwk.c` absent. |
+| SDK-Z12 | `source/ti/zstack/stack/nwk/aps_mede.h:91-124,288-308`; `aps_util.h:110-113` | APS controls/struct; `APSDE_ParseMsg()` declaration only. |
+| SDK-Z13 | `source/ti/zstack/stack/nwk/aps.h:9-63`; `nwk_util.h:9-63` | TI Devices license terms visible in these files; not a general permission statement. |
 
-## 6. Documentación oficial
+### 5.3 ZMAC/TIMAC/runtime
 
-**Fecha de consulta web:** 2026-11-03.
-
-| ID | Documento oficial | Versión/fecha | Conclusión soportada |
-|---|---|---|---|
-| TI-D01 | [Z-Stack 8.30.00 User’s Guide](https://software-dl.ti.com/simplelink/esd/simplelink_cc13xx_cc26xx_sdk/8.30.01.01/exports/docs/zigbee/zigbee-users-guide.html) | SDK 8.30.01.01 / Z-Stack 8.30.00 | Arquitectura, tareas, configuración y alcance del stack completo. |
-| TI-D02 | [Hardware Architecture, SDK 8.30](https://software-dl.ti.com/simplelink/esd/simplelink_cc13xx_cc26xx_sdk/8.30.01.01/exports/docs/zigbee/html/cc13xx_cc26xx/hardware-architecture.html) | © 2005–2024 | CM0 implementa PHY; system core ejecuta link layer→app; RF Driver media el radio. |
-| TI-D03 | [Zigbee Configuration, SDK 8.30](https://software-dl.ti.com/simplelink/esd/simplelink_cc13xx_cc26xx_sdk/8.30.01.01/exports/docs/zigbee/html/sysconfig/zigbee.html) | 8.30 | Roles, channels, BDB, keys, endpoints y configuración generada. |
-| TI-D04 | [Z-Stack 8.30.00 release notes](https://software-dl.ti.com/simplelink/esd/simplelink_cc13xx_cc26xx_sdk/8.30.01.01/exports/docs/zigbee/release_notes_zigbee_8_30_00.html) | 8.30.00 | Declara Zigbee PRO 2017/R22 y ZCL 7; base provisional alineada con el SDK. |
-| TI-D05 | [SimpleLink SDK 8.30.01.01 release notes](https://software-dl.ti.com/simplelink/esd/simplelink_cc13xx_cc26xx_sdk/8.30.01.01/exports/release_notes_simplelink_cc13xx_cc26xx_sdk_8_30_01_01.html) | 8.30.01.01 | Paquete/tooling y componentes distribuidos. |
-| TI-D06 | [SDK 8.30.01.01 manifest](https://software-dl.ti.com/simplelink/esd/simplelink_cc13xx_cc26xx_sdk/8.30.01.01/exports/manifest_simplelink_cc13xx_cc26xx_sdk_8_30_01_01.html) | 8.30.01.01 | Licencias por componente; no sustituye revisión archivo por archivo. |
-| TI-D07 | [CC1352P7 product page](https://www.ti.com/product/CC1352P7) y [datasheet Rev. A](https://www.ti.com/lit/ds/symlink/cc1352p7.pdf) | Nov. 2021 / acceso 2026-11-03 | Recursos y capacidades del dispositivo; no prueba fit ni integración. |
-| IEEE-D01 | [IEEE Std 802.15.4-2020](https://standards.ieee.org/ieee/1159/7029/) | Publicado 2020-07-23; hoy superseded por 802.15.4-2024 | Familia normativa MAC/PHY; la revisión exacta compatible con Zigbee R22 debe aprobarse/obtenerse. |
-| CSA-D01 | [Alliance Specification Downloads](https://csa-iot.org/developer-resource/specifications-download-request/) | Acceso 2026-11-03 | Ofrece Zigbee Core R22.1/R23.1/R23.2, ZCL R7/R8 y BDB 3.0.1/3.1. |
-| CSA-D02 | [Zigbee Specification doc. 05-3474-23](https://csa-iot.org/wp-content/uploads/2023/04/05-3474-23-csg-zigbee-specification-compressed.pdf) | R23 draft/public document | Demuestra disponibilidad de otra revisión; no se mezcla con R22 por defecto. |
-| CSA-D03 | [ZCL Specification 075123 rev. 6](https://csa-iot.org/wp-content/uploads/2019/12/07-5123-06-zigbee-cluster-library-specification.pdf) | 2016 | Referencia histórica pública; no sustituye ZCL 7 objetivo. |
-
-**Estrategia normativa provisional:** alinear la primera cobertura con lo declarado por TI-D04 —Zigbee PRO 2017/R22 y ZCL 7—, mantener schemas versionados y no afirmar compatibilidad R23/ZCL8. La especificación exacta y la base IEEE asociada requieren aprobación y acceso normativo antes de implementar.
-
-## 7. Evidencia experimental histórica
-
-| ID | Fuente | Observación preservada | Limitación |
-|---|---|---|---|
-| EXP-01 | `docs/HARDWARE_VALIDATION_RESULTS/OTA-SUBGHZ-EXPERIMENT_REPORT_2026-10-12/SUMMARY.md:16-37` | IEEE raw/FRAME observado en canal 25 bajo setup registrado | No Zigbee, rango, PER, conformance ni firmware actual identificado criptográficamente. |
-| EXP-02 | `docs/HARDWARE_VALIDATION_RESULTS/OTA-SUBGHZ-EXPERIMENT_REPORT_2026-10-12/experiments/01_ieee_raw_frame_burst.md:13,358-443,891-906` | RAW 20/20 y 10/10 históricos; FRAME 10/10 unidireccional | `TX_FRAME` comparte raw; ACK no equivale por sí solo a RF. |
-| EXP-03 | `docs/HARDWARE_VALIDATION_RESULTS/EXPERIMENTAL_EVIDENCE_REFERENCE.md:47-59` | Índice consolidado de IEEE RAW/FRAME | Conserva límites y provenance. |
-| EXP-04 | `docs/HARDWARE_VALIDATION_RESULTS/VALIDATION_MATRIX_CURRENT.md:57-59,67,71-79` | Transporte, canal, RX/TX, completion y fallos actuales documentados | Algunos estados son parciales/bloqueados; no promover. |
-| EXP-05 | `docs/HARDWARE_VALIDATION_RESULTS/OTA-SUBGHZ-EXPERIMENT_REPORT_2026-10-12/execution_report.md:77-107` | Repetición sincronizada 10/10 bilateral y declaración explícita “No Zigbee stack was validated” | Sólo canal 25, dos CatSniffer y bytes marcados. |
-
-## 8. Herramientas externas — comparación, no autoridad TI
-
-| ID | Fuente fijada | Uso admisible | Límite/licencia registrada |
-|---|---|---|---|
-| EXT-01 | [Scapy v2.8.0, commit `e2e35c07`](https://github.com/secdev/scapy/tree/e2e35c07bce2f40e7513e1b29a6d300d5329dbc3) | Oráculo comparativo para FCS/MAC/NWK/APS/ZDP/ZCL | GPL-2.0-only; cobertura parcial; no probado con FeralRF. |
-| EXT-02 | [zigpy 2.4.1, commit `10b68377`](https://github.com/zigpy/zigpy/tree/10b68377bcbd9a8b15cbbfb506cebdc450704614) | Comparar schemas ZDO/ZCL | GPL-3.0; espera contexto de controller/capa superior, no raw MPDU. |
-| EXT-03 | [WHAD v1.2.18, commit `9d480163`](https://github.com/whad-team/whad-client/tree/9d48016375cd2fdae58517fe6f2fb97022c3bb61) | Comparar abstracción de sniffer | MIT; no hay connector FeralRF. |
-| EXT-04 | [KillerBee upstream](https://github.com/riverloopsec/killerbee) | Comparar flujo legacy y adapter existente | Snapshot exacto no fijado; packaging histórico bloqueado. |
-| EXT-05 | [Wireshark Zigbee NWK fields](https://www.wireshark.org/docs/dfref/z/zbee_nwk.html) | Análisis PCAP externo e independiente | Página live no fijada; fijar release antes de validar. |
-
-La arquitectura seleccionada no depende en runtime de estas herramientas. Se usan como comparadores, y la especificación aprobada resuelve divergencias.
-
-## 9. Discrepancias y correcciones
-
-| ID | Discrepancia | Verificación actual | Tratamiento |
-|---|---|---|---|
-| DISC-01 | AUD-03 `:92` cita `source/ti/zstack/stack/nwk/nwk.c` | No existe; inventario real en SDK-Z14 | No citarlo como implementación. Refuerza ausencia del core/parser NWK fuente. |
-| DISC-02 | Informes anteriores describían la evaluación nativa como untracked | `fc0de99` ahora la incluye y árbol inicial está limpio | Baseline documental actualizado; implementación no cambió. |
-| DISC-03 | “LQI” podría interpretarse como métrica Zigbee normalizada | FW-F13 expone siete bits de corr/CRC como `lqi` | Describir como correlación/LQI reportada; calibración no validada. |
-| DISC-04 | ACK host puede leerse como terminación TX | FW-F03/F04 muestran aceptación antes de RF | Separar accepted/completed/observed/acknowledged/responded. |
-| DISC-05 | Catálogo CSA actual ofrece R23/ZCL8, SDK declara R22/ZCL7 | CSA-D01 frente a TI-D04 | No combinar; schema profile versionado y aprobación normativa. |
-
-## 10. Mapa evidencia → requisitos
-
-Los identificadores corresponden a la propuesta principal.
-
-| Requisito | Evidencia principal | Estado soportado |
+| ID | Ruta SDKROOT, símbolo y líneas | Evidencia y límite |
 |---|---|---|
-| `R-BASE-01` contrato raw | FW-H01–H04, FW-F05, FW-F09, FW-F12–F15, EXP-01–05 | Implementación fuente; observación histórica acotada; confirmación actual pendiente. |
-| `R-MAC-01` parser MAC bounded | R-BASE-01, IEEE-D01, AUD-01 | Propuesto/no implementado; revisión exacta pendiente. |
-| `R-NWK-01` parser NWK | SDK-Z11/Z14, TI-D04, CSA-D01 | Propuesto; implementación TI no visible. |
-| `R-APS-01` parser APS | SDK-Z12/Z13, TI-D04, CSA-D01 | Propuesto; implementación TI no visible. |
-| `R-ZDO-01` subset ZDO | SDK-Z08–Z10, TI-D04 | Field order disponible; parser bounded propuesto. |
-| `R-ZCL-01` header ZCL | SDK-Z02–Z04/Z07 | Algoritmo adaptable, sin bounds en original. |
-| `R-ZCL-02` foundation/types | SDK-Z05–Z07, TI-D04 | Algoritmos/tipos adaptables; cobertura seleccionada pendiente de schema aprobado. |
-| `R-SEC-01` frontera de seguridad | SDK-Z12, SDK-M08, FW-H05/F17 | Header estructural propuesto; no decryption baseline. |
-| `R-RAW-01` preservación | FW-H01, FW-F13, AUD-01 | Contrato existente; wrapper/resultado propuesto. |
-| `R-ERR-01` errores tipados | AUD-01; riesgos SDK-Z03–Z10 | Propuesto/no implementado. |
-| `R-VAL-01` comparación independiente | EXT-01/05, FW-H09 | Flujo posible; no ejecutado. |
-| `C-OBS-01` estado pasivo | SDK-Z10, R-NWK/R-APS/R-ZDO | Condicional; requiere gaps/provenance. |
-| `C-DEC-01` decryption | FW-H05/F17, SDK-M08 | Condicional; CCM*/nonce/AAD/keys/vectores pendientes. |
-| `C-BLD-01` builders/raw TX | FW-H04, FW-F11/F14/F15, SDK-Z04–Z06, EXP-01/02/05 | TX raw existe; builder no; entrega Zigbee no soportada. |
-| `C-RF-01` primitiva temporal | SDK-RF01–RF03, FW-F10–F16 | Mecanismo SDK; necesidad, integración y temporización no resueltas. |
+| SDK-M01 | `source/ti/zstack/zmac/f8w/zmac.c:506-529` | `ZMacInit()` delega `MAP_MAC_*` y estado TIMAC. |
+| SDK-M02 | `source/ti/zstack/zmac/f8w/zmac.c:865-917,1140-1203` | Association y MCPS wrapper delegan a MAC API; allocations/callbacks runtime. |
+| SDK-M03 | `source/ti/zstack/zmac/f8w/zmac_cb.c:164-244` | Callback ownership, OSAL queues/allocations hacia NWK. |
+| SDK-M04 | `source/ti/zstack/.meta/zstack.syscfg.js:150-226` | Librerías binarias se seleccionan por dispositivo/rol/ISA/toolchain. |
+| SDK-M05 | `source/ti/zstack/lib/iar/`, `source/ti/zstack/lib/ticlang/` | No se acredita target de rol GNU GCC. |
+| SDK-M06 | `source/ti/zstack/stack/sec/`, `stack/zdo/zd_sec_mgr.c`, `stack/sec/ssp.h` | Keys/counters/security services; no se integran en decoder. |
+| SDK-M07 | `source/ti/zstack/stack/af/af.c:463-486,697-718` | AF compara ProfileID de endpoint; no define allowlist de decoder ni hace que cualquier payload sea ZCL. |
 
-## 11. Vacíos de evidencia restantes
+## 6. Documentación oficial primaria
 
-1. Documento normativo exacto de Zigbee R22/ZCL7 y revisión IEEE asociada, aprobado para el proyecto.
-2. Corpus legal, versionado y representativo con frames plaintext, secured, truncados, manufacturer-specific y fragmentados.
-3. Confirmación del contrato PHR/FCS/longitudes con firmware actual y sniffer independiente.
-4. Semántica exacta, wrap y continuidad del timestamp RAT; pérdida bajo carga y telemetry end-to-end.
-5. Versiones fijadas y ejecutadas de los comparadores externos.
-6. Cobertura ZDO/ZCL exacta que aprobará el supervisor.
-7. Vectores Zigbee CCM*, key provenance, nonce/AAD y niveles soportados.
-8. Conclusión legal sobre adaptación/redistribución de código TI y dependencias GPL en runtime.
-9. Map file, margen RAM/flash y high-water de stacks para cualquier cambio embedded.
-10. Completion correlacionado de RX/TX y timing medido para cualquier primitiva MAC/RF.
-11. Regresión BLE/IEEE/Sub-1 GHz y frontend/antena si se modifica firmware.
+Fecha de acceso registrada en auditorías previas: 2026-11-03. Estas URLs son fuentes para consultar y aprobar textos exactos; la página catálogo no sustituye el documento normativo completo.
 
-Estos vacíos no impiden aprobar la arquitectura host pasiva. Sí impiden describir cualquiera de sus componentes como implementado o validado, y bloquean todo claim de participación o interoperabilidad Zigbee.
+| ID | Documento oficial y URL | Versión/fecha registrada | Soporte y límite |
+|---|---|---|---|
+| TI-D01 | [Z-Stack 8.30 User’s Guide](https://software-dl.ti.com/simplelink/esd/simplelink_cc13xx_cc26xx_sdk/8.30.01.01/exports/docs/zigbee/zigbee-users-guide.html) | SDK 8.30.01.01 | Arquitectura/configuración del runtime; no prueba fit FeralRF. |
+| TI-D02 | [Hardware Architecture SDK 8.30](https://software-dl.ti.com/simplelink/esd/simplelink_cc13xx_cc26xx_sdk/8.30.01.01/exports/docs/zigbee/html/cc13xx_cc26xx/hardware-architecture.html) | SDK 8.30, © 2005–2024 registrado | CM0 PHY, system core superiores/RF Driver; descripción TI. |
+| TI-D03 | [Zigbee Configuration SDK 8.30](https://software-dl.ti.com/simplelink/esd/simplelink_cc13xx_cc26xx_sdk/8.30.01.01/exports/docs/zigbee/html/syscfg/zigbee.html) | SDK 8.30 | Roles, channels, BDB, keys, endpoints/config generated. |
+| TI-D04 | [Z-Stack 8.30.00 Release Notes](https://software-dl.ti.com/simplelink/esd/simplelink_cc13xx_cc26xx_sdk/8.30.01.01/exports/docs/zigbee/release_notes_zigbee_8_30_00.html) | 8.30.00 | Declara Zigbee PRO 2017/R22 y ZCL7; alineación provisional. |
+| TI-D05 | [SimpleLink SDK 8.30.01.01 Release Notes](https://software-dl.ti.com/simplelink/esd/simplelink_cc13xx_cc26xx_sdk/8.30.01.01/exports/release_notes_simplelink_cc13xx_cc26xx_sdk_8_30_01_01.html) | 8.30.01.01 | Package/tools/components. |
+| TI-D06 | [SDK manifest](https://software-dl.ti.com/simplelink/esd/simplelink_cc13xx_cc26xx_sdk/8.30.01.01/exports/manifest_simplelink_cc13xx_cc26xx_sdk_8_30_01_01.html) | 8.30.01.01 | Component license inventory; no file-level legal conclusion. |
+| TI-D07 | [CC1352P7 product](https://www.ti.com/product/CC1352P7), [datasheet](https://www.ti.com/lit/ds/symlink/cc1352p7.pdf) | Product page/datasheet Rev. A; prior access 2026-11-03 | Device capability; no integration proof. |
+| IEEE-D01 | [IEEE Std 802.15.4-2020](https://standards.ieee.org/ieee/1159/7029/) | Published 2020-07-23; page identifies supersession by 2024 | PHY/MAC revision source; exact R22-mapped edition remains unresolved. |
+| CSA-D01 | [CSA specification downloads](https://csa-iot.org/developer-resource/specifications-download-request/) | Access 2026-11-03 | Catalog includes Zigbee Core R22.1/R23.x, ZCL R7/R8 and BDB revisions; full exact text must be obtained. |
+| CSA-D02 | [Zigbee Specification document 05-3474-23](https://csa-iot.org/wp-content/uploads/2023/04/05-3474-23-csg-zigbee-specification-compressed.pdf) | R23 public draft/document | Evidence another revision exists; not target baseline. |
+| CSA-D03 | [ZCL Specification 075123 rev. 6](https://csa-iot.org/wp-content/uploads/2019/12/07-5123-06-zigbee-cluster-library-specification.pdf) | Revision 6, 2016 | Historical public reference only; does not replace ZCL7. |
+
+### 6.1 APS application profile evidence
+
+The pinned SDK directly defines `ZDO_PROFILE_ID=0` and endpoint 0 (`SDK-Z08`) and routes application endpoint profile IDs as configured (`SDK-M07`). It does not establish an application profile allowlist appropriate for this decoder. `0x0104` is documented in proposal revision 1.1 only as a **candidate requiring official-source verification and supervisor approval**, not as enabled or SDK-confirmed. No application profile is activated in the initial schema profile.
+
+## 7. Externos de comparación y licencias
+
+| ID | Fuente | Uso admisible | Licencia/limitación |
+|---|---|---|---|
+| EXT-01 | [Scapy v2.8.0, commit `e2e35c07`](https://github.com/secdev/scapy/tree/e2e35c07bce2f40e7513e1b29a6d300d5329dbc3) | Comparator MAC/NWK/APS/ZDP/ZCL | GPL-2.0-only según registro previo; versión no ejecutada aquí. |
+| EXT-02 | [zigpy 2.4.1, commit `10b68377`](https://github.com/zigpy/zigpy/tree/10b68377bcbd9a8b15cbbfb506cebdc450704614) | Schema cross-check ZDO/ZCL | GPL-3.0 registrado; controller context, no raw-MPDU oracle. |
+| EXT-03 | [WHAD v1.2.18, commit `9d480163`](https://github.com/whad-team/whad-client/tree/9d48016375cd2fdae58517fe6f2fb97022c3bb61) | Comparar abstracción sniffer | MIT; sin connector FeralRF demostrado. |
+| EXT-04 | [KillerBee upstream](https://github.com/riverloopsec/killerbee) | Referencia del adapter existente | Snapshot upstream no fijado. |
+| EXT-05 | [Wireshark Zigbee NWK fields](https://www.wireshark.org/docs/dfref/z/zbee_nwk.html) | Comparator desde PCAP | Página live; release debe fijarse antes de validación. |
+
+Los comparadores son secundarios; no copian resultados a runtime y no resuelven divergencias frente a la norma.
+
+### 7.1 Política de provenance y licencia
+
+La preferencia es implementación independiente desde documentos normativos autorizados, conservando versión/citas en schemas, y usando TI como contraste. Esto evita portar ownership `OsalPort_malloc/free`, structs dependientes de ABI, globals/tasks y supuestos de runtime/compiler. Las licencias visibles difieren: `zcl.c` tiene aviso BSD-style (`SDK-Z01`), mientras `zd_object.c`, `nwk_util.h`, `aps.h` expresan restricciones TI Devices en sus encabezados; no debe afirmarse que todo Z-Stack sea libremente reutilizable. Protocol spec, headers, código fuente y binarios son categorías distintas. Una futura adaptación requiere revisión file-by-file y preservación de notices; este registro no emite dictamen legal.
+
+## 8. Discrepancias reconciliadas
+
+| ID | Discrepancia anterior | Evidencia actual | Efecto |
+|---|---|---|---|
+| DISC-01 | Referencia histórica a `source/ti/zstack/stack/nwk/nwk.c` | Ruta ausente del SDK; inventario real aparece en SDK-Z11 | No citar parser/source NWK reusable. |
+| DISC-02 | `Packet` tratado como si describiera contrato completo | `Packet` no tiene PHY/FCS policy (FW-H01); PHY vive en `Radio` | `CaptureContext` requerido; faltante produce stop. |
+| DISC-03 | Semejanza estructural puede sugerir “confirmed Zigbee” | FeralRF transporta IEEE raw, sin protocolo Zigbee metadata (FW-F05, FW-H01) | `R-ID-01` distingue provenance de consistencia estructural. |
+| DISC-04 | Seguridad dibujada principalmente en NWK/APS | MAC aux security también cambia payload visible; revisión normativa requerida | Security gate en los tres límites, no decryption. |
+| DISC-05 | ZCL dispatch implícito por cluster/profile | SDK AF usa profile IDs de endpoint; no decoder allowlist (SDK-M07) | App allowlist inicialmente vacía; `0x0104` candidate no habilitado. |
+| DISC-06 | ACK TX podía interpretarse como completion | ACK en `command_processor`; ejecución diferida `control_task`; API espera ACK (FW-F02/03, FW-H04) | V-RAW-01 separa accepted/completed/observed/ACK/app response. |
+| DISC-07 | ZDO ASDU podía contarse incluyendo TSN | `zd_profile.c:2104-2106` separa el byte TSN | Schemas ZDO comienzan después de TSN. |
+| DISC-08 | Reuso TI descrito como general | Diferentes licencias y parser source ausente (SDK-Z01/13, SDK-Z11/12) | Prioridad a implementación independiente y revisión por archivo si cambia. |
+
+## 9. Mapa de evidencia a requisitos
+
+| Requisito | IDs de fuente | Evidencia que justifican | Límite abierto |
+|---|---|---|---|
+| `R-BASE-01` | FW-H01/02/03, FW-F04/06/09/10 | Bytes y metadata actuales llegan a Python | Contexto PHY/FCS en wrapper; contract integrity requiere fixtures. |
+| `R-MAC-01` | FW-F09/10/11, IEEE-D01 | MPDU+FCS disponible; MAC parser no existe | Revisión MAC vinculada con R22 no resuelta. |
+| `R-ID-01` | FW-H01, FW-F05, CSA-D01 | Transporte raw sin identidad Zigbee; perfil normativo requerido | Provenance de captures corpus futuro. |
+| `R-NWK-01` | SDK-Z11, TI-D04, CSA-D01 | Máscaras visibles, parser TI no definido en fuente | Exact Core R22 y corpus. |
+| `R-APS-01` | SDK-Z12/13, TI-D04 | Campos APS visibles y límites de licencia | Layout exacto/fragment/security y Core R22. |
+| `R-ZDO-01` | SDK-Z08/09/10, TI-D04 | IDs, TSN split, field order TI | Normativa status/count exacta. |
+| `R-ZCL-01` | SDK-Z03/07, TI-D04 | Header helper, flags y tipos SDK | ZCL7 exacta; app profile enable. |
+| `R-ZCL-02` | SDK-Z05/06/07, TI-D04 | IDs commands/types/helpers | Dirección/status/string sentinel normativos. |
+| `R-SEC-01` | SDK-Z12, SDK-M06, IEEE-D01, TI-D04 | Indicios/campos de seguridad | CCM*, MIC level, AAD/key context quedan fuera baseline. |
+| `R-RAW-01` | FW-H01, FW-F06, FW-F10 | Buffer y packet fields existentes | Ownership/lifetime del wrapper futuro. |
+| `R-ERR-01` | SDK-Z03–10, FW-H03 | Helpers de entrada hostil no todos bounded | API futura de issues. |
+| `R-VAL-01` | EXT-01/05, CSA-D01, IEEE-D01 | Opciones de comparator y autoridad normativa | Releases/corpus no están fijados/ejecutados. |
+
+## 10. Vacíos de evidencia pendientes
+
+1. Texto autorizado Core R22 exacto, ZCL7 y revisión IEEE correlacionada, incluyendo status, flags, strings y MIC lengths.
+2. Fuente oficial exacta que sustente perfil de aplicación candidato `0x0104`; permanece deshabilitado hasta entonces.
+3. Corpus legal y versionado con provenances para Zigbee known captures, no-Zigbee, secured, malformed, manufacturer-specific y fragmented.
+4. Confirmación byte-exacta FCS/PHR/length y metadata para firmware/artifact identificado; timestamp wrap/continuidad y pérdida bajo carga.
+5. Versión y config fijada de dissector independiente y comparación ejecutada.
+6. Revisión legal file-by-file si se reutiliza código TI; esta propuesta sólo recomienda implementación independiente.
+7. Throughput/buffer backlog host bajo captura sostenida antes de estado pasivo.
+8. Completion RF correlacionado no se expone; cualquier futuro claim terminal requiere interfaz o instrumento independiente claramente definido.
+
+Estos vacíos no cambian el sentido arquitectónico host-side. Sí bloquean detalles semánticos, assertions de validación y cualquier claim de Zigbee interoperability.

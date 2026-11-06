@@ -1,269 +1,217 @@
-# FeralRF Python API
+# API Python de FeralRF
 
-Fecha: 2026-07-20
+> **Referencia canónica de la superficie pública prevista del paquete `feralrf`.**
 
-Este documento resume la API publica recomendada del paquete `feralrf` y su estado actual.
+Reconciliada con el código fuente el 2026-11-06. Los exports de [`python/feralrf/__init__.py`](../python/feralrf/__init__.py) y la implementación pública actual determinan qué símbolos existen cuando esta referencia y el código difieren; una diferencia sigue siendo una discrepancia que debe resolverse explícitamente.
 
-Relacion con otros documentos:
+Documentos relacionados:
 
-- Contrato wire-format: `docs/protocol.md`
-- Baseline y matriz de validacion: `docs/VALIDATION_MATRIX.md`
+- [Arquitectura de software](ARCHITECTURE.md)
+- [Contrato del protocolo wire](protocol.md)
+- [Índice y autoridad documental](README.md)
+- [Matriz canónica actual de capacidades y validación](CURRENT_VALIDATION_MATRIX.md)
+- [Baseline histórico de validación](VALIDATION_MATRIX.md)
+- [Material de trabajo para el futuro Validation Runbook](User-Manual/)
 
-Entry points recomendados:
+Este documento describe interfaces, parámetros y semántica de resultados. Las secuencias exactas de ensayo, terminales, marcadores, configuración física, criterios PASS/FAIL y recuperación pertenecen al futuro Validation Runbook.
 
-- Oficiales: `python/examples/`
-- Manuales, OTA, demos y caracterizacion: `python/examples/lab/`
+## 1. Símbolos exportados por el paquete
 
-## 1. API publica estable
+`feralrf.__all__` exporta:
 
-Objetos exportados:
+- Clases y tipos: `Radio`, `Packet`, `DeviceInfo`, `DeviceStats`, `RxStreamError`.
+- Enums y estado de comandos: `PHY`, `Command`, `Response`, `STABLE_COMMANDS`, `EXPERIMENTAL_COMMANDS`, `PENDING_COMMAND_IDS`.
+- Presets: `PROP_PRESETS`.
+- Excepciones: `FeralRFError`, `ConnectionError`, `ProtocolError`, `CommandError`, `RadioError`, `CryptoError`.
 
-- `Radio`
-- `Packet`
-- `DeviceInfo`
-- `DeviceStats`
-- `PHY`
-- `Command`
-- `Response`
-- `PROP_PRESETS`
+`CommandError` expone `error_code`. Los métodos también pueden producir errores de timeout internos derivados de `FeralRFError`; `TimeoutError` existe en `feralrf.exceptions`, pero no forma parte de `feralrf.__all__` en la revisión actual.
 
-Constantes de estado exportadas:
+## 2. Tipos de datos
 
-- `STABLE_COMMANDS`
-- `EXPERIMENTAL_COMMANDS`
-- `PENDING_COMMAND_IDS`
+### `Packet`
 
-Metodos estables de `Radio`:
+Paquete recibido con `timestamp_us`, `channel`, `rssi_dbm`, `lqi`, `crc_ok`, `data` y metadata opcional `ll_pdu_kind`, `ll_pdu_type` y `ll_pdu_flags`.
 
-- `init()`
-- `set_phy()`
-- `set_channel()`
-- `set_power()`
-- `start_rx()`
-- `read_packets()`
-- `stop_rx()`
-- `transmit()`
-- `transmit_frame()`
-- `transmit_burst()`
-- `transmit_continuous()`
-- `stop_transmit()`
-- `get_stats()`
-- `configure_prop()`
-- `set_adv_hop()`
-- `tx_cw()`, `tx_prbs()`, `tx_test_stop()`
-- `random_bytes()`, `aes_encrypt()`/`aes_decrypt()`, `aes_ccm_encrypt()`/`aes_ccm_decrypt()`, `aes_gcm_encrypt()`/`aes_gcm_decrypt()`, `sha256()`, `ecdh()`, `ecdsa_sign()`, `ecdsa_verify()`
-- `reset_device()`
+La interpretación física de metadata depende del PHY y de la implementación correspondiente. Un valor expuesto por software no sustituye una medición RF independiente.
 
-## 2. API experimental
+### `DeviceInfo`
 
-Metodos experimentales de `Radio`:
+Resultado de `Radio.init()` con `firmware_version`, `capabilities` y `serial`. La versión y el serial reportados no identifican por sí solos un commit, hash binario o unidad física.
 
-- `start_jam()`
-- `stop_jam()`
+### `DeviceStats`
 
-Razon:
+Contadores `rx_ok`, `rx_crc_err`, `rx_drop` y `rx_overflow`, más contadores LL opcionales cuando firmware anuncia la extensión correspondiente.
 
-- El firmware responde a estos comandos y existen smokes de control.
-- Aun no se consideran parte del baseline estable porque falta validacion funcional de interferencia real.
+### `RxStreamError`
 
-## 3. API pendiente
+Evento asíncrono producido por `read_packets()` para un `RSP_ERROR` de firmware fuera del ciclo request/response normal. Contiene `error_code` y `context`.
 
-No se consideran parte de la API publica final todavia:
+## 3. Construcción y ciclo de conexión
 
-- spectrum / RSSI scan
-- helpers ofensivos IEEE 802.15.4 y Sub-1GHz aun no implementados
+### `Radio(port: Optional[str] = None, baudrate: int = 921600)`
 
-El stack de protocolo BLE (conexion, GATT discovery, BLE initiator, scan
-activo/pasivo) fue removido de firmware y de la API Python (2026-07-20) y no
-va a reimplementarse aqui: `Sniffle` cubre ese caso de uso. BLE PHY se
-mantiene solo para captura cruda (ver `docs/ARCHITECTURE.md`).
+Crea el cliente síncrono. Si `port` es `None`, `connect()` usa el primer dispositivo que devuelve `list_devices()`.
 
-Comandos reservados o pendientes hoy:
+### `Radio.list_devices() -> list`
 
-- `JAM_REACTIVE = 0x31`
-- `JAM_PATTERN = 0x32`
+Método estático que devuelve candidatos seriales. Para VID CatSniffer `0x1209`, filtra la descripción/producto para conservar interfaces que contienen `Bridge`.
 
-Los IDs de spectrum aun no estan asignados; el rango `0x40-0x54` esta retirado
-del stack BLE y no se reusa (ver `firmware/cc1352/include/protocol.h`).
+### `connect() -> None`
 
-## 4. Reglas de uso recomendadas
+Abre el puerto serial y prepara los buffers. Es idempotente si la instancia ya tiene el puerto abierto.
 
-- Para sesiones normales:
-- `init() -> set_phy() -> set_channel()/configure_prop() -> start_rx()/transmit_*()`
+### `disconnect() -> None`
 
-- Para modo propietario (GFSK/FSK/OOK/MSK):
-- `set_phy(PHY.PROPRIETARY_GFSK)` seguido de `configure_prop(frequency_hz, mod_type, ...)`
-- `mod_type`: 0=FSK, 1=GFSK, 2=OOK/ASK, 4=MSK, 5=4-FSK, 6=4-GFSK
-- `format_conf`: bitfield para 4-FSK/4-GFSK (0 = restaura defaults SysConfig)
-- O usar presets: `radio.configure_prop(**PROP_PRESETS['gfsk_868_50k'])`
+Cierra el puerto abierto. También se llama al salir de un bloque `with Radio(...) as radio:`; `__enter__` conecta y `__exit__` desconecta.
 
-### Presets disponibles (`PROP_PRESETS`)
+### `init() -> DeviceInfo`
 
-| Preset | Freq | Mod | Rate | OTA |
-|--------|------|-----|------|-----|
-| `gfsk_433_50k` | 433.92 MHz | GFSK | 50k | 6-10/10 |
-| `gfsk_433_10k` | 433.92 MHz | GFSK | 10k | — |
-| `fsk_433_50k` | 433.92 MHz | FSK | 50k | 1/10 |
-| `msk_433_50k` | 433.92 MHz | MSK | 50k | 1/10 |
-| `ook_433_4k8` | 433.92 MHz | OOK | 4.8k | 0/10 (hw) |
-| `ook_433_2k4` | 433.92 MHz | OOK | 2.4k | — |
-| `gfsk_868_50k` | 868 MHz | GFSK | 50k | 10/10 |
-| `gfsk_868_100k` | 868 MHz | GFSK | 100k | — |
-| `msk_868_50k` | 868 MHz | MSK | 50k | 10/10 |
-| `ook_868_4k8` | 868 MHz | OOK | 4.8k | 10/10 |
-| `wireless_mbus_s_868` | 868.3 MHz | GFSK | 32.7k | 10/10 |
-| `wireless_mbus_t_868` | 868.95 MHz | GFSK | 100k | 10/10 |
-| `wireless_mbus_c_868` | 868.95 MHz | GFSK | 100k | 10/10 |
-| `wireless_mbus_n_169_2k4` | 169.45 MHz | GFSK | 2.4k | — |
-| `wireless_mbus_n_169_4k8` | 169.45 MHz | GFSK | 4.8k | — |
-| `gfsk_915_50k` | 915 MHz | GFSK | 50k | 10/10 |
-| `gfsk_902_50k` | 902.2 MHz | GFSK | 50k | — |
-| `gfsk_2440_250k` | 2440 MHz | GFSK | 250k | — |
-| `gfsk_2440_50k` | 2440 MHz | GFSK | 50k | 10/10 |
-| `4fsk_868_50k` | 868 MHz | 4-FSK | 50k | 10/10 |
-| `4gfsk_868_50k` | 868 MHz | 4-GFSK | 50k | 10/10 |
-| `4fsk_433_50k` | 433.92 MHz | 4-FSK | 50k | — (hw lim) |
-| `4gfsk_433_50k` | 433.92 MHz | 4-GFSK | 50k | — (hw lim) |
-| `sidewalk_915_fsk_50k` | 915 MHz | FSK | 50k | 10/10 (F29) |
-| `sidewalk_915_fsk_250k` | 915 MHz | FSK | 250k | 10/10 (F29) |
-| `wisun_915_fsk_50k` | 902.2 MHz | FSK | 50k | 10/10 (F29) |
-| `wisun_915_fsk_100k` | 902.2 MHz | FSK | 100k | 10/10 (F29) |
-| `wisun_915_fsk_150k` | 902.2 MHz | FSK | 150k | 10/10 (F29) |
-| `wisun_915_fsk_200k` | 902.2 MHz | FSK | 200k | 10/10 (F29) |
-| `wisun_915_fsk_300k` | 902.2 MHz | FSK | 300k | 10/10 (F29) |
-| `mioty_868_tsunb` | 868 MHz | FSK | 396 | 0/10 (FAIL) |
+Conecta si es necesario, envía `RADIO_INIT`, solicita `GET_INFO`, almacena las capacidades y devuelve `DeviceInfo`.
 
-### BLE 2M TX
+No existe un método público separado `get_info()` en la implementación actual. `init()` es la interfaz que devuelve la información del dispositivo.
 
-BLE 2M usa extended advertising internamente. El firmware maneja todo transparentemente:
+### `reset_device(wait: float = 1.5) -> None`
 
-```python
-radio.set_phy(PHY.BLE_2M, channel=37)  # channel ignorado para TX — usa ch37→ch9 internamente
-radio.transmit(payload)                  # ADV_EXT_IND(1M,ch37) → AUX_ADV_IND(2M,ch9)
-```
+La implementación actual deduce un puerto Cat-Shell sumando 2 al sufijo numérico del puerto Bridge, cierra temporalmente Bridge, envía `boot` y `exit`, espera y reinicializa si la instancia estaba conectada. Esos comandos intentan un reset de hardware del CC1352; el método no corta físicamente su alimentación y `RADIO_INIT` posterior sólo reinicializa el estado de control host/firmware.
 
-Para RX de BLE 2M, escuchar en ch9:
+Esta inferencia `Bridge + 2` no es universalmente fiable: la enumeración USB puede asignar pares no aritméticos. El método sólo debe usarse cuando ese mapeo haya sido comprobado para el equipo y la sesión. Es un mecanismo de recovery posible para OOK, no una garantía de recovery universal: la evidencia reciente conservada en la [matriz canónica](CURRENT_VALIDATION_MATRIX.md) confirmó recuperación después de un power-cycle físico completo, pero no estableció un lifecycle OOK robusto mediante este helper. Consulte las [preguntas abiertas de hardware](../hardware/OPEN_HARDWARE_QUESTIONS.md) para los límites de reset/boot y el material operativo en [`User-Manual/`](User-Manual/) para el estado de los procedimientos.
 
-```python
-radio.set_phy(PHY.BLE_2M, channel=9)
-radio.start_rx()
-```
+## 4. Configuración de radio
 
-### `reset_device()`
+### `set_phy(phy: PHY, channel: int = 0, frequency_hz: int = 0) -> None`
 
-`reset_device()` envia `boot` + `exit` al RP2040 shell port, que resetea el CC1352 por hardware y reinicializa la sesion. Se recomienda usar en los siguientes casos:
+Selecciona el PHY y envía el formato extendido de `SET_PHY`. `channel=0` y `frequency_hz=0` permiten que el backend use sus defaults.
 
-| Caso | Razon |
-|------|-------|
-| Despues de OOK | OOK carga patches MCE+RFE (genook) que no se pueden descargar. El radio queda bloqueado en OOK hasta power cycle o reset. |
-| Entre cambios de banda de frecuencia | Cambiar de 433 a 868 MHz (o viceversa) puede dejar el sintetizador en estado inconsistente si no se hace reset. |
-| Despues de timeout o error de comunicacion | Si el firmware deja de responder (timeout en `init()` o cualquier comando), un reset recupera el dispositivo. |
-| Entre PHYs diferentes en tests automatizados | El validation script (`run_validation_baseline.sh`) resetea entre cada step para garantizar estado limpio. |
-| Despues de `start_jam()` / `stop_jam()` | Jamming puede dejar el radio en modo TX continuo. Reset garantiza regreso a idle. |
+### `set_channel(channel: int) -> None`
 
-Nota: `reset_device()` funciona incluso cuando el firmware esta colgado porque opera directamente sobre el RP2040 shell port (bridge_port + 2), sin depender de respuesta del CC1352.
+Actualiza el canal mediante `SET_CHANNEL`.
 
-Para scripts automatizados donde `reset_device()` puede fallar (radio completamente muerto), el validation script usa reset directo via serial al shell port como fallback.
+### `set_power(power_dbm: int) -> None`
 
-## 5. Compatibilidad
+Envía la potencia solicitada como entero de 8 bits con signo en el protocolo. La aceptación del comando no prueba potencia RF medida.
 
-El objetivo de compatibilidad del paquete es:
+### `set_adv_hop(enabled: bool) -> None`
 
-- mantener estables firmas y semantica de la API listada arriba
-- no promover comandos pendientes hasta que firmware, docs y validacion esten alineados
-- mantener helpers experimentales disponibles pero etiquetados claramente
+Activa o desactiva hopping de canales de advertising durante RX BLE. Solo aplica a recepción BLE en esos canales; no restaura el stack BLE de conexión/GATT retirado.
 
-## 6. Integración KillerBee
+### `configure_prop(frequency_hz: int, mod_type: int = 1, symbol_rate: int = 50000, deviation: int = 100, rx_bw: int = 0x52, sync_word: int = 0x930B51DE, format_conf: int = 0) -> None`
 
-El CatSniffer puede exponerse como un dispositivo de
-[KillerBee](https://github.com/riverloopsec/killerbee) (framework de seguridad
-IEEE 802.15.4/Zigbee: `zbwireshark`, `zbdump`, `zbstumbler`, `zbreplay`,
-`zbassocflood`, `zbid`) sin ningun cambio de firmware. Runbook end-to-end:
-`docs/TESTING-ON-LINUX.md` (y `docs/killerbee-catsniffer.md`).
+Envía `SET_PROP_CONFIG` para el backend propietario. Los valores son configuración solicitada, no mediciones físicas. El host puede serializar cualquier `u8`, pero el backend TI activo sólo define `0=FSK`, `1=GFSK` y `2=OOK`; los valores `4/5/6` usados por presets llamados MSK/4-FSK/4-GFSK se aceptan y copian a un campo reservado, sin implementar esas modulaciones nombradas. `format_conf` configura el bitfield TI de formato/framing y no selecciona modulación.
 
-### Adapter
+OOK (`mod_type=2`) carga patches dedicados. Antes de cambiar de frecuencia o modo, el backend requiere un reset real del CC1352, power-cycle o reflash; [`reset_device()`](#reset_devicewait-float--15---none) intenta una de esas rutas mediante reset de hardware condicionado al mapeo Cat-Shell, pero no es un power-cycle ni tiene recovery OOK universalmente validado.
 
-- Modulo: `feralrf.integrations.killerbee`
-- Clase: `KillerBeeFeralRF` — envuelve un `feralrf.Radio` y traduce la interfaz
-  de dispositivo de KillerBee a llamadas publicas de `Radio`
-  (`set_phy`/`set_channel`/`start_rx`/`read_one_packet`/`stop_rx`/
-  `transmit_frame`/`start_jam`/`stop_jam`/`list_devices`/`init`/`disconnect`).
-- `killerbee` es una dependencia **opcional**: `pip install feralrf[killerbee]`.
-  Se importa de forma perezosa (via `_kbcaps()`) para que `feralrf` nunca
-  dependa duro de `killerbee`.
-- Construccion: `KillerBeeFeralRF(dev=<puerto>)` (o `dev=None` para
-  auto-detectar); `radio=` es inyectable para tests (`FakeRadio`).
+## 5. Recepción y estadísticas
 
-### Capacidades anunciadas
+### `get_stats(timeout: float = 2.0) -> DeviceStats`
 
-`KillerBeeFeralRF` reporta las siguientes `KBCapabilities` como habilitadas:
+Solicita `GET_STATS`. Acepta el payload base y la extensión LL cuando la capacidad está anunciada.
 
-| Capacidad | Significado |
-|---|---|
-| `FREQ_2400` | Opera en la banda de 2.4 GHz (802.15.4 canales 11–26) |
-| `SNIFF` | `sniffer_on`/`sniffer_off`/`pnext` funcionales |
-| `SETCHAN` | `set_channel(ch, page=0)` valida rango 11–26 |
-| `INJECT` | `inject(packet, ...)` transmite tramas crudas |
-| `PHYJAM` | `jammer_on`/`jammer_off` disponibles (ver caveat abajo) |
+### `start_rx() -> None`
 
-### Contrato del dict de `pnext()`
+Solicita el inicio de RX. Puede producir `CommandError` por estado inválido y posteriormente un `RxStreamError` si firmware emite un fallo RF asíncrono.
 
-`pnext(timeout=100)` (timeout en ms) llama a `Radio.read_one_packet` y
-devuelve `None` en timeout, o un dict con las claves que KillerBee espera:
+### `read_packets(timeout: Optional[float] = 1.0) -> Iterator[Union[Packet, RxStreamError]]`
 
-| Clave | Valor |
-|---|---|
-| `0` | `Packet.data` (bytes crudos de la trama) |
-| `1` | `Packet.crc_ok` (bool) |
-| `2` | `Packet.rssi_dbm` (int, dBm) |
-| `bytes` | igual a `0` |
-| `validcrc` | igual a `1` |
-| `rssi` | igual a `2` |
-| `dbm` | igual a `2` |
-| `location` | siempre `None` (sin GPS) |
-| `datetime` | `datetime.utcnow()` al momento de la lectura |
+Itera paquetes y errores asíncronos durante una ventana total de `timeout` segundos. `timeout=None` mantiene el stream hasta que el consumidor deja de iterar.
 
-### Bridge `read_one_packet`
+### `read_one_packet(timeout: float = 1.0) -> Optional[Packet]`
 
-KillerBee consume paquetes de a uno (`pnext()`), mientras que `feralrf`
-expone RX como el stream `read_packets(timeout)`. `Radio.read_one_packet(timeout=1.0) -> Optional[Packet]`
-reutiliza `read_packets` internamente (sin duplicar el parseo), descarta
-`RxStreamError` y devuelve el primer `Packet` real o `None` si no llega nada
-dentro del timeout.
+Devuelve el primer `Packet` recibido dentro del timeout o `None`. Omite eventos `RxStreamError`; los consumidores que necesiten observar errores asíncronos deben usar `read_packets()`.
 
-### Caveat: duracion de jamming
+### `stop_rx(retries: int = 3, timeout: float = 1.0) -> None`
 
-`jammer_on()` invoca `Radio.start_jam(channel=ch, duration_ms=30000)` — cada
-llamada a `start_jam` esta acotada a **30 s como maximo**. Para jamming mas
-largo hay que re-armar (`jammer_on()` de nuevo) periodicamente; no es un
-jamming continuo de duracion arbitraria. `jammer_off()` llama a `stop_jam()`
-en cualquier momento para cortar antes. Jamming sigue siendo
-FeralRF-experimental y esta legalmente restringido en muchas jurisdicciones
-(ver advertencia en el README); usar solo en la propia red/dispositivos.
+Solicita `RX_STOP` hasta `retries` veces. Un ACK confirma la respuesta de control; no es una medición independiente del estado físico RF.
 
-### Shim del lado KillerBee (`dev_feralcat.py`)
+## 6. Transmisión
 
-Para que herramientas KillerBee como `zbid`/`zbdump -i <puerto>` detecten el
-CatSniffer, se coloca un shim de una linea dentro del paquete `killerbee`
-(o se distribuye via entry point):
+Todos estos métodos confirman la respuesta de control del firmware. Un ACK no equivale a terminación RF, radiación medida ni recepción por un peer.
+
+### `transmit(packet: bytes, power_dbm: int = -128, timeout: float = 5.0) -> None`
+
+Envía `TX_RAW`. El valor por defecto `-128` se serializa como potencia solicitada; el firmware actual resuelve valores que no están en la tabla de potencia activa al valor soportado más cercano. Para reutilizar de forma explícita la potencia establecida por `set_power()`, use `transmit_frame()` o pase a `transmit()` el valor deseado.
+
+### `transmit_frame(packet: bytes, timeout: float = 5.0) -> None`
+
+Envía `TX_FRAME`; rechaza un payload vacío. El framing final depende del PHY activo.
+
+### `transmit_burst(packet: bytes, count: int, interval_us: int = 0, timeout: float = 5.0) -> None`
+
+Programa un burst; valida payload no vacío, `count` en `1..65535` e intervalo en el rango `uint32`.
+
+### `transmit_continuous(packet: bytes, interval_us: int = 0, timeout: float = 5.0) -> None`
+
+Inicia TX repetitivo hasta `TX_STOP`; valida payload e intervalo.
+
+### `stop_transmit(timeout: float = 5.0) -> None`
+
+Envía `TX_STOP` para una operación repetitiva activa.
+
+## 7. Modos de prueba TX
+
+- `tx_cw(power_dbm: int = 0) -> None`: configura potencia e inicia portadora continua; requiere un PHY previamente seleccionado.
+- `tx_prbs(power_dbm: int = 0, pattern: str = "prbs15") -> None`: inicia PRBS15 o PRBS32; cualquier otro patrón produce `ValueError`.
+- `tx_test_stop() -> None`: detiene CW o PRBS y puede llamarse sin un test activo.
+
+Estos métodos exponen control de firmware. La forma, frecuencia, potencia y cese de la señal requieren validación instrumental separada.
+
+## 8. Aceleración criptográfica
+
+La superficie pública actual incluye:
+
+- `random_bytes(n: int) -> bytes`;
+- `aes_encrypt(key: bytes, data: bytes, mode: str, iv: Optional[bytes] = None) -> bytes`;
+- `aes_decrypt(key: bytes, data: bytes, mode: str, iv: Optional[bytes] = None) -> bytes`;
+- `aes_ccm_encrypt(key: bytes, nonce: bytes, aad: bytes, plaintext: bytes, tag_len: int) -> tuple`;
+- `aes_ccm_decrypt(key: bytes, nonce: bytes, aad: bytes, ciphertext: bytes, tag: bytes, tag_len: int) -> bytes`;
+- `aes_gcm_encrypt(key: bytes, iv: bytes, aad: bytes, plaintext: bytes) -> tuple`;
+- `aes_gcm_decrypt(key: bytes, iv: bytes, aad: bytes, ciphertext: bytes, tag: bytes) -> bytes`;
+- `sha256(data: bytes) -> bytes`;
+- `ecdh(my_priv: bytes, peer_pub: bytes, curve: str) -> bytes`;
+- `ecdsa_sign(priv: bytes, msg_hash: bytes, curve: str) -> bytes`;
+- `ecdsa_verify(pub: bytes, msg_hash: bytes, sig: bytes, curve: str) -> bool`.
+
+Los métodos validan tamaños y formatos antes de enviar sus comandos. Los fallos criptográficos del firmware se exponen como `CryptoError`; las firmas exactas y restricciones actuales están en `radio.py`.
+
+## 9. API experimental y pendiente
+
+### Experimental
+
+- `start_jam(channel: int, power_dbm: int = 20, duration_ms: int = 3000, timeout: float = 5.0) -> None`
+- `stop_jam(timeout: float = 5.0) -> None`
+
+Los comandos existen y devuelven respuestas de control. No forman parte del baseline funcional estable porque un ACK no demuestra efecto de interferencia.
+
+### Pendiente
+
+- Spectrum/RSSI scan no tiene una API pública final ni IDs de firmware asignados.
+- `JAM_REACTIVE` (`0x31`) y `JAM_PATTERN` (`0x32`) permanecen en `PENDING_COMMAND_IDS` y no son métodos implementados.
+- El stack de protocolo BLE de conexión/GATT/scan activo o pasivo fue retirado; permanecen los PHY BLE para captura raw.
+
+## 10. Enums y presets
+
+### `PHY`
+
+Expone `BLE_1M`, `BLE_2M`, `BLE_CODED_S8`, `BLE_CODED_S2`, `IEEE_802_15_4`, `SUB_1GHZ_868`, `SUB_1GHZ_915` y `PROPRIETARY_GFSK`.
+
+`Command` y `Response` reflejan los IDs documentados en [`protocol.md`](protocol.md). `STABLE_COMMANDS`, `EXPERIMENTAL_COMMANDS` y `PENDING_COMMAND_IDS` permiten inspeccionar el estado declarado de comandos.
+
+### `PROP_PRESETS`
+
+Diccionario público de parámetros que puede aplicarse con:
 
 ```python
-# killerbee/dev_feralcat.py  (shim delgado; la logica vive en feralrf)
-from feralrf.integrations.killerbee import KillerBeeFeralRF as FERALCAT
+radio.configure_prop(**PROP_PRESETS["gfsk_868_50k"])
 ```
 
-y se agrega un arm de sondeo serial en `killerbee/__init__.py` que construye
-`KillerBeeFeralRF(dev)` cuando `KillerBeeFeralRF.list_devices()` reporta ese
-puerto. El registro upstream completo queda fuera del alcance v1.
+Los nombres son etiquetas de configuración. Un preset llamado Wi-SUN, Sidewalk, Wireless M-Bus o MIOTY no implementa automáticamente framing, MAC, seguridad, asociación ni interoperabilidad de ese protocolo. La evaluación vigente de implementación y evidencia está en [`CURRENT_VALIDATION_MATRIX.md`](CURRENT_VALIDATION_MATRIX.md), sustentada por [`Presets_Reports/`](Presets_Reports/).
 
-### Ejemplo
+## 11. Restricciones de estado y errores
 
-`python/examples/killerbee_sniff.py` construye `KillerBeeFeralRF(dev=<puerto>)`,
-llama `sniffer_on(<canal>)` y hace loop de `pnext()` imprimiendo
-`bytes`/`validcrc`/`rssi`, con opcion de volcar un pcap cargable en Wireshark
-(`DLT_IEEE802_15_4`). Requiere `pip install feralrf[killerbee]` y hardware real:
+- Los métodos de control pueden elevar `ConnectionError`, `ProtocolError` o `CommandError`; las operaciones criptográficas pueden elevar `CryptoError`.
+- Firmware puede rechazar RX durante TX/jamming o TX durante RX con un error de estado.
+- `read_packets()` es la interfaz que conserva errores RF asíncronos como datos del stream.
+- Los límites wire y payload se definen en [`protocol.md`](protocol.md); la validación de una capacidad RF pertenece a la documentación de validación.
 
-```bash
-pip install feralrf[killerbee]
-python python/examples/killerbee_sniff.py --port /dev/ttyACM0 --channel 11
-```
+## 12. Integración KillerBee
+
+El adaptador vive en `feralrf.integrations.killerbee` y usa la API pública de `Radio`, incluido `read_one_packet()`. La guía de integración está en [`killerbee-catsniffer.md`](killerbee-catsniffer.md) y [`TESTING-ON-LINUX.md`](TESTING-ON-LINUX.md). Es documentación de integración supporting; la existencia del adaptador y sus pruebas host no demuestra por sí sola una validación completa con hardware y herramientas KillerBee.

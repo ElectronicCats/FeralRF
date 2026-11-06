@@ -1,10 +1,14 @@
-# FeralRF — Architecture
+# Arquitectura de software de FeralRF
 
-> **Authoritative source for the layered design.**
+> **Documento canónico para la arquitectura de software y el flujo del sistema.**
+
+Este documento describe las capas del host Python y del firmware CC1352, sus responsabilidades y el flujo de comandos y datos. No es una autoridad de pinout, revisión de placa, población física ni compatibilidad de hardware. Para esos temas consulte la [referencia de hardware](../hardware/README.md), su [arquitectura](../hardware/ARCHITECTURE.md) y el [pinout](../hardware/PINOUT.md).
 
 ---
 
 ## 1. Vista global
+
+La ruta siguiente es conceptual. Cat-Bridge transporta el flujo serial entre el host y el CC1352; el protocolo FeralRF se interpreta en el host y en el firmware CC1352. La conectividad eléctrica y el comportamiento del firmware RP2040 se documentan, con sus límites de evidencia, en `hardware/`.
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -17,11 +21,11 @@
 └──────────────────┬───────────────────────────────────────────┘
                    │ USB-CDC 921600 baud
 ┌──────────────────▼───────────────────────────────────────────┐
-│  RP2040 bridge (transparente, firmware stock del CatSniffer) │
+│  Cat-Bridge / RP2040 (transporte USB CDC ↔ UART)             │
 └──────────────────┬───────────────────────────────────────────┘
                    │ UART 921600 (GPIO0/1 ↔ DIO12/13)
 ┌──────────────────▼───────────────────────────────────────────┐
-│  CC1352P7 firmware — FeralRF v2.0 (TI-RTOS 7)                │
+│  Target de software CC1352P7 — firmware FeralRF (TI-RTOS 7) │
 │  L5 app      main_rtos.c, task scheduling                    │
 │  L4 services radio/, rx/data (ll_manager), protocol/, queues │
 │  L3 drivers  host_if, RF, GPIO (delgados sobre SDK)          │
@@ -67,7 +71,7 @@ connection/GATT stack (`ble_conn.c`, `ble_conn_mgr.c`, `ble_conn_pdu.c`, `att_cl
 ## 4. Reglas de capas
 
 1. **No saltar capas.** L4 no toca L1 directo. Lo que falta se expone desde L3/L2.
-2. **L1 platform no conoce nada de FeralRF.** Startup, ccfg y linker son intercambiables entre boards CC1352P7 si cambias config.
+2. **L1 platform no conoce nada de FeralRF.** Startup, CCFG y linker dependen del target de software seleccionado. El target actual es CC1352P7; eso no establece la variante físicamente poblada en toda placa CatSniffer.
 3. **L4 services no conoce transporte.** `ll_manager` no sabe que hay UART; emite eventos al protocol layer.
 4. **Reglas RF de L4/radio** (skill `ti-rtos-rf-cc1352`, detalle en seccion 5): `CMD_FS` siempre via `RF_postCmd` (nunca `RF_runCmd`, todo PHY incl. BLE), un cliente RF abierto a la vez, `RF_open` lazy en primer uso, `RF_close` evitado salvo excepciones guardadas, PHY switch = `RF_flush + RF_yield` + reconfigurar. Ante la duda, gana lo que hace `radio_if.c`.
 5. **Python L3 es la API pública estable.** L4 features construyen sobre L3, nunca bypass a L2/L1.
@@ -114,20 +118,21 @@ TX para correr indefinidamente (eso cuelga `RF_runCmd`).
 
 ---
 
-## 6. Hardware target
+## 6. Límite entre software y hardware
 
-- **MCU radio:** CC1352P7
-- **CatSniffer:** `frontEndMode=0x0` (differential), `biasMode=0x1` (external; `0x0` en IEEE 802.15.4)
-- **Antenna switch:** DIO28 (2.4 GHz), DIO29 (High PA — no configurado), DIO30 (Sub-1GHz)
-- **UART CC1352↔RP2040:** DIO12 (RX), DIO13 (TX), 921600, no flow control
-- **LEDs:** DIO24 (status, en main loop counter — no Clock module)
-- **Flash:** `.hex` via catnip (`.bin` causa boot failures)
+- El build y la configuración generada actuales de FeralRF seleccionan **CC1352P7 como target de software**.
+- Los esquemáticos de los tags oficiales CatSniffer revisados declaran una variante P1. El target del build no demuestra qué MCU está poblado físicamente en cada unidad.
+- El RF Driver de FeralRF configura DIO28, DIO29 y DIO30 para funciones RF. En los PCB de los tags oficiales revisados, esos DIO no conectan directamente con el switch externo U2.
+- Los PCB revisados conectan CTF1–CTF3 desde GPIO8–GPIO10 del RP2040 hacia los controles de U2. Esa conectividad declarada no demuestra por sí sola cómo actúa una imagen RP2040 concreta durante ejecución.
+- El UART configurado por FeralRF usa DIO12/DIO13 a 921600 baud, sin control de flujo. Consulte el [pinout canónico](../hardware/PINOUT.md) para las conexiones eléctricas y sus límites.
+
+Las diferencias entre revisiones, la identidad P1/P7, reset/boot, el switch de antena y los límites de validación física pertenecen a la [documentación canónica de hardware](../hardware/README.md).
 
 ---
 
 ## 7. Wire protocol
 
-COBS-framed binary con CRC16-CCITT. Detalles completos en [`protocol.md`](protocol.md).
+COBS-framed binary con CRC16-CCITT. El contrato completo está en [`protocol.md`](protocol.md); la superficie pública del host está en [`PYTHON_API.md`](PYTHON_API.md).
 
 Frame structure:
 ```
@@ -135,8 +140,8 @@ Frame structure:
 [0x00 delimiter]
 
 Campos multibyte en little-endian. CRC16-CCITT (poly 0x1021, init 0xFFFF)
-calculado sobre CMD/RSP + SEQ + LEN + PAYLOAD. Fuente de verdad:
-`python/feralrf/protocol.py` y `firmware/cc1352/src/protocol.c` (identicos).
+calculado sobre CMD/RSP + SEQ + LEN + PAYLOAD. Implementaciones principales:
+`python/feralrf/protocol.py` y `firmware/cc1352/src/protocol.c`.
 ```
 
 | ID range | Tipo |

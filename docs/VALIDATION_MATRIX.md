@@ -1,5 +1,10 @@
 # FeralRF Validation Matrix
 
+> [!IMPORTANT]
+> **Baseline histórico, no matriz vigente.** Este documento conserva la validación reportada el 2026-04-08 y las ampliaciones de fase que se incorporaron a ese baseline. Campañas y análisis posteriores refinaron o contradijeron algunas interpretaciones, por lo que sus estados `PASS`, `FAIL`, `marginal` y `experimental` no deben leerse como la evaluación actual del proyecto. Los resultados originales se preservan aquí como registro histórico; una matriz canónica reconciliada se elaborará en una fase documental posterior.
+
+Para el estado de la documentación consulte el [índice documental](README.md). Como fuentes posteriores de análisis, véanse [`Presets_Reports/`](Presets_Reports/) y el material consolidado de [`User-Manual/`](User-Manual/); la evidencia primaria y supporting de campañas permanece en [`HARDWARE_VALIDATION_RESULTS/`](HARDWARE_VALIDATION_RESULTS/). Ninguna de estas áreas se declara todavía como la matriz canónica final.
+
 Baseline de validacion del firmware FeralRF sobre CC1352P7 (CatSniffer). Consolida
 la corrida OTA de hardware del 2026-04-08 (PHYs base + presets Sub-1GHz) mas las
 validaciones posteriores por fase (modos de test TX, crypto, emulacion, presets

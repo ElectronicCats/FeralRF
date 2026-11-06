@@ -38,11 +38,13 @@ El target de software, una configuración RF o un reporte experimental no establ
 - [`User-Manual/02 - Matriz histórica de experimentos y ejecuciones.md`](<User-Manual/02 - Matriz histórica de experimentos y ejecuciones.md>) es el inventario histórico de ejecuciones y lookup de trazabilidad (`SUPPORTING`).
 - [`Presets_Reports/`](Presets_Reports/) contiene el análisis consolidado de implementación, presets y gaps que sustenta la matriz actual (`SUPPORTING`).
 - [`HARDWARE_VALIDATION_RESULTS/`](HARDWARE_VALIDATION_RESULTS/) conserva evidencia primaria y supporting de campañas (`HISTORICAL`), además de algunos análisis y propuestas fechados.
-- [`User-Manual/`](User-Manual/) también contiene síntesis de evidencia y procedimientos en elaboración (`OPERATIONAL_DRAFT`); no es todavía el Validation Runbook canónico.
+- [`User-Manual/`](User-Manual/) conserva síntesis de evidencia y drafts operativos (`SUPPORTING`/`HISTORICAL`) usados para construir el Runbook. Ya no es la entrada operacional canónica.
 
 ## Procedimientos de validación
 
-El material de [`User-Manual/`](User-Manual/) será la fuente de trabajo para un futuro FeralRF Validation Runbook. Hasta su consolidación, cada procedimiento debe leerse con su estado, fecha, dependencias y límites de evidencia; su presencia no implica que siga siendo ejecutable con el checkout actual.
+[`validation/runbook/README.md`](validation/runbook/README.md) es la entrada `CANONICAL` para ejecutar validaciones. Clasifica cada procedimiento por ejecutabilidad actual, enlaza scripts/API verificados, define criterios, cleanup, recovery y el registro mínimo de evidencia.
+
+La matriz canónica responde **qué** es defendible; el Runbook responde **cómo** ensayarlo. Los procedimientos preservados en [`User-Manual/`](User-Manual/) siguen disponibles como fuentes históricas/supporting y no deben sustituir al Runbook.
 
 ## Integraciones
 

@@ -11,9 +11,9 @@ Documentos relacionados:
 - [Índice y autoridad documental](README.md)
 - [Matriz canónica actual de capacidades y validación](CURRENT_VALIDATION_MATRIX.md)
 - [Baseline histórico de validación](VALIDATION_MATRIX.md)
-- [Material de trabajo para el futuro Validation Runbook](User-Manual/)
+- [Validation Runbook canónico](validation/runbook/README.md)
 
-Este documento describe interfaces, parámetros y semántica de resultados. Las secuencias exactas de ensayo, terminales, marcadores, configuración física, criterios PASS/FAIL y recuperación pertenecen al futuro Validation Runbook.
+Este documento describe interfaces, parámetros y semántica de resultados. Las secuencias exactas de ensayo, la configuración operacional, los criterios, el cleanup y el recovery pertenecen al [Validation Runbook canónico](validation/runbook/README.md).
 
 ## 1. Símbolos exportados por el paquete
 
@@ -74,7 +74,7 @@ No existe un método público separado `get_info()` en la implementación actual
 
 La implementación actual deduce un puerto Cat-Shell sumando 2 al sufijo numérico del puerto Bridge, cierra temporalmente Bridge, envía `boot` y `exit`, espera y reinicializa si la instancia estaba conectada. Esos comandos intentan un reset de hardware del CC1352; el método no corta físicamente su alimentación y `RADIO_INIT` posterior sólo reinicializa el estado de control host/firmware.
 
-Esta inferencia `Bridge + 2` no es universalmente fiable: la enumeración USB puede asignar pares no aritméticos. El método sólo debe usarse cuando ese mapeo haya sido comprobado para el equipo y la sesión. Es un mecanismo de recovery posible para OOK, no una garantía de recovery universal: la evidencia reciente conservada en la [matriz canónica](CURRENT_VALIDATION_MATRIX.md) confirmó recuperación después de un power-cycle físico completo, pero no estableció un lifecycle OOK robusto mediante este helper. Consulte las [preguntas abiertas de hardware](../hardware/OPEN_HARDWARE_QUESTIONS.md) para los límites de reset/boot y el material operativo en [`User-Manual/`](User-Manual/) para el estado de los procedimientos.
+Esta inferencia `Bridge + 2` no es universalmente fiable: la enumeración USB puede asignar pares no aritméticos. El método sólo debe usarse cuando ese mapeo haya sido comprobado para el equipo y la sesión. Es un mecanismo de recovery posible para OOK, no una garantía de recovery universal: la evidencia reciente conservada en la [matriz canónica](CURRENT_VALIDATION_MATRIX.md) confirmó recuperación después de un power-cycle físico completo, pero no estableció un lifecycle OOK robusto mediante este helper. Consulte las [preguntas abiertas de hardware](../hardware/OPEN_HARDWARE_QUESTIONS.md), el [recovery manual](validation/runbook/common.md#op-03) y el procedimiento [OOK bloqueado](validation/runbook/subghz.md#op-16).
 
 ## 4. Configuración de radio
 

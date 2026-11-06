@@ -14,7 +14,7 @@ No sustituye:
 - el [contrato wire](protocol.md);
 - la [referencia de API](PYTHON_API.md);
 - la [documentación canónica de hardware](../hardware/README.md);
-- el futuro Validation Runbook;
+- el [Validation Runbook canónico](validation/runbook/README.md);
 - los registros de cada ejecución.
 
 La evidencia experimental conservada no enlaza de forma criptográfica todos los binarios CC1352/RP2040 instalados con este HEAD. Por eso «presente en source» no significa «ejecutado desde este mismo artefacto».
@@ -247,6 +247,8 @@ Una fila o estado sólo puede cambiar si la actualización registra, hasta donde
 6. artefacto de evidencia preservado;
 7. resultado de cleanup y estado posterior;
 8. limitaciones y aquello que el ensayo no demuestra.
+
+La ejecución reproducible, sus precondiciones y cleanup se mantienen en el [Validation Runbook](validation/runbook/README.md); esta matriz no duplica esos pasos.
 
 Un resultado nuevo no elimina evidencia contradictoria. Debe relacionarse como:
 

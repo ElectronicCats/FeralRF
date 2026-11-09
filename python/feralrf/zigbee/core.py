@@ -283,10 +283,15 @@ class ByteReader:
 
 @dataclass(frozen=True)
 class RawCapture:
-    """Immutable raw bytes plus the context required by later parsing layers."""
+    """Immutable raw bytes, capture metadata, and explicit decoder context."""
 
     data: bytes
     context: CaptureContext
+    timestamp_us: Optional[int] = None
+    channel: Optional[int] = None
+    rssi_dbm: Optional[int] = None
+    lqi: Optional[int] = None
+    crc_ok: Optional[bool] = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.context, CaptureContext):
